@@ -1,0 +1,212 @@
+[
+  {
+    "id": "agent-1",
+    "name": "精明",
+    "avatar": "🤔",
+    "personality": {
+      "aggressiveness": 70,
+      "caution": 60,
+      "cunning": 80,
+      "honesty": 40,
+      "talkativeness": 80
+    },
+    "speakingStyle": "serious",
+    "strategy": {
+      "nightAction": "target_strong",
+      "dayStrategy": "leader",
+      "revealIdentity": "early"
+    },
+    "language": {
+      "prefixes": [
+        "我查的",
+        "昨晚我"
+      ],
+      "suffixes": [
+        "大家信我",
+        "绝对没错"
+      ],
+      "favoriteWords": [
+        "查杀",
+        "金水",
+        "铁狼"
+      ]
+    },
+    "createdAt": 1784722558750,
+    "updatedAt": 1784723240313
+  },
+  {
+    "id": "agent-2",
+    "name": "冷静",
+    "avatar": "👨‍🌾",
+    "personality": {
+      "aggressiveness": 30,
+      "caution": 80,
+      "cunning": 20,
+      "honesty": 90,
+      "talkativeness": 50
+    },
+    "speakingStyle": "calm",
+    "strategy": {
+      "nightAction": "random",
+      "dayStrategy": "follower",
+      "revealIdentity": "never"
+    },
+    "language": {
+      "prefixes": [
+        "我觉得",
+        "依我看"
+      ],
+      "suffixes": [
+        "对吧",
+        "大家觉得呢"
+      ],
+      "favoriteWords": [
+        "好人",
+        "平民",
+        "出"
+      ]
+    },
+    "createdAt": 1784722558750,
+    "updatedAt": 1784723059635
+  },
+  {
+    "id": "agent-3",
+    "name": "狡猾",
+    "avatar": "🐺",
+    "personality": {
+      "aggressiveness": 80,
+      "caution": 50,
+      "cunning": 95,
+      "honesty": 10,
+      "talkativeness": 70
+    },
+    "speakingStyle": "aggressive",
+    "strategy": {
+      "nightAction": "target_weak",
+      "dayStrategy": "active",
+      "revealIdentity": "never"
+    },
+    "language": {
+      "prefixes": [
+        "我怀疑",
+        "听我说"
+      ],
+      "suffixes": [
+        "绝对是狼",
+        "票他"
+      ],
+      "favoriteWords": [
+        "查杀",
+        "狼",
+        "投"
+      ]
+    },
+    "createdAt": 1784722558750,
+    "updatedAt": 1784723064969
+  },
+  {
+    "id": "agent-4",
+    "name": "神秘",
+    "avatar": "🧪",
+    "personality": {
+      "aggressiveness": 50,
+      "caution": 90,
+      "cunning": 70,
+      "honesty": 30,
+      "talkativeness": 40
+    },
+    "speakingStyle": "mysterious",
+    "strategy": {
+      "nightAction": "target_strong",
+      "dayStrategy": "passive",
+      "revealIdentity": "late"
+    },
+    "language": {
+      "prefixes": [
+        "我有药",
+        "昨晚"
+      ],
+      "suffixes": [
+        "你们懂的",
+        "不多说了"
+      ],
+      "favoriteWords": [
+        "救",
+        "毒",
+        "药"
+      ]
+    },
+    "createdAt": 1784722558750,
+    "updatedAt": 1784723070671
+  },
+  {
+    "id": "agent-5",
+    "name": "强势",
+    "avatar": "🏹",
+    "personality": {
+      "aggressiveness": 95,
+      "caution": 30,
+      "cunning": 40,
+      "honesty": 70,
+      "talkativeness": 60
+    },
+    "speakingStyle": "aggressive",
+    "strategy": {
+      "nightAction": "random",
+      "dayStrategy": "leader",
+      "revealIdentity": "early"
+    },
+    "language": {
+      "prefixes": [
+        "谁敢投我",
+        "我是猎人"
+      ],
+      "suffixes": [
+        "开枪带走你",
+        "不信试试"
+      ],
+      "favoriteWords": [
+        "枪",
+        "带走",
+        "猎人"
+      ]
+    },
+    "createdAt": 1784722558750,
+    "updatedAt": 1784723076166
+  },
+  {
+    "id": "agent-6",
+    "name": "幽默",
+    "avatar": "😂",
+    "personality": {
+      "aggressiveness": 40,
+      "caution": 50,
+      "cunning": 60,
+      "honesty": 60,
+      "talkativeness": 90
+    },
+    "speakingStyle": "humorous",
+    "strategy": {
+      "nightAction": "random",
+      "dayStrategy": "active",
+      "revealIdentity": "never"
+    },
+    "language": {
+      "prefixes": [
+        "哈哈",
+        "笑死"
+      ],
+      "suffixes": [
+        "狗头",
+        "滑稽"
+      ],
+      "favoriteWords": [
+        "村民",
+        "快乐",
+        "狼"
+      ]
+    },
+    "createdAt": 1784722558750,
+    "updatedAt": 1784723082241
+  }
+]

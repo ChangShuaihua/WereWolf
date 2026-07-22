@@ -1,8 +1,10 @@
+const { EventEmitter } = require('events');
 const { PHASE, ROLE, TIMERS, TEAM } = require('./constants');
 const { getRolesForGame, getRoleName } = require('./RoleConfig');
 
-class GameEngine {
+class GameEngine extends EventEmitter {
   constructor(roomCode, players, emit) {
+    super();
     this.roomCode = roomCode;
     this.emit = emit;                    // callback to emit socket events
     this.players = players;              // [{ id, username, socketId, isAlive, isReady }]
@@ -15,6 +17,7 @@ class GameEngine {
     this.nightActions = {};              // { socketId: { action, targetId } }
     this.guardLastProtected = null;      // socketId of last protected player
     this.witchSaveUsed = false;
+    this.witchSaveTarget = null;         // socketId of player saved by witch
     this.witchPoisonUsed = false;
     this.killedByWerewolves = null;      // socketId of werewolf kill target
     this.killedByWitch = null;           // socketId of witch poison target
@@ -22,6 +25,15 @@ class GameEngine {
     // Vote state
     this.votes = {};                     // { voterSocketId: targetSocketId }
     this.nightCount = 0;
+    
+    // Hunter state
+    this.hunterDied = false;             // Whether hunter died this phase
+    this.hunterKilledByPoison = false;   // Whether hunter was killed by poison
+    
+    // Speaking state (turn-based)
+    this.speakingOrder = [];             // Array of socketIds in speaking order
+    this.currentSpeakerIndex = -1;       // Index of current speaker in speakingOrder
+    this.hasSpoken = new Set();          // Set of socketIds that have spoken this round
     
     // Game history for replay
     this.gameHistory = [];               // [{ night, action, actor, target, detail }]
@@ -117,11 +129,14 @@ class GameEngine {
     this.nightActions = {};
     this.killedByWerewolves = null;
     this.killedByWitch = null;
+    this.witchSaveTarget = null;
+
+    const nightDuration = 120;
 
     this.broadcast('phase_change', {
       phase: PHASE.NIGHT,
       nightCount: this.nightCount,
-      timeout: TIMERS.NIGHT,
+      timeout: nightDuration,
       message: `第 ${this.nightCount} 夜来临，请闭眼...`,
     });
 
@@ -132,60 +147,220 @@ class GameEngine {
   async runNightSequence() {
     const alive = this.alivePlayers;
 
-    // 1. Guard protects
+    // Wait for AI players to submit their night actions first
+    const aiPlayers = alive.filter(p => p.isAI);
+    if (aiPlayers.length > 0) {
+      await this._waitForAINightActions(aiPlayers);
+    }
+
+    // 1. Guard protects (30 seconds)
     const guards = alive.filter(p => this.roles[p.socketId] === ROLE.GUARD);
-    for (const g of guards) {
-      this.sendTo(g.socketId, 'night_action_prompt', {
-        action: 'guard',
-        message: '请选择要守护的玩家',
-        targets: alive.filter(p => p.socketId !== g.socketId && p.socketId !== this.guardLastProtected)
-          .map(p => ({ id: p.socketId, username: p.username })),
+    if (guards.length > 0) {
+      this.broadcast('night_role_turn', {
+        role: 'guard',
+        roleName: '守卫',
+        timeout: 30,
+        message: '🛡️ 守卫行动阶段',
+      });
+
+      for (const g of guards) {
+        this.sendTo(g.socketId, 'night_action_prompt', {
+          action: 'guard',
+          message: '请选择要守护的玩家',
+          targets: alive.filter(p => p.socketId !== g.socketId && p.socketId !== this.guardLastProtected)
+            .map(p => ({ id: p.socketId, username: p.username })),
+          timeout: 30,
+        });
+      }
+      await this._waitForRoleActions(guards, 'guard');
+      
+      this.broadcast('night_role_done', {
+        role: 'guard',
+        roleName: '守卫',
+        message: '🛡️ 守卫行动结束',
       });
     }
 
-    // 2. Werewolves kill
+    // 2. Werewolves kill (30 seconds)
     const werewolves = alive.filter(p => this.roles[p.socketId] === ROLE.WEREWOLF);
     const targets = alive.filter(p => this.roles[p.socketId] !== ROLE.WEREWOLF)
       .map(p => ({ id: p.socketId, username: p.username }));
+    
+    this.broadcast('night_role_turn', {
+      role: 'werewolf',
+      roleName: '狼人',
+      timeout: 30,
+      message: '🐺 狼人行动阶段',
+    });
+
     for (const w of werewolves) {
+      const teammates = werewolves.filter(p => p.socketId !== w.socketId)
+        .map(p => ({ id: p.socketId, username: p.username }));
       this.sendTo(w.socketId, 'night_action_prompt', {
         action: 'kill',
         message: '请选择要击杀的目标',
         targets,
+        teammates,
+        isWerewolfTeam: true,
+        timeout: 30,
       });
     }
+    await this._waitForRoleActions(werewolves, 'kill');
+    
+    this.broadcast('night_role_done', {
+      role: 'werewolf',
+      roleName: '狼人',
+      message: '🐺 狼人行动结束',
+    });
 
-    // 3. Seer checks
+    // Resolve werewolf vote - all werewolves must agree on the same target
+    const werewolfActions = werewolves.filter(w => this.nightActions[w.socketId]?.action === 'kill');
+    if (werewolfActions.length > 0) {
+      const firstAction = this.nightActions[werewolfActions[0].socketId];
+      const chosenTarget = firstAction.targetId;
+      
+      for (const w of werewolfActions) {
+        this.nightActions[w.socketId].targetId = chosenTarget;
+      }
+      
+      this.killedByWerewolves = chosenTarget;
+    }
+
+    // 3. Seer checks (30 seconds)
     const seers = alive.filter(p => this.roles[p.socketId] === ROLE.SEER);
-    for (const s of seers) {
-      this.sendTo(s.socketId, 'night_action_prompt', {
-        action: 'check',
-        message: '请选择要查验的玩家',
-        targets: alive.filter(p => p.socketId !== s.socketId)
-          .map(p => ({ id: p.socketId, username: p.username })),
+    if (seers.length > 0) {
+      this.broadcast('night_role_turn', {
+        role: 'seer',
+        roleName: '预言家',
+        timeout: 30,
+        message: '🔮 预言家行动阶段',
+      });
+
+      for (const s of seers) {
+        this.sendTo(s.socketId, 'night_action_prompt', {
+          action: 'check',
+          message: '请选择要查验的玩家',
+          targets: alive.filter(p => p.socketId !== s.socketId)
+            .map(p => ({ id: p.socketId, username: p.username })),
+          timeout: 30,
+        });
+      }
+      await this._waitForRoleActions(seers, 'check');
+      
+      this.broadcast('night_role_done', {
+        role: 'seer',
+        roleName: '预言家',
+        message: '🔮 预言家行动结束',
       });
     }
 
-    // 4. Witch action - will be notified after werewolves decide or on timeout
+    // 4. Witch action (30 seconds)
     const witches = alive.filter(p => this.roles[p.socketId] === ROLE.WITCH);
-    for (const w of witches) {
-      const options = {
-        action: 'witch',
-        message: '请使用你的药水',
-        killed: this.killedByWerewolves
-          ? { id: this.killedByWerewolves, username: this.getPlayer(this.killedByWerewolves)?.username }
-          : null,
-        canSave: !this.witchSaveUsed && this.killedByWerewolves !== null,
-        canPoison: !this.witchPoisonUsed,
-        targets: alive.filter(p => p.socketId !== w.socketId)
-          .map(p => ({ id: p.socketId, username: p.username })),
-      };
-      this.sendTo(w.socketId, 'night_action_prompt', options);
+    if (witches.length > 0) {
+      this.broadcast('night_role_turn', {
+        role: 'witch',
+        roleName: '女巫',
+        timeout: 30,
+        message: '🧪 女巫行动阶段',
+      });
+
+      for (const w of witches) {
+        const options = {
+          action: 'witch',
+          message: '请使用你的药水',
+          killed: this.killedByWerewolves
+            ? { id: this.killedByWerewolves, username: this.getPlayer(this.killedByWerewolves)?.username }
+            : null,
+          canSave: !this.witchSaveUsed && this.killedByWerewolves !== null,
+          canPoison: !this.witchPoisonUsed,
+          targets: alive.filter(p => p.socketId !== w.socketId)
+            .map(p => ({ id: p.socketId, username: p.username })),
+          timeout: 30,
+        };
+        this.sendTo(w.socketId, 'night_action_prompt', options);
+      }
+      await this._waitForRoleActions(witches, 'witch');
+      
+      this.broadcast('night_role_done', {
+        role: 'witch',
+        roleName: '女巫',
+        message: '🧪 女巫行动结束',
+      });
     }
 
-    // Auto-advance after timer
-    this.clearTimer();
-    this.phaseTimer = setTimeout(() => this.resolveNight(), TIMERS.NIGHT * 1000);
+    // Resolve night
+    this.resolveNight();
+  }
+
+  _waitForRoleActions(players, actionType) {
+    return new Promise((resolve) => {
+      const humanPlayers = players.filter(p => !p.isAI);
+      
+      if (humanPlayers.length === 0) {
+        resolve();
+        return;
+      }
+
+      let completedCount = 0;
+      const totalCount = humanPlayers.length;
+
+      const checkComplete = () => {
+        completedCount++;
+        if (completedCount >= totalCount) {
+          this.clearTimer();
+          this.off('night_action', actionListener);
+          resolve();
+        }
+      };
+
+      const actionListener = (socketId, action) => {
+        if (action.action === actionType || action.action === 'skip') {
+          checkComplete();
+        }
+      };
+
+      this.on('night_action', actionListener);
+
+      this.clearTimer();
+      this.phaseTimer = setTimeout(() => {
+        this.off('night_action', actionListener);
+        resolve();
+      }, 30000);
+    });
+  }
+
+  async _waitForAINightActions(aiPlayers) {
+    const aiGameHandler = require('./AIGameHandler');
+    
+    const timeoutPromise = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    
+    for (const aiPlayer of aiPlayers) {
+      const role = this.getRole(aiPlayer.socketId);
+      if (!role) continue;
+
+      try {
+        const action = await Promise.race([
+          aiGameHandler._decideNightAction(this, aiPlayer, role),
+          timeoutPromise(3000)
+        ]);
+        
+        if (action) {
+          this.submitNightAction(aiPlayer.socketId, action.action, action.targetId);
+        } else {
+          console.warn(`[GameEngine] AI night action timeout for ${aiPlayer.username}, using fallback`);
+          const fallbackAction = aiGameHandler._getFallbackNightAction(this, aiPlayer, role);
+          if (fallbackAction) {
+            this.submitNightAction(aiPlayer.socketId, fallbackAction.action, fallbackAction.targetId);
+          }
+        }
+      } catch (error) {
+        console.error(`[GameEngine] AI night action error for ${aiPlayer.username}:`, error);
+        const fallbackAction = aiGameHandler._getFallbackNightAction(this, aiPlayer, role);
+        if (fallbackAction) {
+          this.submitNightAction(aiPlayer.socketId, fallbackAction.action, fallbackAction.targetId);
+        }
+      }
+    }
   }
 
   // ==================== Night Actions ====================
@@ -202,13 +377,22 @@ class GameEngine {
       this.nightActions[socketId] = { action, targetId };
     }
     
+    let detail;
+    if (action === 'skip') {
+      detail = `${getRoleName(this.roles[socketId])}选择跳过`;
+    } else {
+      detail = `${getRoleName(this.roles[socketId])}选择了${target?.username || '未知'}`;
+    }
+    
     this.gameHistory.push({
       night: this.nightCount,
       action,
       actor: { id: socketId, username: player.username, role: this.roles[socketId] },
       target: target ? { id: targetId, username: target.username } : null,
-      detail: `${getRoleName(this.roles[socketId])}选择了${target?.username || '未知'}`,
+      detail,
     });
+
+    this.emit('night_action', socketId, { action, targetId });
 
     switch (action) {
       case 'guard':
@@ -216,23 +400,7 @@ class GameEngine {
         break;
 
       case 'kill': {
-        // Werewolf vote: last kill action wins (simplified)
-        const werewolves = this.alivePlayers.filter(p => this.roles[p.socketId] === ROLE.WEREWOLF);
-        const werewolfActions = werewolves.filter(w => this.nightActions[w.socketId]?.action === 'kill');
-        if (werewolfActions.length === werewolves.length) {
-          // All werewolves have voted, count majority
-          const tally = {};
-          werewolfActions.forEach(w => {
-            const t = this.nightActions[w.socketId].targetId;
-            tally[t] = (tally[t] || 0) + 1;
-          });
-          const maxVotes = Math.max(...Object.values(tally));
-          const topTargets = Object.entries(tally).filter(([, v]) => v === maxVotes);
-          this.killedByWerewolves = topTargets[0][0]; // first target with most votes
-
-          // Notify witch of the kill target
-          this.notifyWitch();
-        }
+        // Store the kill action
         break;
       }
 
@@ -248,7 +416,7 @@ class GameEngine {
       }
 
       case 'save':
-        this.killedByWerewolves = null;
+        this.witchSaveTarget = this.killedByWerewolves;
         this.witchSaveUsed = true;
         this.notifyWitch(); // re-notify to hide save button
         break;
@@ -291,9 +459,18 @@ class GameEngine {
       protectedPlayer = this.guardLastProtected;
     }
 
-    // Apply werewolf kill
-    if (this.killedByWerewolves && this.killedByWerewolves !== protectedPlayer) {
-      deaths.add(this.killedByWerewolves);
+    // Apply werewolf kill with guard protection and witch save
+    if (this.killedByWerewolves) {
+      const wasProtected = this.killedByWerewolves === protectedPlayer;
+      const wasSaved = this.witchSaveTarget === this.killedByWerewolves;
+      
+      // 同守同救规则：守卫守护 + 女巫救 = 死亡
+      if (!wasProtected && !wasSaved) {
+        deaths.add(this.killedByWerewolves);
+      } else if (wasProtected && wasSaved) {
+        deaths.add(this.killedByWerewolves);
+      }
+      // 其他情况：只被守卫守护或只被女巫救，目标存活
     }
 
     // Apply witch poison
@@ -311,21 +488,66 @@ class GameEngine {
       }
     }
 
+    const nightMessage = deathList.length === 0 ? '🌅 天亮了，昨晚是平安夜' : `🌅 天亮了，昨晚 ${deathList.map(d => d.username).join('、')} 死亡`;
+    
     this.broadcast('night_result', {
       deaths: deathList.map(d => ({ id: d.id, username: d.username })),
       saved: !!protectedPlayer && this.killedByWerewolves === protectedPlayer,
-      message: deathList.length === 0 ? '天亮了，昨晚是平安夜' : `天亮了，昨晚 ${deathList.map(d => d.username).join('、')} 死亡`,
+      message: nightMessage,
+    });
+
+    this.broadcast('chat_message', {
+      username: '系统',
+      message: nightMessage,
+      timestamp: Date.now(),
+      isSystem: true,
+    });
+
+    const nightDetail = deathList.length > 0 
+      ? `夜晚结束，${deathList.map(d => d.username).join('、')}死亡`
+      : '夜晚结束，平安夜';
+      
+    this.gameHistory.push({
+      night: this.nightCount,
+      action: 'night_end',
+      deaths: deathList.map(d => ({ id: d.id, username: d.username, role: d.role })),
+      saved: !!protectedPlayer && this.killedByWerewolves === protectedPlayer,
+      guardProtected: protectedPlayer ? { id: protectedPlayer, username: this.getPlayer(protectedPlayer)?.username } : null,
+      killedByWerewolves: this.killedByWerewolves ? { id: this.killedByWerewolves, username: this.getPlayer(this.killedByWerewolves)?.username } : null,
+      killedByWitch: this.killedByWitch ? { id: this.killedByWitch, username: this.getPlayer(this.killedByWitch)?.username } : null,
+      witchSaved: this.witchSaveTarget ? { id: this.witchSaveTarget, username: this.getPlayer(this.witchSaveTarget)?.username } : null,
+      detail: nightDetail,
     });
 
     // Check for hunter death trigger
+    let hunterDeath = null;
+    let hunterKilledByPoison = false;
+    
     for (const d of deathList) {
       if (d.role === ROLE.HUNTER) {
-        this.sendTo(d.id, 'hunter_trigger', {
+        hunterDeath = d;
+        hunterKilledByPoison = this.killedByWitch === d.id;
+        break;
+      }
+    }
+
+    // Hunter shooting: can only shoot if not killed by poison
+    if (hunterDeath && !hunterKilledByPoison) {
+      const aliveAfterNight = this.alivePlayers;
+      if (aliveAfterNight.length > 0) {
+        // Send hunter trigger
+        this.sendTo(hunterDeath.id, 'hunter_trigger', {
           message: '你已被杀，请选择带走一名玩家',
-          targets: this.alivePlayers.map(p => ({ id: p.socketId, username: p.username })),
+          targets: aliveAfterNight.map(p => ({ id: p.socketId, username: p.username })),
         });
-        // Hunter ability: can take someone with them (simplified: auto after short delay or manual)
-        // For simplicity, we skip hunter active ability in night death, handle in day
+        
+        // Wait for hunter action or auto-shoot after timeout
+        this.clearTimer();
+        this.phaseTimer = setTimeout(() => {
+          this._executeHunterShoot(hunterDeath.id);
+        }, 10000);
+        
+        return; // Wait for hunter action
       }
     }
 
@@ -336,19 +558,215 @@ class GameEngine {
     setTimeout(() => this.startDay(), 2000);
   }
 
+  // ==================== Hunter Shooting ====================
+
+  _executeHunterShoot(hunterId) {
+    const hunter = this.getPlayer(hunterId);
+    const aliveAfterNight = this.alivePlayers;
+    
+    if (!hunter || aliveAfterNight.length === 0) {
+      this._continueAfterHunter();
+      return;
+    }
+    
+    // Auto-shoot a random player if hunter didn't choose
+    const randomTarget = aliveAfterNight[Math.floor(Math.random() * aliveAfterNight.length)];
+    
+    // Kill the target
+    randomTarget.isAlive = false;
+    
+    this.gameHistory.push({
+      night: this.nightCount,
+      action: 'hunter_shoot',
+      actor: { id: hunterId, username: hunter.username, role: ROLE.HUNTER },
+      target: { id: randomTarget.socketId, username: randomTarget.username },
+      detail: `${hunter.username}开枪带走了${randomTarget.username}`,
+    });
+    
+    // Notify everyone
+    this.broadcast('hunter_result', {
+      shooter: { id: hunterId, username: hunter.username },
+      target: { id: randomTarget.socketId, username: randomTarget.username },
+      message: `${hunter.username}开枪带走了${randomTarget.username}`,
+    });
+    
+    this._continueAfterHunter();
+  }
+  
+  _continueAfterHunter() {
+    // Check win condition after hunter shooting
+    if (this.checkWinCondition()) return;
+    
+    // Transition to day
+    setTimeout(() => this.startDay(), 2000);
+  }
+
   // ==================== Day Phase ====================
 
   startDay() {
     this.phase = PHASE.DAY;
 
+    const alive = this.alivePlayers;
+    this.speakingOrder = alive.map(p => p.socketId);
+    this.currentSpeakerIndex = 0;
+    this.hasSpoken = new Set();
+
+    this._skipDeadSpeakers();
+
     this.broadcast('phase_change', {
       phase: PHASE.DAY,
       timeout: TIMERS.DAY,
-      message: '天亮了，请自由讨论',
+      message: '天亮了，按顺序发言',
+      currentSpeaker: this.speakingOrder[this.currentSpeakerIndex],
+      speakerName: this.getPlayer(this.speakingOrder[this.currentSpeakerIndex])?.username,
     });
 
     this.clearTimer();
-    this.phaseTimer = setTimeout(() => this.startVote(), TIMERS.DAY * 1000);
+
+    const currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
+    if (currentSpeaker) {
+      const speakerPlayer = this.getPlayer(currentSpeaker);
+      if (speakerPlayer && speakerPlayer.isAI) {
+        setTimeout(() => this._triggerAISpeaking(currentSpeaker), 1000);
+      }
+    }
+  }
+
+  _skipDeadSpeakers() {
+    const aliveSpeakers = this.speakingOrder.filter(socketId => {
+      const player = this.getPlayer(socketId);
+      return player && player.isAlive !== false;
+    });
+    
+    if (aliveSpeakers.length > 0) {
+      this.speakingOrder = aliveSpeakers;
+      
+      if (this.currentSpeakerIndex >= this.speakingOrder.length) {
+        this.currentSpeakerIndex = 0;
+      }
+    }
+  }
+
+  async _triggerAISpeaking(socketId) {
+    const aiGameHandler = require('./AIGameHandler');
+    const player = this.getPlayer(socketId);
+    if (!player || !player.isAI) return;
+
+    try {
+      const timeoutPromise = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      
+      let message = await Promise.race([
+        aiGameHandler._generateChatMessage(this, player),
+        timeoutPromise(5000)
+      ]);
+
+      if (!message || !message.trim()) {
+        message = aiGameHandler._getFallbackChatMessage(this, player);
+      }
+
+      message = this._ensureMessageLength(message, player);
+
+      this.broadcast('chat_message', {
+        username: player.username,
+        message: message,
+        timestamp: Date.now(),
+      });
+
+      setTimeout(() => this.nextSpeaker(), 5000);
+    } catch (error) {
+      console.error(`[GameEngine] AI speaking error for ${player.username}:`, error);
+      const fallbackMessage = aiGameHandler._getFallbackChatMessage(this, player);
+      const finalMessage = this._ensureMessageLength(fallbackMessage, player);
+      
+      this.broadcast('chat_message', {
+        username: player.username,
+        message: finalMessage,
+        timestamp: Date.now(),
+      });
+
+      setTimeout(() => this.nextSpeaker(), 5000);
+    }
+  }
+
+  _ensureMessageLength(message, player) {
+    if (!message) message = '';
+    
+    const trimmed = message.trim();
+    
+    if (trimmed.length >= 30 && trimmed.length <= 50) {
+      return trimmed;
+    }
+    
+    if (trimmed.length > 50) {
+      return trimmed.substring(0, 50).replace(/，$/, '').replace(/。$/, '') + '。';
+    }
+    
+    const role = this.getRole(player.socketId);
+    const roleName = getRoleName(role);
+    
+    const extensions = {
+      [ROLE.WEREWOLF]: [
+        ' 大家仔细分析一下局势。',
+        ' 我觉得我们需要谨慎投票。',
+        ' 希望好人能做出正确的判断。',
+        ' 狼人肯定会伪装成好人。',
+        ' 大家不要被表面现象迷惑。',
+      ],
+      [ROLE.SEER]: [
+        ' 请大家相信我的查验结果。',
+        ' 今晚我会继续查验其他人。',
+        ' 好人阵营需要我的信息。',
+        ' 狼人一定会质疑我，大家别上当。',
+        ' 希望大家能跟我一起投票。',
+      ],
+      [ROLE.WITCH]: [
+        ' 我手里还有一瓶毒药。',
+        ' 大家小心狼人乱跳身份。',
+        ' 我会根据情况使用毒药。',
+        ' 希望好人能保护好自己。',
+        ' 今晚我会谨慎使用技能。',
+      ],
+      [ROLE.GUARD]: [
+        ' 今晚我会守护关键人物。',
+        ' 大家放心，我会保护好人。',
+        ' 狼人别想轻易得手。',
+        ' 我会根据局势决定守护谁。',
+        ' 好人阵营需要我的守护。',
+      ],
+      [ROLE.HUNTER]: [
+        ' 有枪在手，狼人小心点。',
+        ' 谁敢出我，我就带走谁。',
+        ' 我的身份很硬，大家别乱投。',
+        ' 狼人别想轻易把我弄出去。',
+        ' 我会根据情况开枪。',
+      ],
+      [ROLE.VILLAGER]: [
+        ' 希望预言家能给点信息。',
+        ' 我只能跟着大家的节奏走。',
+        ' 请好人带领我们找出狼人。',
+        ' 我完全相信好人阵营。',
+        ' 大家一起加油找出狼人。',
+      ],
+    };
+    
+    const roleExtensions = extensions[role] || extensions[ROLE.VILLAGER];
+    let result = trimmed;
+    
+    while (result.length < 30) {
+      const extension = roleExtensions[Math.floor(Math.random() * roleExtensions.length)];
+      if (!result.endsWith(extension.replace(/。$/, ''))) {
+        if (!result.endsWith('。') && !result.endsWith('，')) {
+          result += '，';
+        }
+        result += extension.replace(/^ /, '');
+      }
+    }
+    
+    if (result.length > 50) {
+      result = result.substring(0, 50).replace(/，$/, '').replace(/。$/, '') + '。';
+    }
+    
+    return result;
   }
 
   skipToVote() {
@@ -357,13 +775,88 @@ class GameEngine {
     this.startVote();
   }
 
+  nextSpeaker() {
+    if (this.phase !== PHASE.DAY) return;
+
+    this.hasSpoken.add(this.speakingOrder[this.currentSpeakerIndex]);
+
+    if (this.hasSpoken.size >= this.speakingOrder.length) {
+      this.clearTimer();
+      this.startVote();
+      return;
+    }
+    
+    this.currentSpeakerIndex++;
+    if (this.currentSpeakerIndex >= this.speakingOrder.length) {
+      this.currentSpeakerIndex = 0;
+    }
+
+    this._skipDeadSpeakers();
+    
+    const currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
+    
+    this.broadcast('speaker_change', {
+      currentSpeaker,
+      speakerName: this.getPlayer(currentSpeaker)?.username,
+      hasSpoken: Array.from(this.hasSpoken),
+    });
+
+    if (currentSpeaker) {
+      const speakerPlayer = this.getPlayer(currentSpeaker);
+      if (speakerPlayer && speakerPlayer.isAI) {
+        setTimeout(() => this._triggerAISpeaking(currentSpeaker), 1000);
+      }
+    }
+  }
+
+  skipSpeaking() {
+    if (this.phase !== PHASE.DAY) return;
+    
+    const currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
+    this.hasSpoken.add(currentSpeaker);
+
+    if (this.hasSpoken.size >= this.speakingOrder.length) {
+      this.clearTimer();
+      this.startVote();
+      return;
+    }
+    
+    this.currentSpeakerIndex++;
+    if (this.currentSpeakerIndex >= this.speakingOrder.length) {
+      this.currentSpeakerIndex = 0;
+    }
+
+    this._skipDeadSpeakers();
+    
+    const nextSpeaker = this.speakingOrder[this.currentSpeakerIndex];
+    
+    this.broadcast('speaker_change', {
+      currentSpeaker: nextSpeaker,
+      speakerName: this.getPlayer(nextSpeaker)?.username,
+      hasSpoken: Array.from(this.hasSpoken),
+    });
+
+    if (nextSpeaker) {
+      const speakerPlayer = this.getPlayer(nextSpeaker);
+      if (speakerPlayer && speakerPlayer.isAI) {
+        setTimeout(() => this._triggerAISpeaking(nextSpeaker), 1000);
+      }
+    }
+  }
+
   // ==================== Vote Phase ====================
 
-  startVote() {
+  async startVote() {
     this.phase = PHASE.VOTE;
     this.votes = {};
 
     const alive = this.alivePlayers;
+
+    // Wait for AI players to submit their votes first
+    const aiPlayers = alive.filter(p => p.isAI);
+    if (aiPlayers.length > 0) {
+      await this._waitForAIVotes(aiPlayers);
+    }
 
     this.broadcast('phase_change', {
       phase: PHASE.VOTE,
@@ -374,6 +867,37 @@ class GameEngine {
 
     this.clearTimer();
     this.phaseTimer = setTimeout(() => this.resolveVote(), TIMERS.VOTE * 1000);
+  }
+
+  async _waitForAIVotes(aiPlayers) {
+    const aiGameHandler = require('./AIGameHandler');
+    
+    const timeoutPromise = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    
+    for (const aiPlayer of aiPlayers) {
+      try {
+        const voteTarget = await Promise.race([
+          aiGameHandler._decideVote(this, aiPlayer),
+          timeoutPromise(3000)
+        ]);
+        
+        if (voteTarget) {
+          this.submitVote(aiPlayer.socketId, voteTarget);
+        } else {
+          console.warn(`[GameEngine] AI vote timeout for ${aiPlayer.username}, using fallback`);
+          const fallbackTarget = aiGameHandler._getFallbackVote(this, aiPlayer);
+          if (fallbackTarget) {
+            this.submitVote(aiPlayer.socketId, fallbackTarget);
+          }
+        }
+      } catch (error) {
+        console.error(`[GameEngine] AI vote error for ${aiPlayer.username}:`, error);
+        const fallbackTarget = aiGameHandler._getFallbackVote(this, aiPlayer);
+        if (fallbackTarget) {
+          this.submitVote(aiPlayer.socketId, fallbackTarget);
+        }
+      }
+    }
   }
 
   submitVote(socketId, targetId) {
@@ -449,6 +973,13 @@ class GameEngine {
     };
 
     this.broadcast('vote_result', result);
+
+    this.broadcast('chat_message', {
+      username: '系统',
+      message: `🗳️ ${result.message}`,
+      timestamp: Date.now(),
+      isSystem: true,
+    });
 
     // Check win condition
     if (this.checkWinCondition()) return;
@@ -561,7 +1092,7 @@ ${message}
 🔫 猎人：${hunter.username}`;
     }
     
-    const civilians = villagers.filter(p => p.role === ROLE.CIVILIAN);
+    const civilians = villagers.filter(p => p.role === ROLE.VILLAGER);
     if (civilians.length > 0) {
       replay += `
 👤 平民：${civilians.map(p => p.username).join('、')}`;
@@ -585,9 +1116,10 @@ ${message}
       this.gameHistory.forEach(h => {
         if (h.night !== currentNight) {
           currentNight = h.night;
-          replay += `\n🌙 第${currentNight + 1}夜：`;
+          replay += `\n🌙 第${currentNight}夜：`;
         }
-        replay += `\n  - ${h.detail}`;
+        const detail = h.detail || `${h.action || '未知行动'}${h.actor?.username ? ' - ' + h.actor.username : ''}`;
+        replay += `\n  - ${detail}`;
       });
     }
     

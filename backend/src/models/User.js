@@ -44,6 +44,34 @@ const User = {
       );
     }
   },
+
+  async updateProfile(userId, data) {
+    const updates = [];
+    const values = [];
+
+    if (data.username) {
+      updates.push('username = ?');
+      values.push(data.username);
+    }
+
+    if (data.password) {
+      const hash = await bcrypt.hash(data.password, 10);
+      updates.push('password = ?');
+      values.push(hash);
+    }
+
+    if (updates.length === 0) {
+      return null;
+    }
+
+    values.push(userId);
+    await pool.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    return this.findById(userId);
+  },
 };
 
 module.exports = User;

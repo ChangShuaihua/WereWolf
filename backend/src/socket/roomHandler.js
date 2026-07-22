@@ -1,5 +1,6 @@
 const { roomCache, socketCache } = require('../utils/cache');
 const { gameCache } = require('../utils/cache');
+const aiGameHandler = require('../game/AIGameHandler');
 
 /**
  * Generate a 6-character room code
@@ -16,7 +17,8 @@ function generateRoomCode() {
 /**
  * Create a new room
  */
-function createRoom(socket, username, userId) {
+function createRoom(socket, username, userId, aiCount = 0) {
+  console.log(`[roomHandler] createRoom called with userId=${userId}, typeof=${typeof userId}`);
   const code = generateRoomCode();
 
   // Prevent duplicates
@@ -37,22 +39,124 @@ function createRoom(socket, username, userId) {
 
   roomCache.set(code, room);
   joinRoom(socket, code, username, userId, true);
+
+  for (let i = 0; i < aiCount; i++) {
+    addAIPlayer(code);
+  }
   
   const io = require('../app').getIO();
   io.emit('room_created', {
     code,
     hostUsername: username,
-    playerCount: 1,
+    playerCount: room.players.length,
     maxPlayers: 12,
   });
   
   return code;
 }
 
+function isHost(socketId, room) {
+  return room.hostId === socketId;
+}
+
+/**
+ * Add an AI player to a room (host only)
+ */
+function addAIPlayer(socket, code, agentId = null) {
+  const room = roomCache.get(code);
+  if (!room) return null;
+
+  if (!isHost(socket.id, room)) {
+    console.log('[roomHandler] Only host can add AI players');
+    socket.emit('error', { message: '只有房主可以添加AI玩家' });
+    return null;
+  }
+
+  if (room.players.length >= 12) {
+    console.log('[roomHandler] Room is full, cannot add AI');
+    socket.emit('error', { message: '房间已满，无法添加AI玩家' });
+    return null;
+  }
+
+  const game = gameCache.get(code);
+  if (game && game.phase !== 'WAITING') {
+    console.log('[roomHandler] Game in progress, cannot add AI');
+    socket.emit('error', { message: '游戏进行中，无法添加AI玩家' });
+    return null;
+  }
+
+  const aiPlayer = aiGameHandler.createAIPlayer(code, agentId);
+  aiPlayer.isReady = true;
+  room.players.push(aiPlayer);
+  roomCache.set(code, room);
+
+  const welcomeMsg = {
+    username: '系统',
+    message: `🤖 ${aiPlayer.username} 加入了房间！`,
+    timestamp: Date.now(),
+  };
+  room.chat.push(welcomeMsg);
+  if (room.chat.length > 100) room.chat.shift();
+
+  const io = require('../app').getIO();
+  io.to(code).emit('chat_message', welcomeMsg);
+  broadcastRoomUpdate(code);
+
+  console.log(`[roomHandler] AI player ${aiPlayer.username} added to room ${code}`);
+  return aiPlayer;
+}
+
+/**
+ * Remove an AI player from a room (host only)
+ */
+function removeAIPlayer(socket, code, aiSocketId) {
+  const room = roomCache.get(code);
+  if (!room) return null;
+
+  if (!isHost(socket.id, room)) {
+    console.log('[roomHandler] Only host can remove AI players');
+    socket.emit('error', { message: '只有房主可以删除AI玩家' });
+    return null;
+  }
+
+  const game = gameCache.get(code);
+  if (game && game.phase !== 'WAITING') {
+    console.log('[roomHandler] Game in progress, cannot remove AI');
+    socket.emit('error', { message: '游戏进行中，无法删除AI玩家' });
+    return null;
+  }
+
+  const aiPlayer = room.players.find(p => p.socketId === aiSocketId && p.isAI);
+  if (!aiPlayer) {
+    console.log('[roomHandler] AI player not found');
+    socket.emit('error', { message: 'AI玩家不存在' });
+    return null;
+  }
+
+  room.players = room.players.filter(p => p.socketId !== aiSocketId);
+  roomCache.set(code, room);
+
+  const leaveMsg = {
+    username: '系统',
+    message: `🤖 ${aiPlayer.username} 离开了房间！`,
+    timestamp: Date.now(),
+  };
+  room.chat.push(leaveMsg);
+  if (room.chat.length > 100) room.chat.shift();
+
+  const io = require('../app').getIO();
+  io.to(code).emit('chat_message', leaveMsg);
+  broadcastRoomUpdate(code);
+
+  console.log(`[roomHandler] AI player ${aiPlayer.username} removed from room ${code}`);
+  return aiPlayer;
+}
+
 /**
  * Join an existing room
  */
 function joinRoom(socket, code, username, userId, isCreator = false) {
+  console.log(`[roomHandler] joinRoom called with userId=${userId}, typeof=${typeof userId}`);
   const room = roomCache.get(code);
   if (!room) {
     socket.emit('error', { message: '房间不存在或已过期' });
@@ -65,11 +169,19 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
 
   // Check if user already in room by userId (reconnect case)
   existing = room.players.find(p => p.userId === userId);
+  
+  // If no match by userId, try matching by username for legacy rooms
+  if (!existing) {
+    existing = room.players.find(p => p.username === username && !p.userId);
+  }
+  
   if (existing) {
     existing.socketId = socket.id;
+    if (!existing.userId) existing.userId = userId;
     
-    if (room.hostUserId === userId) {
+    if (room.hostUserId === userId || existing.socketId === room.hostId) {
       room.hostId = socket.id;
+      if (!room.hostUserId) room.hostUserId = userId;
     }
     
     socket.join(code);
@@ -96,16 +208,16 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
 
   // If game exists and is waiting, check this user isn't in game already
   if (game) {
-      const gamePlayer = game.players.find(p => p.id === userId);
-      if (gamePlayer && gamePlayer.isAlive) {
-        const oldSocketId = gamePlayer.socketId;
-        gamePlayer.socketId = socket.id;
-        if (oldSocketId && oldSocketId !== socket.id) {
-          game.roles[socket.id] = game.roles[oldSocketId];
-          delete game.roles[oldSocketId];
-        }
+    const gamePlayer = game.players.find(p => p.id === userId);
+    if (gamePlayer && gamePlayer.isAlive) {
+      const oldSocketId = gamePlayer.socketId;
+      gamePlayer.socketId = socket.id;
+      if (oldSocketId && oldSocketId !== socket.id) {
+        game.roles[socket.id] = game.roles[oldSocketId];
+        delete game.roles[oldSocketId];
       }
     }
+  }
 
   const player = {
     socketId: socket.id,
@@ -141,6 +253,35 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
   return room;
 }
 
+function isRoomOnlyAI(room) {
+  return room.players.every(p => p.isAI);
+}
+
+function shouldDestroyRoom(room, leavingUserId) {
+  if (room.hostUserId === leavingUserId) {
+    return true;
+  }
+  
+  if (isRoomOnlyAI(room)) {
+    return true;
+  }
+  
+  return false;
+}
+
+function destroyRoom(code) {
+  const aiGameHandler = require('../game/AIGameHandler');
+  aiGameHandler.cleanup(code);
+  
+  roomCache.del(code);
+  gameCache.del(code);
+  
+  const io = require('../app').getIO();
+  io.emit('room_deleted', { code });
+  
+  console.log(`[roomHandler] Room ${code} deleted`);
+}
+
 /**
  * Leave a room
  */
@@ -148,65 +289,60 @@ function leaveRoom(socket, code, isDisconnect = false) {
   const room = roomCache.get(code);
   if (!room) return;
 
-  if (isDisconnect) {
-    const player = room.players.find(p => p.socketId === socket.id);
-    if (player) {
-      player.socketId = null;
-      roomCache.set(code, room);
-      broadcastRoomUpdate(code);
-      
-      setTimeout(() => {
-        const roomCheck = roomCache.get(code);
-        if (roomCheck) {
-          const playerCheck = roomCheck.players.find(p => p.userId === player.userId);
-          if (playerCheck && playerCheck.socketId === null) {
-            roomCheck.players = roomCheck.players.filter(p => p.userId !== player.userId);
-            
-            if (roomCheck.players.length === 0) {
-              roomCache.del(code);
-              gameCache.del(code);
-              const io = require('../app').getIO();
-              io.emit('room_deleted', { code });
-            } else {
-              if (roomCheck.hostUserId === player.userId) {
-                roomCheck.hostId = roomCheck.players[0].socketId;
-                roomCheck.hostUserId = roomCheck.players[0].userId;
-              }
-              roomCache.set(code, roomCheck);
-              broadcastRoomUpdate(code);
+  const player = room.players.find(p => p.socketId === socket.id);
+  const leavingUserId = player?.userId;
+
+  if (isDisconnect && player) {
+    player.socketId = null;
+    roomCache.set(code, room);
+    broadcastRoomUpdate(code);
+    
+    setTimeout(() => {
+      const roomCheck = roomCache.get(code);
+      if (roomCheck) {
+        const playerCheck = roomCheck.players.find(p => p.userId === leavingUserId);
+        if (playerCheck && playerCheck.socketId === null) {
+          roomCheck.players = roomCheck.players.filter(p => p.userId !== leavingUserId);
+          
+          if (roomCheck.players.length === 0) {
+            destroyRoom(code);
+          } else if (shouldDestroyRoom(roomCheck, leavingUserId)) {
+            destroyRoom(code);
+          } else {
+            if (roomCheck.hostUserId === leavingUserId) {
+              roomCheck.hostId = roomCheck.players[0].socketId;
+              roomCheck.hostUserId = roomCheck.players[0].userId;
             }
+            roomCache.set(code, roomCheck);
+            broadcastRoomUpdate(code);
           }
         }
-      }, 30000);
+      }
+    }, 30000);
+  } else {
+    room.players = room.players.filter(p => p.socketId !== socket.id);
+
+    if (room.players.length === 0 || shouldDestroyRoom(room, leavingUserId)) {
+      destroyRoom(code);
+      socket.leave(code);
+      socketCache.del(socket.id);
+      return;
     }
-    socketCache.del(socket.id);
-    return;
+
+    if (room.hostId === socket.id && room.players.length > 0) {
+      room.hostId = room.players[0].socketId;
+      room.hostUserId = room.players[0].userId;
+    }
+
+    roomCache.set(code, room);
   }
-
-  room.players = room.players.filter(p => p.socketId !== socket.id);
-
-  if (room.players.length === 0) {
-    roomCache.del(code);
-    gameCache.del(code);
-    
-    const io = require('../app').getIO();
-    io.emit('room_deleted', { code });
-    
-    console.log(`[roomHandler] Room ${code} deleted - no players left`);
-    return;
-  }
-
-  if (room.hostId === socket.id && room.players.length > 0) {
-    room.hostId = room.players[0].socketId;
-    room.hostUserId = room.players[0].userId;
-  }
-
-  roomCache.set(code, room);
 
   socket.leave(code);
   socketCache.del(socket.id);
 
-  broadcastRoomUpdate(code);
+  if (roomCache.has(code)) {
+    broadcastRoomUpdate(code);
+  }
 }
 
 /**
@@ -272,7 +408,8 @@ function broadcastRoomUpdate(code, room = null) {
 
   const connectedPlayers = room.players.filter(p => p.socketId !== null);
   
-  console.log(`[roomHandler] broadcastRoomUpdate room=${code}, players=${connectedPlayers.length}`);
+  console.log(`[roomHandler] broadcastRoomUpdate room=${code}, totalPlayers=${room.players.length}, connectedPlayers=${connectedPlayers.length}`);
+  console.log(`[roomHandler] players:`, room.players.map(p => ({ username: p.username, socketId: p.socketId, userId: p.userId, isAI: p.isAI })));
 
   const io = require('../app').getIO();
   io.to(code).emit('room_update', {
@@ -310,4 +447,4 @@ function handleDisconnect(socket) {
   }
 }
 
-module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate };
+module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer };

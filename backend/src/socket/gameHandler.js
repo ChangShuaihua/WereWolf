@@ -2,6 +2,7 @@ const { gameCache, roomCache } = require('../utils/cache');
 const GameEngine = require('../game/GameEngine');
 const GameRecord = require('../models/GameRecord');
 const User = require('../models/User');
+const aiGameHandler = require('../game/AIGameHandler');
 
 /**
  * Start the game
@@ -48,6 +49,9 @@ function startGame(io, socket, code) {
         roomCache.set(data.roomCode, room);
         io.to(data.roomCode).emit('chat_message', replayMsg);
       }
+    } else if (event === 'phase_change') {
+      aiGameHandler.handlePhaseChange(code, data.phase);
+      io.to(code).emit(event, data);
     } else if (target === code) {
       io.to(code).emit(event, data);
     } else {
@@ -62,6 +66,7 @@ function startGame(io, socket, code) {
     username: p.username,
     isAlive: true,
     isReady: p.isReady,
+    isAI: p.isAI || false,
   })), emit);
 
   gameCache.set(code, engine);
@@ -100,6 +105,51 @@ function handleNightAction(socket, code, { action, targetId }) {
   }
 
   game.submitNightAction(socket.id, action, targetId);
+}
+
+/**
+ * Handle hunter shoot
+ */
+function handleHunterShoot(socket, code, { targetId }) {
+  const game = gameCache.get(code);
+  if (!game) return;
+
+  const hunter = game.getPlayer(socket.id);
+  if (!hunter) return;
+
+  const role = game.getRole(socket.id);
+  if (role !== 'hunter') return;
+
+  const target = game.getPlayer(targetId);
+  if (!target || !target.isAlive) return;
+
+  // Kill the target
+  target.isAlive = false;
+  
+  game.gameHistory.push({
+    night: game.nightCount,
+    action: 'hunter_shoot',
+    actor: { id: socket.id, username: hunter.username, role: 'hunter' },
+    target: { id: targetId, username: target.username },
+    detail: `${hunter.username}开枪带走了${target.username}`,
+  });
+  
+  // Notify everyone
+  game.broadcast('hunter_result', {
+    shooter: { id: socket.id, username: hunter.username },
+    target: { id: targetId, username: target.username },
+    message: `${hunter.username}开枪带走了${target.username}`,
+  });
+  
+  game.broadcast('chat_message', {
+    username: '系统',
+    message: `🔫 ${hunter.username}开枪带走了${target.username}`,
+    timestamp: Date.now(),
+    isSystem: true,
+  });
+  
+  // Continue game
+  game._continueAfterHunter();
 }
 
 /**
@@ -157,10 +207,11 @@ function resetGame(code) {
   const room = roomCache.get(code);
   if (!room) return;
 
+  aiGameHandler.cleanup(code);
   gameCache.del(code);
 
   room.players.forEach(p => {
-    p.isReady = false;
+    p.isReady = p.isAI ? true : false;
     p.isAlive = true;
   });
 
@@ -172,4 +223,4 @@ function resetGame(code) {
   console.log(`[gameHandler] Game ${code} reset, players ready to return`);
 }
 
-module.exports = { startGame, handleNightAction, handleVote, skipDay, resetGame };
+module.exports = { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot };

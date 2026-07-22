@@ -87,4 +87,50 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// PUT /api/auth/me
+router.put('/me', authMiddleware, async (req, res) => {
+  try {
+    const { username, password, oldPassword } = req.body;
+
+    if (!username && !password) {
+      return res.status(400).json({ message: '请提供要修改的信息' });
+    }
+
+    if (password && !oldPassword) {
+      return res.status(400).json({ message: '修改密码需要提供旧密码' });
+    }
+
+    if (username) {
+      if (username.length < 2 || username.length > 20) {
+        return res.status(400).json({ message: '用户名长度应为2-20个字符' });
+      }
+      const existing = await User.findByUsername(username);
+      if (existing && existing.id !== req.user.id) {
+        return res.status(400).json({ message: '用户名已存在' });
+      }
+    }
+
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({ message: '密码长度不能少于6位' });
+      }
+      const user = await User.findById(req.user.id);
+      const valid = await User.verifyPassword(oldPassword, user.password);
+      if (!valid) {
+        return res.status(400).json({ message: '旧密码不正确' });
+      }
+    }
+
+    const updated = await User.updateProfile(req.user.id, { username, password });
+    if (!updated) {
+      return res.status(400).json({ message: '更新失败' });
+    }
+
+    res.json({ user: { id: updated.id, username: updated.username, wins: updated.wins, losses: updated.losses, score: updated.score } });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ message: '更新失败，请稍后重试' });
+  }
+});
+
 module.exports = router;

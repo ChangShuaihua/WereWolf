@@ -1,6 +1,6 @@
-const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect } = require('./roomHandler');
-const { startGame, handleNightAction, handleVote, skipDay, resetGame } = require('./gameHandler');
-const { socketCache } = require('../utils/cache');
+const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer } = require('./roomHandler');
+const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
+const { socketCache, gameCache } = require('../utils/cache');
 
 /**
  * Initialize Socket.io with all event handlers
@@ -11,7 +11,8 @@ function initSocket(io) {
 
     // Authenticate on connection
     socket.on('authenticate', ({ userId, username }) => {
-      socketCache.set(socket.id, { userId, username, roomCode: null });
+      const existing = socketCache.get(socket.id);
+      socketCache.set(socket.id, { userId, username, roomCode: existing?.roomCode || null });
       socket.emit('authenticated', { socketId: socket.id });
       console.log(`User authenticated: ${username} (${socket.id})`);
     });
@@ -45,6 +46,30 @@ function initSocket(io) {
       if (code) toggleReady(socket, code);
     });
 
+    // Add AI player
+    socket.on('add_ai_player', ({ roomCode, agentId } = {}) => {
+      console.log(`[socket] add_ai_player event received from socket=${socket.id}, roomCode=${roomCode}, agentId=${agentId}`);
+      const info = socketCache.get(socket.id);
+      console.log(`[socket] socketCache info:`, info);
+      const code = roomCode || info?.roomCode;
+      console.log(`[socket] resolved code: ${code}`);
+      if (code) {
+        const result = addAIPlayer(socket, code, agentId);
+        console.log(`[socket] addAIPlayer result:`, result ? result.username : 'null');
+      }
+    });
+
+    // Remove AI player
+    socket.on('remove_ai_player', ({ roomCode, aiSocketId } = {}) => {
+      console.log(`[socket] remove_ai_player event received from socket=${socket.id}, roomCode=${roomCode}, aiSocketId=${aiSocketId}`);
+      const info = socketCache.get(socket.id);
+      const code = roomCode || info?.roomCode;
+      if (code && aiSocketId) {
+        const result = removeAIPlayer(socket, code, aiSocketId);
+        console.log(`[socket] removeAIPlayer result:`, result ? result.username : 'null');
+      }
+    });
+
     // Start game
     socket.on('start_game', ({ roomCode } = {}) => {
       const info = socketCache.get(socket.id);
@@ -56,6 +81,12 @@ function initSocket(io) {
     socket.on('night_action', (data) => {
       const info = socketCache.get(socket.id);
       if (info?.roomCode) handleNightAction(socket, info.roomCode, data);
+    });
+
+    // Hunter shoot
+    socket.on('hunter_shoot', (data) => {
+      const info = socketCache.get(socket.id);
+      if (info?.roomCode) handleHunterShoot(socket, info.roomCode, data);
     });
 
     // Vote
@@ -75,7 +106,38 @@ function initSocket(io) {
       console.log(`[socket] chat from ${socket.id}: msg="${message}" code="${code}"`);
       const info = socketCache.get(socket.id);
       const roomCode = code || info?.roomCode;
-      if (roomCode && message) addChat(socket, roomCode, message);
+      
+      if (roomCode && message) {
+        const game = gameCache.get(roomCode);
+        if (game && game.phase === 'DAY' && game.speakingOrder.length > 0) {
+          const currentSpeaker = game.speakingOrder[game.currentSpeakerIndex];
+          if (socket.id !== currentSpeaker) {
+            socket.emit('chat_error', { message: '请等待轮到你发言' });
+            return;
+          }
+        }
+        addChat(socket, roomCode, message);
+      }
+    });
+
+    // Next speaker
+    socket.on('next_speaker', ({ roomCode } = {}) => {
+      const info = socketCache.get(socket.id);
+      const code = roomCode || info?.roomCode;
+      if (code) {
+        const game = gameCache.get(code);
+        if (game) game.nextSpeaker();
+      }
+    });
+
+    // Skip speaking
+    socket.on('skip_speaking', ({ roomCode } = {}) => {
+      const info = socketCache.get(socket.id);
+      const code = roomCode || info?.roomCode;
+      if (code) {
+        const game = gameCache.get(code);
+        if (game) game.skipSpeaking();
+      }
     });
 
     // Reset game and return to room

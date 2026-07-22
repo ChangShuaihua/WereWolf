@@ -2,7 +2,7 @@
   <div class="login-page">
     <div class="login-card">
       <h2>🐺 狼人杀</h2>
-      <p class="subtitle">登录或注册以开始游戏</p>
+      <p class="subtitle">登录或注册</p>
 
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
@@ -12,6 +12,11 @@
         <div class="form-group">
           <label>密码</label>
           <input v-model="password" type="password" placeholder="请输入密码" required />
+        </div>
+
+        <div v-if="!isLogin" class="form-group">
+          <label>确认密码</label>
+          <input v-model="confirmPassword" type="password" placeholder="请再次输入密码" required />
         </div>
 
         <p v-if="error" class="error">{{ error }}</p>
@@ -42,6 +47,7 @@ const userStore = useUserStore()
 const isLogin = ref(true)
 const username = ref('')
 const password = ref('')
+const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
 
@@ -49,6 +55,14 @@ async function handleSubmit() {
   error.value = ''
   loading.value = true
   try {
+    if (!isLogin.value) {
+      if (password.value !== confirmPassword.value) {
+        error.value = '两次输入的密码不一致'
+        loading.value = false
+        return
+      }
+    }
+
     if (isLogin.value) {
       await userStore.login(username.value, password.value)
     } else {

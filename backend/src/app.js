@@ -7,7 +7,7 @@ require('dotenv').config();
 const { initDB } = require('./config/db');
 const { roomCache } = require('./utils/cache');
 const authRoutes = require('./routes/auth');
-const rankRoutes = require('./routes/rank');
+const aiAgentRoutes = require('./routes/aiAgentRoutes');
 const initSocket = require('./socket');
 
 const app = express();
@@ -22,13 +22,20 @@ const io = new Server(server, {
 // Make io accessible to socket handlers
 app.getIO = () => io;
 
+// Clear roomCache on server startup to ensure fresh data
+roomCache.clear();
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
+});
 
 // REST Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/rank', rankRoutes);
+app.use('/api/ai-agents', aiAgentRoutes);
 
 // GET /api/rooms - list active rooms
 app.get('/api/rooms', (req, res) => {

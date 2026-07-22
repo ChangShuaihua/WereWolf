@@ -9,6 +9,7 @@ const roomCache = {
   has(key) { return key in this._data; },
   del(key) { delete this._data[key]; },
   keys() { return Object.keys(this._data); },
+  clear() { this._data = {}; },
 };
 
 const gameCache = {

@@ -15,27 +15,6 @@ const GameRecord = {
       [gameId, userId, role, isWinner]
     );
   },
-
-  async getLeaderboard(limit = 50) {
-    const [rows] = await pool.query(
-      'SELECT id, username, wins, losses, score FROM users ORDER BY score DESC LIMIT ?',
-      [limit]
-    );
-    return rows;
-  },
-
-  async getUserHistory(userId, limit = 20) {
-    const [rows] = await pool.query(
-      `SELECT gr.id, gr.room_code, gr.winner, gr.player_count, gr.duration, gp.role, gp.is_winner, gr.created_at
-       FROM game_players gp
-       JOIN game_records gr ON gp.game_id = gr.id
-       WHERE gp.user_id = ?
-       ORDER BY gr.created_at DESC
-       LIMIT ?`,
-      [userId, limit]
-    );
-    return rows;
-  },
 };
 
 module.exports = GameRecord;

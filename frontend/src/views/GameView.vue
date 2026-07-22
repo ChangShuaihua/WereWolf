@@ -3,56 +3,97 @@
     <!-- Role Reveal Overlay -->
     <RoleReveal v-if="showRoleReveal" :role="gameStore.myRole" :roleName="gameStore.myRoleName" @close="showRoleReveal = false" />
 
-    <!-- Phase Indicator -->
-    <div class="game-top-bar">
-      <div class="phase-badge" :class="phaseClass">
-        {{ phaseLabel }}
-        <span v-if="gameStore.nightCount && gameStore.isNight">第{{ gameStore.nightCount }}夜</span>
+    <!-- Top Bar -->
+    <header class="game-header">
+      <div class="game-header-left">
+        <div class="phase-indicator" :class="phaseClass">
+          <span class="phase-icon">{{ phaseIcon }}</span>
+          <span class="phase-text">{{ phaseLabel }}</span>
+          <span v-if="gameStore.nightCount && gameStore.isNight" class="night-number">第{{ gameStore.nightCount }}夜</span>
+        </div>
       </div>
-      <div class="role-badge" v-if="gameStore.myRole">
-        {{ roleIcon }} {{ gameStore.myRoleName }}
+
+      <div class="game-header-center">
+        <div class="my-role" v-if="gameStore.myRole">
+          <span class="role-emoji">{{ roleIcon }}</span>
+          <span class="role-name">{{ gameStore.myRoleName }}</span>
+        </div>
+        <Countdown v-if="gameStore.isNight" :timeout="gameStore.timeout" :phase="gameStore.phase" />
       </div>
-      <Countdown :timeout="gameStore.timeout" :phase="gameStore.phase" />
-      <div class="message-bar" v-if="gameStore.message">{{ gameStore.message }}</div>
-    </div>
 
-    <div class="game-body">
-      <!-- Player Grid -->
-      <PlayerList
-        :players="gameStore.players"
-        :myId="socket.id"
-        :showRoles="gameStore.isEnd"
-        :roles="gameOverRoles"
-        :aliveFilter="null"
-      />
+      <div class="game-header-right">
+        <div class="game-message" v-if="gameStore.message">{{ gameStore.message }}</div>
+      </div>
+    </header>
 
-      <!-- Action Panels by Phase -->
-      <NightPanel
-        v-if="gameStore.isNight && gameStore.myPlayer?.isAlive"
-        :prompt="gameStore.nightActionPrompt"
-        :seerResult="gameStore.seerResult"
-        @action="gameStore.submitNightAction"
-      />
+    <!-- Main Content -->
+    <div class="game-main">
+      <!-- Left Panel: Player List & Action Panels -->
+      <div class="game-left-panel">
+        <!-- Player Grid -->
+        <section class="game-section player-section">
+          <div class="section-header">
+            <h3>👥 玩家列表</h3>
+            <span class="section-badge">{{ aliveCount }}/{{ gameStore.players.length }} 存活</span>
+          </div>
+          <div class="player-grid-wrapper">
+            <PlayerList
+              :players="gameStore.players"
+              :myId="socket.id"
+              :showRoles="gameStore.isEnd"
+              :roles="gameOverRoles"
+              :aliveFilter="null"
+            />
+          </div>
+        </section>
 
-      <DayPanel
-        v-if="gameStore.isDay"
-        :message="gameStore.message"
-        :isAlive="gameStore.myPlayer?.isAlive"
-        @skip="gameStore.skipDay()"
-      />
+        <!-- Action Panels -->
+        <section class="game-section action-section">
+          <NightPanel
+            v-if="gameStore.isNight && gameStore.myPlayer?.isAlive"
+            :prompt="gameStore.nightActionPrompt"
+            :seerResult="gameStore.seerResult"
+            :currentNightRole="gameStore.currentNightRole"
+            @action="gameStore.submitNightAction"
+          />
 
-      <VotePanel
-        v-if="gameStore.isVote && gameStore.myPlayer?.isAlive"
-        :candidates="gameStore.candidates"
-        :votedCount="gameStore.votedCount"
-        :totalVoters="gameStore.totalVoters"
-        @vote="gameStore.submitVote"
-      />
-    </div>
+          <HunterPanel
+            v-if="gameStore.hunterPrompt"
+            :prompt="gameStore.hunterPrompt"
+            @shoot="gameStore.submitHunterShoot"
+          />
 
-    <!-- Chat sidebar -->
-    <div class="game-sidebar">
-      <ChatBox :messages="roomStore.chat" @send="handleChat" />
+          <DayPanel
+            v-if="gameStore.isDay"
+            :message="gameStore.message"
+            :isAlive="gameStore.myPlayer?.isAlive"
+            :currentSpeaker="gameStore.currentSpeaker"
+            :speakerName="gameStore.speakerName"
+            :mySocketId="socket.id"
+            @skip="gameStore.skipSpeaking()"
+            @next="gameStore.nextSpeaker()"
+            @skipDay="gameStore.skipDay()"
+          />
+
+          <VotePanel
+            v-if="gameStore.isVote && gameStore.myPlayer?.isAlive"
+            :candidates="gameStore.candidates"
+            :votedCount="gameStore.votedCount"
+            :totalVoters="gameStore.totalVoters"
+            @vote="gameStore.submitVote"
+          />
+        </section>
+      </div>
+
+      <!-- Right Panel: Chat -->
+      <aside class="game-right-panel">
+        <section class="game-section chat-section">
+          <div class="section-header">
+            <h3>💬 聊天</h3>
+          </div>
+          <ChatBox :messages="roomStore.chat" @send="handleChat" />
+        </section>
+      </aside>
     </div>
 
     <!-- Game Over -->
@@ -74,17 +115,24 @@ import NightPanel from '../components/NightPanel.vue'
 import DayPanel from '../components/DayPanel.vue'
 import VotePanel from '../components/VotePanel.vue'
 import GameResult from '../components/GameResult.vue'
+import HunterPanel from '../components/HunterPanel.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
 
-const showRoleReveal = ref(true)
+const showRoleReveal = ref(false)
 const gameChat = ref([])
+const roleRevealed = ref(false)
 
 const phaseLabel = computed(() => {
-  const labels = { WAITING: '等待中', NIGHT: '🌙 夜晚', DAY: '☀️ 白天', VOTE: '🗳️ 投票', END: '游戏结束' }
+  const labels = { WAITING: '等待中', NIGHT: '夜晚', DAY: '白天', VOTE: '投票', END: '游戏结束' }
   return labels[gameStore.phase] || gameStore.phase
+})
+
+const phaseIcon = computed(() => {
+  const icons = { WAITING: '⏳', NIGHT: '🌙', DAY: '☀️', VOTE: '🗳️', END: '🏆' }
+  return icons[gameStore.phase] || '❓'
 })
 
 const phaseClass = computed(() => gameStore.phase.toLowerCase())
@@ -100,6 +148,8 @@ const roleIcons = {
 
 const roleIcon = computed(() => roleIcons[gameStore.myRole] || '❓')
 
+const aliveCount = computed(() => gameStore.players.filter(p => p.isAlive).length)
+
 const gameOverRoles = computed(() => {
   if (!gameStore.gameOver) return {}
   const map = {}
@@ -114,10 +164,13 @@ onMounted(() => {
   }
 
   roomStore.bindEvents()
+  gameStore.bindEvents()
 
-  // Show role reveal
-  showRoleReveal.value = true
-  setTimeout(() => { showRoleReveal.value = false }, 5000)
+  if (!roleRevealed.value && gameStore.myRole) {
+    showRoleReveal.value = true
+    roleRevealed.value = true
+    setTimeout(() => { showRoleReveal.value = false }, 5000)
+  }
 })
 
 function handleChat(message) {

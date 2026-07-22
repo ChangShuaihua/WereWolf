@@ -15,15 +15,18 @@ export const useRoomStore = defineStore('room', () => {
   // ---- event handlers (named so we can off/on) ----
   function _onRoomJoined(data) {
     console.log('[roomStore] room_joined', data)
+    console.log('[roomStore] players from room_joined:', data.players?.map(p => ({ username: p.username, socketId: p.socketId, userId: p.userId })))
     roomCode.value = data.code
     players.value = data.players
     hostId.value = data.hostId
+    console.log('[roomStore] isHost check:', { mySocketId: socket.id, hostId: data.hostId, myUserId: userStore.user?.id })
   }
 
   
 
   function _onRoomUpdate(data) {
     console.log('[roomStore] room_update', data)
+    console.log('[roomStore] players from room_update:', data.players?.map(p => ({ username: p.username, socketId: p.socketId, userId: p.userId })))
     players.value = [...data.players]
     hostId.value = data.hostId
   }
@@ -55,6 +58,7 @@ export const useRoomStore = defineStore('room', () => {
   // ---- actions ----
   function createRoom() {
     console.log('[roomStore] createRoom, user=', userStore.user)
+    console.log('[roomStore] userId:', userStore.user?.id, 'typeof:', typeof userStore.user?.id)
     socket.emit('create_room', {
       username: userStore.user?.username,
       userId: userStore.user?.id,
@@ -91,8 +95,38 @@ export const useRoomStore = defineStore('room', () => {
     socket.emit('chat', { message, roomCode: roomCode.value })
   }
 
+  function addAIPlayer(agentId = '') {
+    console.log('[roomStore] addAIPlayer called')
+    console.log('[roomStore] roomCode.value:', roomCode.value)
+    console.log('[roomStore] socket.connected:', socket.connected)
+    console.log('[roomStore] socket.id:', socket.id)
+    console.log('[roomStore] agentId:', agentId)
+    
+    if (!socket.connected) {
+      console.warn('[roomStore] Socket not connected, connecting...')
+      socket.connect()
+      socket.once('connect', () => {
+        console.log('[roomStore] Socket connected, now sending add_ai_player')
+        socket.emit('add_ai_player', { roomCode: roomCode.value, agentId })
+      })
+    } else {
+      console.log('[roomStore] Sending add_ai_player event with roomCode:', roomCode.value)
+      socket.emit('add_ai_player', { roomCode: roomCode.value, agentId })
+      console.log('[roomStore] add_ai_player event sent')
+    }
+  }
+
+  function removeAIPlayer(aiSocketId) {
+    console.log('[roomStore] removeAIPlayer called, aiSocketId:', aiSocketId)
+    if (socket.connected) {
+      socket.emit('remove_ai_player', { roomCode: roomCode.value, aiSocketId })
+    }
+  }
+
   function isHost() {
-    return socket.id === hostId.value
+    if (socket.id === hostId.value) return true
+    const hostPlayer = players.value.find(p => (p.socketId || p.id) === hostId.value)
+    return hostPlayer?.userId === userStore.user?.id
   }
 
   function allReady() {
@@ -103,6 +137,6 @@ export const useRoomStore = defineStore('room', () => {
     roomCode, players, hostId, chat, isInRoom,
     bindEvents, unbindEvents,
     createRoom, joinRoom, leaveRoom,
-    toggleReady, startGame, sendChat, isHost, allReady,
+    toggleReady, startGame, sendChat, addAIPlayer, removeAIPlayer, isHost, allReady,
   }
 })

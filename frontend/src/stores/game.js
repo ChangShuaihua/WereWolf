@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import socket from '../socket'
+import { useRoomStore } from './room'
 
 export const useGameStore = defineStore('game', () => {
   const phase = ref('WAITING')
@@ -16,6 +17,10 @@ export const useGameStore = defineStore('game', () => {
   const gameOver = ref(null)
   const seerResult = ref(null)
   const nightActionPrompt = ref(null)
+  const hunterPrompt = ref(null)
+  const currentSpeaker = ref(null)
+  const speakerName = ref('')
+  const currentNightRole = ref(null)
 
   const isNight = computed(() => phase.value === 'NIGHT')
   const isDay = computed(() => phase.value === 'DAY')
@@ -51,11 +56,29 @@ export const useGameStore = defineStore('game', () => {
     totalVoters.value = data.candidates?.length || 0
     seerResult.value = null
     nightActionPrompt.value = null
+    currentSpeaker.value = data.currentSpeaker || null
+    speakerName.value = data.speakerName || ''
+  }
+
+  function _onSpeakerChange(data) {
+    console.log('[gameStore] speaker_change', data)
+    currentSpeaker.value = data.currentSpeaker || null
+    speakerName.value = data.speakerName || ''
   }
 
   function _onNightActionPrompt(data) {
     console.log('[gameStore] night_action_prompt', data)
     nightActionPrompt.value = data
+  }
+
+  function _onNightRoleTurn(data) {
+    console.log('[gameStore] night_role_turn', data)
+    currentNightRole.value = data
+  }
+
+  function _onNightRoleDone(data) {
+    console.log('[gameStore] night_role_done', data)
+    currentNightRole.value = null
   }
 
   function _onSeerResult(data) {
@@ -66,12 +89,27 @@ export const useGameStore = defineStore('game', () => {
     console.log('[gameStore] night_result', data)
     if (data.deaths) {
       data.deaths.forEach(d => {
-        const p = players.value.find(pl => pl.id === d.id)
+        const p = players.value.find(pl => pl.id === d.id || pl.socketId === d.id)
         if (p) p.isAlive = false
       })
     }
     message.value = data.message
     nightActionPrompt.value = null
+  }
+
+  function _onHunterTrigger(data) {
+    console.log('[gameStore] hunter_trigger', data)
+    hunterPrompt.value = data
+  }
+
+  function _onHunterResult(data) {
+    console.log('[gameStore] hunter_result', data)
+    if (data.target) {
+      const p = players.value.find(pl => pl.id === data.target.id || pl.socketId === data.target.id)
+      if (p) p.isAlive = false
+    }
+    message.value = data.message
+    hunterPrompt.value = null
   }
 
   function _onVoteUpdate(data) {
@@ -82,7 +120,7 @@ export const useGameStore = defineStore('game', () => {
   function _onVoteResult(data) {
     console.log('[gameStore] vote_result', data)
     if (data.eliminated) {
-      const p = players.value.find(pl => pl.id === data.eliminated.id)
+      const p = players.value.find(pl => pl.id === data.eliminated.id || pl.socketId === data.eliminated.id)
       if (p) p.isAlive = false
     }
     message.value = data.message
@@ -108,20 +146,28 @@ export const useGameStore = defineStore('game', () => {
     socket.off('night_action_prompt', _onNightActionPrompt)
     socket.off('seer_result', _onSeerResult)
     socket.off('night_result', _onNightResult)
+    socket.off('hunter_trigger', _onHunterTrigger)
+    socket.off('hunter_result', _onHunterResult)
     socket.off('vote_update', _onVoteUpdate)
     socket.off('vote_result', _onVoteResult)
     socket.off('game_over', _onGameOver)
     socket.off('player_disconnected', _onPlayerDisconnected)
+    socket.off('speaker_change', _onSpeakerChange)
 
     socket.on('game_started', _onGameStarted)
     socket.on('phase_change', _onPhaseChange)
     socket.on('night_action_prompt', _onNightActionPrompt)
+    socket.on('night_role_turn', _onNightRoleTurn)
+    socket.on('night_role_done', _onNightRoleDone)
     socket.on('seer_result', _onSeerResult)
     socket.on('night_result', _onNightResult)
+    socket.on('hunter_trigger', _onHunterTrigger)
+    socket.on('hunter_result', _onHunterResult)
     socket.on('vote_update', _onVoteUpdate)
     socket.on('vote_result', _onVoteResult)
     socket.on('game_over', _onGameOver)
     socket.on('player_disconnected', _onPlayerDisconnected)
+    socket.on('speaker_change', _onSpeakerChange)
 
     console.log('[gameStore] events bound, socket.id=', socket.id)
   }
@@ -142,6 +188,10 @@ export const useGameStore = defineStore('game', () => {
     socket.emit('night_action', { action, targetId })
   }
 
+  function submitHunterShoot(targetId) {
+    socket.emit('hunter_shoot', { targetId })
+  }
+
   function submitVote(targetId) {
     socket.emit('vote', { targetId })
   }
@@ -151,14 +201,27 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function sendChat(message) {
-    socket.emit('chat', { message })
+    const roomStore = useRoomStore()
+    socket.emit('chat', { message, roomCode: roomStore.roomCode })
+  }
+
+  function nextSpeaker() {
+    const roomStore = useRoomStore()
+    socket.emit('next_speaker', { roomCode: roomStore.roomCode })
+  }
+
+  function skipSpeaking() {
+    const roomStore = useRoomStore()
+    socket.emit('skip_speaking', { roomCode: roomStore.roomCode })
   }
 
   return {
     phase, myRole, myRoleName, players, timeout, message, nightCount,
-    candidates, votedCount, totalVoters, gameOver, seerResult, nightActionPrompt,
+    candidates, votedCount, totalVoters, gameOver, seerResult, nightActionPrompt, hunterPrompt,
+    currentSpeaker, speakerName, currentNightRole,
     isNight, isDay, isVote, isEnd, myPlayer, alivePlayers,
     bindEvents, unbindEvents,
-    submitNightAction, submitVote, skipDay, sendChat,
+    submitNightAction, submitHunterShoot, submitVote, skipDay, sendChat,
+    nextSpeaker, skipSpeaking,
   }
 })
