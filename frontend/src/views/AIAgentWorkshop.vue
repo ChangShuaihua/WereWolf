@@ -1,20 +1,16 @@
 <template>
   <div class="workshop-page">
-    <header class="workshop-header">
-      <button class="btn-back" @click="$router.push('/')">
-        ← 返回大厅
-      </button>
-      <h1>🤖 AI工坊</h1>
-      <button class="btn-create" @click="showCreateForm = true">
-        + 创建智能体
-      </button>
-    </header>
-
     <div class="workshop-content">
       <div class="agent-list">
-        <h2>智能体列表</h2>
+        <div class="list-header">
+          <h2>智能体列表</h2>
+          <button class="btn-create" @click="showCreateForm = true">
+            + 创建
+          </button>
+        </div>
         <div v-if="agents.length === 0" class="empty-state">
-          <p>暂无智能体，点击右上角创建</p>
+          <p>暂无智能体</p>
+          <button class="btn btn-primary" @click="showCreateForm = true">创建第一个智能体</button>
         </div>
         <div class="agent-card"
           v-for="agent in agents"

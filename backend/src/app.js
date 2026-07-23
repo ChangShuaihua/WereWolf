@@ -50,7 +50,7 @@ app.get('/api/rooms', (req, res) => {
           code: room.code,
           hostUsername: connectedPlayers[0]?.username || '未知',
           playerCount: connectedPlayers.length,
-          maxPlayers: 12,
+          maxPlayers: Number(room.maxPlayers) || 6,
         });
       }
     }
@@ -65,12 +65,15 @@ app.get('/api/room/:code', (req, res) => {
   if (!room) {
     return res.status(404).json({ message: '房间不存在' });
   }
+  const { buildSeats } = require('./socket/roomHandler');
   const connectedPlayers = room.players.filter(p => p.socketId !== null);
   res.json({
     code: room.code,
     hostId: room.hostId,
     players: connectedPlayers,
+    seats: buildSeats(room),
     chat: room.chat,
+    maxPlayers: Number(room.maxPlayers) || 6,
   });
 });
 

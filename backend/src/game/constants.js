@@ -45,17 +45,14 @@ const TEAM = {
   guard: 'villager',
 };
 
-// Role distribution by player count
+// Supported game modes
+const GAME_MODES = [6, 8, 12];
+
+// Role distribution by player count (only 6, 8, 12 supported)
 const ROLE_DISTRIBUTION = {
-  4: ['werewolf', 'seer', 'witch', 'villager'],
-  5: ['werewolf', 'werewolf', 'seer', 'witch', 'villager'],
-  6: ['werewolf', 'werewolf', 'seer', 'witch', 'villager', 'villager'],
-  7: ['werewolf', 'werewolf', 'seer', 'witch', 'hunter', 'villager', 'villager'],
+  6: ['werewolf', 'werewolf', 'seer', 'witch', 'hunter', 'villager'],
   8: ['werewolf', 'werewolf', 'werewolf', 'seer', 'witch', 'guard', 'villager', 'villager'],
-  9: ['werewolf', 'werewolf', 'werewolf', 'seer', 'witch', 'guard', 'hunter', 'villager', 'villager'],
-  10: ['werewolf', 'werewolf', 'werewolf', 'seer', 'witch', 'guard', 'hunter', 'villager', 'villager', 'villager'],
-  11: ['werewolf', 'werewolf', 'werewolf', 'werewolf', 'seer', 'witch', 'guard', 'hunter', 'villager', 'villager', 'villager'],
   12: ['werewolf', 'werewolf', 'werewolf', 'werewolf', 'seer', 'witch', 'guard', 'hunter', 'villager', 'villager', 'villager', 'villager'],
 };
 
-module.exports = { PHASE, ROLE, TIMERS, ROLE_NAMES, TEAM, ROLE_DISTRIBUTION };
+module.exports = { PHASE, ROLE, TIMERS, ROLE_NAMES, TEAM, ROLE_DISTRIBUTION, GAME_MODES };

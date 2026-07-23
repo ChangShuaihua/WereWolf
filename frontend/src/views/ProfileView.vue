@@ -13,20 +13,7 @@
         </div>
         <div class="profile-info">
           <h2>{{ userStore.user?.username }}</h2>
-          <div class="profile-stats">
-            <div class="stat-item">
-              <span class="stat-value">{{ userStore.user?.wins || 0 }}</span>
-              <span class="stat-label">胜利</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value">{{ userStore.user?.losses || 0 }}</span>
-              <span class="stat-label">失败</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value">{{ userStore.user?.score || 0 }}</span>
-              <span class="stat-label">积分</span>
-            </div>
-          </div>
+          <p class="profile-id">ID: {{ userStore.user?.id }}</p>
         </div>
       </div>
 

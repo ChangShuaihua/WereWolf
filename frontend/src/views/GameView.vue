@@ -1,5 +1,12 @@
 <template>
   <div class="game-page">
+    <!-- Loading overlay -->
+    <div v-if="loading" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <p>正在重新连接到游戏...</p>
+    </div>
+
+    <template v-else>
     <!-- Role Reveal Overlay -->
     <RoleReveal v-if="showRoleReveal" :role="gameStore.myRole" :roleName="gameStore.myRoleName" @close="showRoleReveal = false" />
 
@@ -98,15 +105,17 @@
 
     <!-- Game Over -->
     <GameResult v-if="gameStore.isEnd" :result="gameStore.gameOver" @back="goToLobby" @returnRoom="returnToRoom" />
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { useRoomStore } from '../stores/room'
-import socket from '../socket'
+import { useUserStore } from '../stores/user'
+import socket, { authenticate } from '../socket'
 import PlayerList from '../components/PlayerList.vue'
 import ChatBox from '../components/ChatBox.vue'
 import RoleReveal from '../components/RoleReveal.vue'
@@ -118,12 +127,15 @@ import GameResult from '../components/GameResult.vue'
 import HunterPanel from '../components/HunterPanel.vue'
 
 const router = useRouter()
+const route = useRoute()
 const gameStore = useGameStore()
 const roomStore = useRoomStore()
+const userStore = useUserStore()
 
 const showRoleReveal = ref(false)
 const gameChat = ref([])
 const roleRevealed = ref(false)
+const loading = ref(true)
 
 const phaseLabel = computed(() => {
   const labels = { WAITING: '等待中', NIGHT: '夜晚', DAY: '白天', VOTE: '投票', END: '游戏结束' }
@@ -157,14 +169,51 @@ const gameOverRoles = computed(() => {
   return map
 })
 
-onMounted(() => {
-  if (!roomStore.roomCode) {
+async function reconnectToRoom() {
+  const code = route.params.code
+  if (!code) {
     router.push('/lobby')
     return
   }
 
+  if (!socket.connected) socket.connect()
+
   roomStore.bindEvents()
   gameStore.bindEvents()
+
+  if (userStore.user) {
+    await authenticate(userStore.user.id, userStore.user.username)
+  }
+
+  // Wait for socket connection
+  await new Promise((resolve) => {
+    if (socket.connected) {
+      resolve()
+    } else {
+      socket.once('connect', resolve)
+      setTimeout(resolve, 3000)
+    }
+  })
+
+  // Join room - this will trigger room_joined event which sets roomCode
+  roomStore.joinRoom(code)
+
+  // Wait a bit for the room_joined event to process
+  setTimeout(() => {
+    if (roomStore.roomCode) {
+      loading.value = false
+    } else {
+      router.push('/lobby')
+    }
+  }, 500)
+}
+
+onMounted(async () => {
+  await reconnectToRoom()
+
+  if (!roomStore.roomCode) {
+    return
+  }
 
   if (!roleRevealed.value && gameStore.myRole) {
     showRoleReveal.value = true

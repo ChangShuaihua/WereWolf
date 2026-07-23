@@ -1,7 +1,7 @@
 <template>
   <div class="player-grid">
     <div
-      v-for="player in players"
+      v-for="player in sortedPlayers"
       :key="player.id || player.socketId"
       class="player-card"
       :class="{
@@ -11,6 +11,11 @@
         host: (player.socketId || player.id) === hostId,
       }"
     >
+      <!-- Seat number badge (top-left) -->
+      <div class="seat-num-badge">
+        {{ player.seatNum || ((player.seatIndex !== undefined ? player.seatIndex : 0) + 1) + '号' }}
+      </div>
+
       <div class="player-avatar">
         {{ (player.username || '?')[0] }}
       </div>
@@ -37,7 +42,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   players: { type: Array, default: () => [] },
   myId: { type: String, default: '' },
   hostId: { type: String, default: '' },
@@ -48,6 +55,15 @@ defineProps({
 })
 
 defineEmits(['removeAI'])
+
+// Sort players by seatIndex so they always appear in order
+const sortedPlayers = computed(() => {
+  return [...props.players].sort((a, b) => {
+    const aSeat = a.seatIndex !== undefined ? a.seatIndex : 999
+    const bSeat = b.seatIndex !== undefined ? b.seatIndex : 999
+    return aSeat - bSeat
+  })
+})
 
 const roleNames = {
   werewolf: '🐺狼人',

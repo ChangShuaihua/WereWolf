@@ -6,8 +6,10 @@ import { useUserStore } from './user'
 export const useRoomStore = defineStore('room', () => {
   const roomCode = ref('')
   const players = ref([])
+  const seats = ref([])
   const hostId = ref('')
   const chat = ref([])
+  const maxPlayers = ref(6)
   const isInRoom = computed(() => !!roomCode.value)
 
   const userStore = useUserStore()
@@ -15,20 +17,28 @@ export const useRoomStore = defineStore('room', () => {
   // ---- event handlers (named so we can off/on) ----
   function _onRoomJoined(data) {
     console.log('[roomStore] room_joined', data)
-    console.log('[roomStore] players from room_joined:', data.players?.map(p => ({ username: p.username, socketId: p.socketId, userId: p.userId })))
     roomCode.value = data.code
     players.value = data.players
+    const mp = Number(data.maxPlayers) || 6
+    seats.value = data.seats || buildDefaultSeats(mp)
     hostId.value = data.hostId
-    console.log('[roomStore] isHost check:', { mySocketId: socket.id, hostId: data.hostId, myUserId: userStore.user?.id })
+    maxPlayers.value = mp
   }
-
-  
 
   function _onRoomUpdate(data) {
     console.log('[roomStore] room_update', data)
-    console.log('[roomStore] players from room_update:', data.players?.map(p => ({ username: p.username, socketId: p.socketId, userId: p.userId })))
     players.value = [...data.players]
+    const mp = Number(data.maxPlayers) || maxPlayers.value
+    seats.value = data.seats || buildDefaultSeats(mp)
     hostId.value = data.hostId
+    if (data.maxPlayers) maxPlayers.value = mp
+  }
+
+  function buildDefaultSeats(count) {
+    return Array.from({ length: count }, (_, i) => ({
+      seatIndex: i,
+      occupied: false,
+    }))
   }
 
   function _onChatMessage(msg) {
@@ -56,12 +66,15 @@ export const useRoomStore = defineStore('room', () => {
   }
 
   // ---- actions ----
-  function createRoom() {
-    console.log('[roomStore] createRoom, user=', userStore.user)
-    console.log('[roomStore] userId:', userStore.user?.id, 'typeof:', typeof userStore.user?.id)
+  function createRoom(mode = 6) {
+    const playerCount = Number(mode) || 6;
+    console.log('[roomStore] createRoom, user=', userStore.user, 'mode=', playerCount)
+    maxPlayers.value = playerCount
+    seats.value = buildDefaultSeats(playerCount)
     socket.emit('create_room', {
       username: userStore.user?.username,
       userId: userStore.user?.id,
+      maxPlayers: playerCount,
     })
   }
 
@@ -78,8 +91,10 @@ export const useRoomStore = defineStore('room', () => {
     socket.emit('leave_room', { roomCode: roomCode.value })
     roomCode.value = ''
     players.value = []
+    seats.value = []
     hostId.value = ''
     chat.value = []
+    maxPlayers.value = 6
   }
 
   function toggleReady() {
@@ -101,7 +116,7 @@ export const useRoomStore = defineStore('room', () => {
     console.log('[roomStore] socket.connected:', socket.connected)
     console.log('[roomStore] socket.id:', socket.id)
     console.log('[roomStore] agentId:', agentId)
-    
+
     if (!socket.connected) {
       console.warn('[roomStore] Socket not connected, connecting...')
       socket.connect()
@@ -130,11 +145,21 @@ export const useRoomStore = defineStore('room', () => {
   }
 
   function allReady() {
-    return players.value.length >= 4 && players.value.every(p => p.isReady)
+    return players.value.length >= maxPlayers.value && players.value.every(p => p.isReady)
   }
 
+  // My current seat info
+  const mySeat = computed(() => {
+    return seats.value.find(s => s.occupied && s.socketId === socket.id)
+  })
+
+  const myPlayer = computed(() => {
+    return players.value.find(p => p.socketId === socket.id)
+  })
+
   return {
-    roomCode, players, hostId, chat, isInRoom,
+    roomCode, players, seats, hostId, chat, maxPlayers, isInRoom,
+    mySeat, myPlayer,
     bindEvents, unbindEvents,
     createRoom, joinRoom, leaveRoom,
     toggleReady, startGame, sendChat, addAIPlayer, removeAIPlayer, isHost, allReady,

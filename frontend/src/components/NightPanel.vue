@@ -227,56 +227,65 @@ function confirmSkip() {
 
 <style scoped>
 .night-panel {
-  background: rgba(0, 0, 0, 0.8);
-  padding: 20px;
-  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+  padding: 24px;
+  border-radius: 16px;
   color: #fff;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
 }
 
 .night-waiting {
   text-align: center;
-  padding: 40px;
+  padding: 24px;
+}
+
+.night-waiting p:first-child {
+  font-size: 15px;
+  color: #cbd5e1;
+  margin-bottom: 16px;
 }
 
 .night-role-info {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 8px;
-  padding: 15px;
-  margin-top: 15px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 12px;
 }
 
 .night-role-info p {
-  margin: 5px 0;
-  font-size: 16px;
+  margin: 6px 0;
+  font-size: 15px;
+  color: #e2e8f0;
 }
 
 .role-players {
   color: #60a5fa;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .action-done {
   text-align: center;
-  padding: 30px;
+  padding: 24px;
 }
 
 .action-done .action-message {
-  font-size: 20px;
-  margin-bottom: 15px;
+  font-size: 18px;
+  margin-bottom: 16px;
   color: #4ade80;
 }
 
 .confirmed-info {
   background: rgba(74, 222, 128, 0.1);
   border: 1px solid rgba(74, 222, 128, 0.3);
-  border-radius: 8px;
-  padding: 15px;
+  border-radius: 12px;
+  padding: 16px;
 }
 
 .confirmed-info p {
-  margin: 5px 0;
-  font-size: 16px;
+  margin: 6px 0;
+  font-size: 15px;
 }
 
 .confirmed-info strong {
@@ -286,29 +295,29 @@ function confirmSkip() {
 .seer-result {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 8px;
-  padding: 15px;
-  margin-top: 15px;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
   text-align: center;
 }
 
 .seer-result p {
   margin: 0;
-  font-size: 18px;
-  font-weight: bold;
+  font-size: 16px;
+  font-weight: 600;
   color: #60a5fa;
 }
 
 .night-actions {
-  padding: 10px;
+  padding: 4px;
 }
 
 .timer-bar {
   position: relative;
-  height: 25px;
-  background: #374151;
-  border-radius: 12px;
-  margin-bottom: 15px;
+  height: 28px;
+  background: rgba(71, 85, 105, 0.6);
+  border-radius: 14px;
+  margin-bottom: 16px;
   overflow: hidden;
 }
 
@@ -319,32 +328,34 @@ function confirmSkip() {
   height: 100%;
   background: linear-gradient(90deg, #3b82f6, #10b981);
   transition: width 1s linear;
+  border-radius: 14px;
 }
 
 .timer-text {
   position: absolute;
-  right: 10px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: #fff;
-  font-size: 14px;
-  font-weight: bold;
+  font-size: 13px;
+  font-weight: 600;
   z-index: 1;
 }
 
 .action-message {
-  font-size: 16px;
-  margin-bottom: 15px;
+  font-size: 15px;
+  margin-bottom: 16px;
   text-align: center;
+  color: #e2e8f0;
 }
 
 .teammates-info {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 12px;
+  padding: 12px;
   text-align: center;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .teammates-info p {
@@ -356,7 +367,7 @@ function confirmSkip() {
 .witch-options {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .witch-mode-toggle {
@@ -366,22 +377,25 @@ function confirmSkip() {
 }
 
 .btn-mode {
-  padding: 10px 25px;
-  border: 2px solid #4a5568;
-  border-radius: 8px;
-  background: #2d3748;
-  color: #fff;
+  padding: 10px 20px;
+  border: 2px solid rgba(71, 85, 105, 0.5);
+  border-radius: 10px;
+  background: rgba(51, 65, 85, 0.5);
+  color: #cbd5e1;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 13px;
 }
 
 .btn-mode:hover:not(:disabled) {
-  border-color: #718096;
+  border-color: #64748b;
+  background: rgba(71, 85, 105, 0.7);
 }
 
 .btn-mode.active {
   border-color: #4ade80;
-  background: rgba(74, 222, 128, 0.2);
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
 }
 
 .btn-mode:disabled {
@@ -394,36 +408,37 @@ function confirmSkip() {
 }
 
 .save-option p {
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .target-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
 }
 
 .btn-target {
-  padding: 10px 20px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  background: #333;
-  color: #fff;
+  padding: 10px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  background: rgba(51, 65, 85, 0.5);
+  color: #e2e8f0;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 13px;
 }
 
 .btn-target:hover:not(:disabled) {
   border-color: #4ade80;
-  background: #444;
+  background: rgba(74, 222, 128, 0.15);
 }
 
 .btn-target.selected {
   border-color: #4ade80;
   background: #4ade80;
-  color: #000;
-  font-weight: bold;
+  color: #0f172a;
+  font-weight: 600;
 }
 
 .btn-target.disabled {
@@ -440,58 +455,70 @@ function confirmSkip() {
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: #fff;
   border: none;
-  padding: 12px 30px;
-  border-radius: 8px;
+  padding: 10px 24px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  transform: translateY(-1px);
 }
 
 .btn-danger {
-  background: #dc2626;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
   color: #fff;
   border: none;
-  padding: 12px 30px;
-  border-radius: 8px;
+  padding: 10px 24px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .btn-danger:hover {
-  background: #b91c1c;
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  transform: translateY(-1px);
 }
 
 .btn-warn {
-  background: #eab308;
-  color: #000;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #0f172a;
   border: none;
-  padding: 12px 30px;
-  border-radius: 8px;
+  padding: 10px 24px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .btn-warn:hover {
-  background: #ca8a04;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: #6b7280;
-  color: #fff;
-  border: none;
-  padding: 12px 30px;
-  border-radius: 8px;
+  background: rgba(100, 116, 139, 0.5);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 10px 24px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .btn-secondary:hover {
-  background: #4b5563;
+  background: rgba(100, 116, 139, 0.7);
+  color: #f8fafc;
 }
 </style>

@@ -64,38 +64,41 @@ function confirmAction() {
 
 <style scoped>
 .hunter-panel {
-  background: rgba(0, 0, 0, 0.8);
-  padding: 20px;
-  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  padding: 24px;
+  border-radius: 16px;
   color: #fff;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.1);
 }
 
 .hunter-waiting {
   text-align: center;
-  padding: 40px;
+  padding: 24px;
+  color: #cbd5e1;
 }
 
 .action-done {
   text-align: center;
-  padding: 30px;
+  padding: 24px;
 }
 
 .action-done .action-message {
-  font-size: 20px;
-  margin-bottom: 15px;
+  font-size: 18px;
+  margin-bottom: 16px;
   color: #4ade80;
 }
 
 .confirmed-info {
   background: rgba(74, 222, 128, 0.1);
   border: 1px solid rgba(74, 222, 128, 0.3);
-  border-radius: 8px;
-  padding: 15px;
+  border-radius: 12px;
+  padding: 16px;
 }
 
 .confirmed-info p {
-  margin: 5px 0;
-  font-size: 16px;
+  margin: 6px 0;
+  font-size: 15px;
 }
 
 .confirmed-info strong {
@@ -103,38 +106,40 @@ function confirmAction() {
 }
 
 .action-message {
-  font-size: 16px;
-  margin-bottom: 20px;
+  font-size: 15px;
+  margin-bottom: 16px;
   text-align: center;
+  color: #e2e8f0;
 }
 
 .target-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
 }
 
 .btn-target {
-  padding: 10px 20px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  background: #333;
-  color: #fff;
+  padding: 10px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  background: rgba(51, 65, 85, 0.5);
+  color: #e2e8f0;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 13px;
 }
 
 .btn-target:hover:not(:disabled) {
-  border-color: #ff6b6b;
-  background: #444;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
 }
 
 .btn-target.selected {
-  border-color: #ff6b6b;
-  background: #ff6b6b;
-  color: #000;
-  font-weight: bold;
+  border-color: #ef4444;
+  background: #ef4444;
+  color: #fff;
+  font-weight: 600;
 }
 
 .btn-target.disabled {
@@ -151,30 +156,36 @@ function confirmAction() {
 }
 
 .btn-danger {
-  background: #dc2626;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
   color: #fff;
   border: none;
-  padding: 12px 30px;
-  border-radius: 8px;
+  padding: 10px 24px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .btn-danger:hover {
-  background: #b91c1c;
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: #6b7280;
-  color: #fff;
-  border: none;
-  padding: 12px 30px;
-  border-radius: 8px;
+  background: rgba(100, 116, 139, 0.5);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 10px 24px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .btn-secondary:hover {
-  background: #4b5563;
+  background: rgba(100, 116, 139, 0.7);
+  color: #f8fafc;
 }
 </style>

@@ -41,7 +41,8 @@ export const useGameStore = defineStore('game', () => {
     myRole.value = data.role
     myRoleName.value = data.roleName
     players.value = data.players
-    phase.value = 'NIGHT'
+    // Use the actual phase if provided (for reconnection), otherwise default to NIGHT
+    phase.value = data.phase || 'NIGHT'
     gameOver.value = null
   }
 

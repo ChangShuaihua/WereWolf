@@ -32,20 +32,20 @@
       ]
     },
     "createdAt": 1784722558750,
-    "updatedAt": 1784723240313
+    "updatedAt": 1784768861094
   },
   {
     "id": "agent-2",
     "name": "冷静",
     "avatar": "👨‍🌾",
     "personality": {
-      "aggressiveness": 30,
-      "caution": 80,
-      "cunning": 20,
-      "honesty": 90,
-      "talkativeness": 50
+      "aggressiveness": 100,
+      "caution": 100,
+      "cunning": 100,
+      "honesty": 100,
+      "talkativeness": 100
     },
-    "speakingStyle": "calm",
+    "speakingStyle": "humorous",
     "strategy": {
       "nightAction": "random",
       "dayStrategy": "follower",
@@ -67,7 +67,7 @@
       ]
     },
     "createdAt": 1784722558750,
-    "updatedAt": 1784723059635
+    "updatedAt": 1784725533959
   },
   {
     "id": "agent-3",
@@ -172,7 +172,7 @@
       ]
     },
     "createdAt": 1784722558750,
-    "updatedAt": 1784723076166
+    "updatedAt": 1784768408161
   },
   {
     "id": "agent-6",
@@ -208,5 +208,69 @@
     },
     "createdAt": 1784722558750,
     "updatedAt": 1784723082241
+  },
+  {
+    "id": "agent-1784766573482",
+    "name": "哈哈",
+    "avatar": "😇",
+    "personality": {
+      "aggressiveness": 50,
+      "caution": 50,
+      "cunning": 50,
+      "honesty": 50,
+      "talkativeness": 50
+    },
+    "speakingStyle": "calm",
+    "strategy": {
+      "nightAction": "random",
+      "dayStrategy": "passive",
+      "revealIdentity": "mid"
+    },
+    "language": {
+      "prefixes": [
+        "我觉得"
+      ],
+      "suffixes": [
+        "对吧"
+      ],
+      "favoriteWords": [
+        "狼",
+        "好人"
+      ]
+    },
+    "createdAt": 1784766573482,
+    "updatedAt": 1784766573482
+  },
+  {
+    "id": "agent-1784768753882",
+    "name": "未命名智能体",
+    "avatar": "🤖",
+    "personality": {
+      "aggressiveness": 100,
+      "caution": 50,
+      "cunning": 100,
+      "honesty": 50,
+      "talkativeness": 100
+    },
+    "speakingStyle": "mysterious",
+    "strategy": {
+      "nightAction": "random",
+      "dayStrategy": "passive",
+      "revealIdentity": "mid"
+    },
+    "language": {
+      "prefixes": [
+        "我觉得"
+      ],
+      "suffixes": [
+        "对吧"
+      ],
+      "favoriteWords": [
+        "狼",
+        "好人"
+      ]
+    },
+    "createdAt": 1784768753882,
+    "updatedAt": 1784768753882
   }
 ]

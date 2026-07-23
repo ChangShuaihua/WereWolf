@@ -18,12 +18,11 @@ function initSocket(io) {
     });
 
     // Create room
-    socket.on('create_room', ({ username, userId }) => {
-      console.log(`[socket] create_room from ${username} (${socket.id})`);
-      const code = createRoom(socket, username, userId);
-      if (code) {
-        socket.emit('room_created', { code });
-      }
+    socket.on('create_room', ({ username, userId, maxPlayers }) => {
+      const mode = Number(maxPlayers) || 6;
+      console.log(`[socket] create_room from ${username} (${socket.id}), maxPlayers=${mode}`);
+      createRoom(socket, username, userId, mode);
+      // Note: createRoom broadcasts room_created via io.emit and room_joined to creator
     });
 
     // Join room

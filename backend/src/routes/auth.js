@@ -65,7 +65,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username, wins: user.wins, losses: user.losses, score: user.score },
+      user: { id: user.id, username: user.username },
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -126,7 +126,7 @@ router.put('/me', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: '更新失败' });
     }
 
-    res.json({ user: { id: updated.id, username: updated.username, wins: updated.wins, losses: updated.losses, score: updated.score } });
+    res.json({ user: { id: updated.id, username: updated.username } });
   } catch (err) {
     console.error('Update profile error:', err);
     res.status(500).json({ message: '更新失败，请稍后重试' });

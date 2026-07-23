@@ -1,7 +1,6 @@
 const { gameCache, roomCache } = require('../utils/cache');
 const GameEngine = require('../game/GameEngine');
 const GameRecord = require('../models/GameRecord');
-const User = require('../models/User');
 const aiGameHandler = require('../game/AIGameHandler');
 
 /**
@@ -27,8 +26,9 @@ function startGame(io, socket, code) {
   }
 
   const readyPlayers = room.players.filter(p => p.isReady);
-  if (readyPlayers.length < 4) {
-    socket.emit('error', { message: '至少需要4名玩家准备才能开始' });
+  const minPlayers = Number(room.maxPlayers) || 6;
+  if (readyPlayers.length < minPlayers) {
+    socket.emit('error', { message: `至少需要${minPlayers}名玩家准备才能开始` });
     return;
   }
 
@@ -64,10 +64,11 @@ function startGame(io, socket, code) {
     id: p.userId,
     socketId: p.socketId,
     username: p.username,
+    seatIndex: p.seatIndex !== undefined ? p.seatIndex : 0,
     isAlive: true,
     isReady: p.isReady,
     isAI: p.isAI || false,
-  })), emit);
+  })), emit, Number(room.maxPlayers) || 6);
 
   gameCache.set(code, engine);
   engine.start();
@@ -190,7 +191,6 @@ async function handleGameResult(data) {
       const roomPlayer = room?.players.find(rp => rp.socketId === p.id);
       if (roomPlayer?.userId) {
         await GameRecord.addPlayer(gameId, roomPlayer.userId, p.role, p.isWinner);
-        await User.updateStats(roomPlayer.userId, p.isWinner);
       }
     }
 

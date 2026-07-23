@@ -1,5 +1,6 @@
 const { roomCache, socketCache } = require('../utils/cache');
 const { gameCache } = require('../utils/cache');
+const { GAME_MODES } = require('../game/constants');
 const aiGameHandler = require('../game/AIGameHandler');
 
 /**
@@ -15,10 +16,57 @@ function generateRoomCode() {
 }
 
 /**
+ * Find the first empty seat index in a room
+ */
+function findEmptySeat(room) {
+  const takenSeats = new Set(room.players.map(p => p.seatIndex).filter(i => i !== undefined && i !== null));
+  for (let i = 0; i < room.maxPlayers; i++) {
+    if (!takenSeats.has(i)) return i;
+  }
+  return -1; // no empty seat
+}
+
+/**
+ * Build a seats array for broadcasting (includes empty seats)
+ */
+function buildSeats(room) {
+  const connectedPlayers = room.players.filter(p => p.socketId !== null);
+  const seats = [];
+  for (let i = 0; i < room.maxPlayers; i++) {
+    const player = connectedPlayers.find(p => p.seatIndex === i);
+    if (player) {
+      seats.push({
+        seatIndex: i,
+        occupied: true,
+        socketId: player.socketId,
+        userId: player.userId,
+        username: player.username,
+        isReady: player.isReady,
+        isAI: player.isAI || false,
+        isHost: player.socketId === room.hostId || player.userId === room.hostUserId,
+      });
+    } else {
+      seats.push({
+        seatIndex: i,
+        occupied: false,
+      });
+    }
+  }
+  return seats;
+}
+
+/**
  * Create a new room
  */
-function createRoom(socket, username, userId, aiCount = 0) {
-  console.log(`[roomHandler] createRoom called with userId=${userId}, typeof=${typeof userId}`);
+function createRoom(socket, username, userId, maxPlayers = 6) {
+  // Ensure maxPlayers is a number and validate against supported modes
+  maxPlayers = Number(maxPlayers) || 6;
+  if (!GAME_MODES.includes(maxPlayers)) {
+    console.log(`[roomHandler] Invalid maxPlayers=${maxPlayers}, falling back to 6`);
+    maxPlayers = 6;
+  }
+  console.log(`[roomHandler] createRoom called with userId=${userId}, maxPlayers=${maxPlayers}`);
+
   const code = generateRoomCode();
 
   // Prevent duplicates
@@ -34,24 +82,21 @@ function createRoom(socket, username, userId, aiCount = 0) {
     hostUserId: userId,
     players: [],
     chat: [],
+    maxPlayers,
     createdAt: Date.now(),
   };
 
   roomCache.set(code, room);
   joinRoom(socket, code, username, userId, true);
 
-  for (let i = 0; i < aiCount; i++) {
-    addAIPlayer(code);
-  }
-  
   const io = require('../app').getIO();
   io.emit('room_created', {
     code,
     hostUsername: username,
     playerCount: room.players.length,
-    maxPlayers: 12,
+    maxPlayers: room.maxPlayers,
   });
-  
+
   return code;
 }
 
@@ -72,7 +117,7 @@ function addAIPlayer(socket, code, agentId = null) {
     return null;
   }
 
-  if (room.players.length >= 12) {
+  if (room.players.length >= room.maxPlayers) {
     console.log('[roomHandler] Room is full, cannot add AI');
     socket.emit('error', { message: '房间已满，无法添加AI玩家' });
     return null;
@@ -87,6 +132,15 @@ function addAIPlayer(socket, code, agentId = null) {
 
   const aiPlayer = aiGameHandler.createAIPlayer(code, agentId);
   aiPlayer.isReady = true;
+
+  // Assign to first empty seat
+  const seatIndex = findEmptySeat(room);
+  if (seatIndex === -1) {
+    socket.emit('error', { message: '没有空座位了' });
+    return null;
+  }
+  aiPlayer.seatIndex = seatIndex;
+
   room.players.push(aiPlayer);
   roomCache.set(code, room);
 
@@ -177,6 +231,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
   
   if (existing) {
     existing.socketId = socket.id;
+    existing.disconnectTime = null;
     if (!existing.userId) existing.userId = userId;
     
     if (room.hostUserId === userId || existing.socketId === room.hostId) {
@@ -187,14 +242,132 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     socket.join(code);
     socketCache.set(socket.id, { userId, username, roomCode: code });
     roomCache.set(code, room);
+
+    // Also restore game state if game is active
+    const game = gameCache.get(code);
+    if (game && game.phase !== 'WAITING' && game.phase !== 'END') {
+      const gamePlayer = game.players.find(p => p.id === userId);
+      if (gamePlayer) {
+        const oldSocketId = gamePlayer.socketId;
+        gamePlayer.socketId = socket.id;
+        gamePlayer.disconnectTime = null;
+        
+        // Restore role socket mapping
+        if (gamePlayer.isAlive && game.roles && oldSocketId !== null) {
+          if (game.roles[oldSocketId]) {
+            game.roles[socket.id] = game.roles[oldSocketId];
+            delete game.roles[oldSocketId];
+          }
+        } else if (gamePlayer.isAlive && game.roles) {
+          // oldSocketId is null (disconnected), find role by process of elimination
+          for (const [oldKey, role] of Object.entries(game.roles)) {
+            const playerWithRole = game.players.find(p => p.socketId === oldKey);
+            if (!playerWithRole) {
+              game.roles[socket.id] = role;
+              delete game.roles[oldKey];
+              break;
+            }
+          }
+        }
+
+        // Send current game state to reconnected player
+        const role = game.roles[socket.id];
+        const roleName = role ? require('../game/RoleConfig').getRoleName(role) : '';
+        
+        socket.emit('game_started', {
+          role: role,
+          roleName: roleName,
+          seatNum: game.getSeatNum(socket.id),
+          seatIndex: gamePlayer.seatIndex,
+          phase: game.phase,
+          players: game.players.map(pl => ({
+            id: pl.socketId,
+            username: pl.username,
+            seatNum: game.getSeatNum(pl.socketId),
+            seatIndex: pl.seatIndex,
+            isAlive: pl.isAlive,
+          })),
+        });
+
+        // Send current phase state
+        socket.emit('phase_change', {
+          phase: game.phase,
+          timeout: game.phaseTimer?._idleStart ? Math.ceil((game.phaseTimer._idleEnd - Date.now()) / 1000) : 0,
+          message: game.message || '',
+          nightCount: game.nightCount,
+          candidates: game.candidates || [],
+          currentSpeaker: game.currentSpeaker || null,
+          speakerName: game.currentSpeaker ? game.getSeatNum(game.currentSpeaker) : '',
+        });
+
+        // Send night action prompt if player needs to act
+        if (gamePlayer.isAlive && game.phase === 'NIGHT') {
+          const nightRole = game.roles[socket.id];
+          if (nightRole === 'werewolf') {
+            socket.emit('night_action_prompt', {
+              action: 'kill',
+              message: '请选择要击杀的玩家',
+              targets: game.alivePlayers.filter(p => p.socketId !== socket.id)
+                .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+            });
+          } else if (nightRole === 'seer') {
+            socket.emit('night_action_prompt', {
+              action: 'check',
+              message: '请选择要查验的玩家',
+              targets: game.alivePlayers.filter(p => p.socketId !== socket.id)
+                .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+            });
+          } else if (nightRole === 'guard') {
+            socket.emit('night_action_prompt', {
+              action: 'guard',
+              message: '请选择要守护的玩家',
+              targets: game.alivePlayers.map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+            });
+          }
+        }
+
+        // Send vote info if in vote phase
+        if (game.phase === 'VOTE') {
+          socket.emit('vote_update', {
+            votedCount: Object.keys(game.votes).length,
+            totalCount: game.alivePlayers.filter(p => p.socketId !== socket.id).length,
+          });
+        }
+
+        // Send speaker change if in day phase and player is current speaker
+        if (game.phase === 'DAY' && game.currentSpeaker === socket.id) {
+          socket.emit('speaker_change', {
+            currentSpeaker: game.currentSpeaker,
+            speakerName: game.getSeatNum(game.currentSpeaker),
+          });
+        }
+
+        // Send night role turn if player's role is active
+        if (game.phase === 'NIGHT' && game.currentNightRole) {
+          socket.emit('night_role_turn', game.currentNightRole);
+        }
+
+        // Send seer result if available
+        if (game.seerResult && gamePlayer.isAlive && game.roles[socket.id] === 'seer') {
+          socket.emit('seer_result', game.seerResult);
+        }
+
+        // Send hunter prompt if available
+        if (game.hunterPrompt && gamePlayer.isAlive && game.roles[socket.id] === 'hunter') {
+          socket.emit('hunter_trigger', game.hunterPrompt);
+        }
+      }
+      console.log(`[roomHandler] ${username} reconnected to active game in room ${code}`);
+    }
+    
     broadcastRoomUpdate(code);
-    socket.emit('room_joined', { code, players: room.players, hostId: room.hostId });
+    socket.emit('room_joined', { code, players: room.players, seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers });
     console.log(`[roomHandler] ${username} reconnected to room ${code}`);
     return room;
   }
 
-  // Check if room is full (max 12)
-  if (room.players.length >= 12) {
+  // Check if room is full
+  if (room.players.length >= room.maxPlayers) {
     socket.emit('error', { message: '房间已满' });
     return null;
   }
@@ -227,6 +400,14 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     isAlive: true,
   };
 
+  // Assign to first empty seat
+  const seatIndex = findEmptySeat(room);
+  if (seatIndex === -1) {
+    socket.emit('error', { message: '没有空座位了' });
+    return null;
+  }
+  player.seatIndex = seatIndex;
+
   room.players.push(player);
   socket.join(code);
 
@@ -244,7 +425,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
 
   console.log(`[roomHandler] ${username} joined room ${code}, players=${room.players.length}`);
 
-  socket.emit('room_joined', { code, players: room.players, hostId: room.hostId });
+  socket.emit('room_joined', { code, players: room.players, seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers });
   broadcastRoomUpdate(code, room);
   
   const io = require('../app').getIO();
@@ -380,10 +561,20 @@ function addChat(socket, code, message) {
   const player = room.players.find(p => p.socketId === socket.id);
   if (!player) { console.log('[roomHandler] addChat: player not found, socketId=', socket.id); return; }
 
-  console.log(`[roomHandler] chat from ${player.username} in ${code}: ${message}`);
+  // Use seat number if game is in progress
+  const game = gameCache.get(code);
+  let displayName;
+  if (game && game.phase !== 'WAITING') {
+    const seatNum = (player.seatIndex !== undefined ? player.seatIndex : 0) + 1;
+    displayName = `${seatNum}号`;
+  } else {
+    displayName = player.username;
+  }
+
+  console.log(`[roomHandler] chat from ${displayName} in ${code}: ${message}`);
 
   const chatMsg = {
-    username: player.username,
+    username: displayName,
     message,
     timestamp: Date.now(),
   };
@@ -406,15 +597,24 @@ function broadcastRoomUpdate(code, room = null) {
   }
   if (!room) return;
 
-  const connectedPlayers = room.players.filter(p => p.socketId !== null);
-  
-  console.log(`[roomHandler] broadcastRoomUpdate room=${code}, totalPlayers=${room.players.length}, connectedPlayers=${connectedPlayers.length}`);
-  console.log(`[roomHandler] players:`, room.players.map(p => ({ username: p.username, socketId: p.socketId, userId: p.userId, isAI: p.isAI })));
+  const seats = buildSeats(room);
+
+  console.log(`[roomHandler] broadcastRoomUpdate room=${code}, totalPlayers=${room.players.length}, seats=${seats.length}`);
 
   const io = require('../app').getIO();
   io.to(code).emit('room_update', {
-    players: connectedPlayers,
+    players: seats.filter(s => s.occupied).map(s => ({
+      socketId: s.socketId,
+      userId: s.userId,
+      username: s.username,
+      isReady: s.isReady,
+      isAI: s.isAI,
+      isAlive: true,
+      seatIndex: s.seatIndex,
+    })),
+    seats,
     hostId: room.hostId,
+    maxPlayers: room.maxPlayers,
   });
 }
 
@@ -426,25 +626,71 @@ function handleDisconnect(socket) {
   if (!info || !info.roomCode) return;
 
   const code = info.roomCode;
-  leaveRoom(socket, code, true);
+  const userId = info.userId;
 
-  // Mark player as dead in active game
+  // Check if there's an active game
   const game = gameCache.get(code);
-  if (game) {
-    const player = game.getPlayer(socket.id);
-    if (player && player.isAlive) {
-      player.isAlive = false;
-      game.broadcast('player_disconnected', {
-        id: socket.id,
-        username: player.username,
-        message: `${player.username} 断开连接，视为死亡`,
-      });
-      // Check win condition after forced death
-      if (game.phase !== 'WAITING' && game.phase !== 'END') {
-        game.checkWinCondition();
+  const isGameActive = game && game.phase !== 'WAITING' && game.phase !== 'END';
+
+  if (isGameActive) {
+    // Game in progress: give player time to reconnect (60 seconds)
+    const room = roomCache.get(code);
+    if (room) {
+      const player = room.players.find(p => p.socketId === socket.id);
+      if (player) {
+        player.socketId = null; // Mark as disconnected but keep in room
+        player.disconnectTime = Date.now();
+        roomCache.set(code, room);
+
+        // Also update game player
+        const gamePlayer = game.players.find(p => p.userId === userId);
+        if (gamePlayer) {
+          gamePlayer.socketId = null;
+          gamePlayer.disconnectTime = Date.now();
+        }
+
+        broadcastRoomUpdate(code);
+
+        console.log(`[roomHandler] Player ${userId} disconnected during game in room ${code}, waiting for reconnection (60s)`);
+
+        // Set timeout to mark as dead if not reconnected
+        setTimeout(() => {
+          const gameCheck = gameCache.get(code);
+          if (gameCheck) {
+            const gamePlayerCheck = gameCheck.players.find(p => p.userId === userId);
+            if (gamePlayerCheck && gamePlayerCheck.disconnectTime) {
+              // Player still disconnected after timeout
+              const playerInRoom = roomCache.get(code)?.players.find(p => p.userId === userId);
+              if (playerInRoom && playerInRoom.socketId === null) {
+                // Mark as dead
+                if (gamePlayerCheck.isAlive) {
+                  gamePlayerCheck.isAlive = false;
+                  gameCheck.broadcast('player_disconnected', {
+                    id: userId,
+                    username: gamePlayerCheck.username || `玩家${gamePlayerCheck.seatIndex + 1}号`,
+                    message: `${gamePlayerCheck.username || gamePlayerCheck.seatIndex + 1}号 长时间未连接，视为死亡`,
+                  });
+                  if (gameCheck.phase !== 'WAITING' && gameCheck.phase !== 'END') {
+                    gameCheck.checkWinCondition();
+                  }
+                }
+                // Remove from room
+                const roomCheck = roomCache.get(code);
+                if (roomCheck) {
+                  roomCheck.players = roomCheck.players.filter(p => p.userId !== userId);
+                  roomCache.set(code, roomCheck);
+                  broadcastRoomUpdate(code);
+                }
+              }
+            }
+          }
+        }, 60000);
       }
     }
+  } else {
+    // Game not active: use normal leave logic with 30s timeout
+    leaveRoom(socket, code, true);
   }
 }
 
-module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer };
+module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer, buildSeats };

@@ -3,11 +3,12 @@ const { PHASE, ROLE, TIMERS, TEAM } = require('./constants');
 const { getRolesForGame, getRoleName } = require('./RoleConfig');
 
 class GameEngine extends EventEmitter {
-  constructor(roomCode, players, emit) {
+  constructor(roomCode, players, emit, maxPlayers = 6) {
     super();
     this.roomCode = roomCode;
     this.emit = emit;                    // callback to emit socket events
     this.players = players;              // [{ id, username, socketId, isAlive, isReady }]
+    this.maxPlayers = maxPlayers;        // 6, 8, or 12
     this.roles = {};                     // { socketId: role }
     this.phase = PHASE.WAITING;
     this.phaseTimer = null;
@@ -53,6 +54,23 @@ class GameEngine extends EventEmitter {
     return this.roles[socketId];
   }
 
+  // Get seat number display string like "3号"
+  getSeatNum(socketId) {
+    const player = this.getPlayer(socketId);
+    if (!player) return '未知';
+    const num = (player.seatIndex !== undefined ? player.seatIndex : 0) + 1;
+    return `${num}号`;
+  }
+
+  // Get targets array with seat numbers for prompts
+  getTargetsForPrompt(playerList) {
+    return playerList.map(p => ({
+      id: p.socketId,
+      username: this.getSeatNum(p.socketId),
+      seatNum: this.getSeatNum(p.socketId),
+    }));
+  }
+
   broadcast(event, data) {
     this.emit(this.roomCode, event, data);
   }
@@ -71,11 +89,11 @@ class GameEngine extends EventEmitter {
         this.sendTo(w.socketId, 'night_action_prompt', {
           action: 'witch',
           message: '请使用你的药水',
-          killed: killedPlayer ? { id: killedPlayer.socketId, username: killedPlayer.username } : null,
+          killed: killedPlayer ? { id: killedPlayer.socketId, username: this.getSeatNum(killedPlayer.socketId) } : null,
           canSave: !this.witchSaveUsed && this.killedByWerewolves !== null,
           canPoison: !this.witchPoisonUsed,
           targets: this.alivePlayers.filter(p => p.socketId !== w.socketId)
-            .map(p => ({ id: p.socketId, username: p.username })),
+            .map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
         });
       }
     }
@@ -86,7 +104,7 @@ class GameEngine extends EventEmitter {
   start() {
     if (this.phase !== PHASE.WAITING) return;
     const readyPlayers = this.players.filter(p => p.isReady);
-    if (readyPlayers.length < 4) return;
+    if (readyPlayers.length < this.maxPlayers) return;
 
     // Assign roles
     const roleList = getRolesForGame(readyPlayers.length);
@@ -102,19 +120,33 @@ class GameEngine extends EventEmitter {
     this.nightCount = 0;
     this.startTime = Date.now();
 
-    // Tell each player their role
+    // Tell each player their role and seat number
     this.players.forEach(p => {
       if (p.isAlive) {
+        const mySeatNum = this.getSeatNum(p.socketId);
         this.sendTo(p.socketId, 'game_started', {
           role: this.roles[p.socketId],
           roleName: getRoleName(this.roles[p.socketId]),
+          seatNum: mySeatNum,
+          seatIndex: p.seatIndex,
           players: this.players.map(pl => ({
             id: pl.socketId,
             username: pl.username,
+            seatNum: this.getSeatNum(pl.socketId),
+            seatIndex: pl.seatIndex,
             isAlive: pl.isAlive,
           })),
         });
       }
+    });
+
+    // Announce game start
+    const playerList = this.alivePlayers.map(p => this.getSeatNum(p.socketId)).join('、');
+    this.broadcast('chat_message', {
+      username: '系统',
+      message: `🎮 游戏开始！玩家：${playerList}，共${this.alivePlayers.length}人`,
+      timestamp: Date.now(),
+      isSystem: true,
     });
 
     // Start first night after a short delay
@@ -137,7 +169,7 @@ class GameEngine extends EventEmitter {
       phase: PHASE.NIGHT,
       nightCount: this.nightCount,
       timeout: nightDuration,
-      message: `第 ${this.nightCount} 夜来临，请闭眼...`,
+      message: `🌙 第 ${this.nightCount} 夜来临，请闭眼...`,
     });
 
     // Night sub-phases handled sequentially
@@ -168,7 +200,7 @@ class GameEngine extends EventEmitter {
           action: 'guard',
           message: '请选择要守护的玩家',
           targets: alive.filter(p => p.socketId !== g.socketId && p.socketId !== this.guardLastProtected)
-            .map(p => ({ id: p.socketId, username: p.username })),
+            .map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
           timeout: 30,
         });
       }
@@ -184,8 +216,8 @@ class GameEngine extends EventEmitter {
     // 2. Werewolves kill (30 seconds)
     const werewolves = alive.filter(p => this.roles[p.socketId] === ROLE.WEREWOLF);
     const targets = alive.filter(p => this.roles[p.socketId] !== ROLE.WEREWOLF)
-      .map(p => ({ id: p.socketId, username: p.username }));
-    
+      .map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) }));
+
     this.broadcast('night_role_turn', {
       role: 'werewolf',
       roleName: '狼人',
@@ -195,7 +227,7 @@ class GameEngine extends EventEmitter {
 
     for (const w of werewolves) {
       const teammates = werewolves.filter(p => p.socketId !== w.socketId)
-        .map(p => ({ id: p.socketId, username: p.username }));
+        .map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) }));
       this.sendTo(w.socketId, 'night_action_prompt', {
         action: 'kill',
         message: '请选择要击杀的目标',
@@ -241,7 +273,7 @@ class GameEngine extends EventEmitter {
           action: 'check',
           message: '请选择要查验的玩家',
           targets: alive.filter(p => p.socketId !== s.socketId)
-            .map(p => ({ id: p.socketId, username: p.username })),
+            .map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
           timeout: 30,
         });
       }
@@ -269,12 +301,12 @@ class GameEngine extends EventEmitter {
           action: 'witch',
           message: '请使用你的药水',
           killed: this.killedByWerewolves
-            ? { id: this.killedByWerewolves, username: this.getPlayer(this.killedByWerewolves)?.username }
+            ? { id: this.killedByWerewolves, username: this.getSeatNum(this.killedByWerewolves) }
             : null,
           canSave: !this.witchSaveUsed && this.killedByWerewolves !== null,
           canPoison: !this.witchPoisonUsed,
           targets: alive.filter(p => p.socketId !== w.socketId)
-            .map(p => ({ id: p.socketId, username: p.username })),
+            .map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
           timeout: 30,
         };
         this.sendTo(w.socketId, 'night_action_prompt', options);
@@ -379,16 +411,16 @@ class GameEngine extends EventEmitter {
     
     let detail;
     if (action === 'skip') {
-      detail = `${getRoleName(this.roles[socketId])}选择跳过`;
+      detail = `${this.getSeatNum(socketId)} (${getRoleName(this.roles[socketId])}) 选择跳过`;
     } else {
-      detail = `${getRoleName(this.roles[socketId])}选择了${target?.username || '未知'}`;
+      detail = `${this.getSeatNum(socketId)} (${getRoleName(this.roles[socketId])}) 选择了${target ? this.getSeatNum(targetId) : '未知'}`;
     }
     
     this.gameHistory.push({
       night: this.nightCount,
       action,
-      actor: { id: socketId, username: player.username, role: this.roles[socketId] },
-      target: target ? { id: targetId, username: target.username } : null,
+      actor: { id: socketId, username: this.getSeatNum(socketId), role: this.roles[socketId] },
+      target: target ? { id: targetId, username: this.getSeatNum(targetId) } : null,
       detail,
     });
 
@@ -484,7 +516,7 @@ class GameEngine extends EventEmitter {
       const player = this.getPlayer(socketId);
       if (player) {
         player.isAlive = false;
-        deathList.push({ id: socketId, username: player.username, role: this.roles[socketId] });
+        deathList.push({ id: socketId, username: this.getSeatNum(socketId), role: this.roles[socketId] });
       }
     }
 
@@ -494,6 +526,7 @@ class GameEngine extends EventEmitter {
       deaths: deathList.map(d => ({ id: d.id, username: d.username })),
       saved: !!protectedPlayer && this.killedByWerewolves === protectedPlayer,
       message: nightMessage,
+      guardProtected: protectedPlayer ? this.getSeatNum(protectedPlayer) : null,
     });
 
     this.broadcast('chat_message', {
@@ -503,19 +536,19 @@ class GameEngine extends EventEmitter {
       isSystem: true,
     });
 
-    const nightDetail = deathList.length > 0 
+    const nightDetail = deathList.length > 0
       ? `夜晚结束，${deathList.map(d => d.username).join('、')}死亡`
       : '夜晚结束，平安夜';
-      
+
     this.gameHistory.push({
       night: this.nightCount,
       action: 'night_end',
       deaths: deathList.map(d => ({ id: d.id, username: d.username, role: d.role })),
       saved: !!protectedPlayer && this.killedByWerewolves === protectedPlayer,
-      guardProtected: protectedPlayer ? { id: protectedPlayer, username: this.getPlayer(protectedPlayer)?.username } : null,
-      killedByWerewolves: this.killedByWerewolves ? { id: this.killedByWerewolves, username: this.getPlayer(this.killedByWerewolves)?.username } : null,
-      killedByWitch: this.killedByWitch ? { id: this.killedByWitch, username: this.getPlayer(this.killedByWitch)?.username } : null,
-      witchSaved: this.witchSaveTarget ? { id: this.witchSaveTarget, username: this.getPlayer(this.witchSaveTarget)?.username } : null,
+      guardProtected: protectedPlayer ? { id: protectedPlayer, username: this.getSeatNum(protectedPlayer) } : null,
+      killedByWerewolves: this.killedByWerewolves ? { id: this.killedByWerewolves, username: this.getSeatNum(this.killedByWerewolves) } : null,
+      killedByWitch: this.killedByWitch ? { id: this.killedByWitch, username: this.getSeatNum(this.killedByWitch) } : null,
+      witchSaved: this.witchSaveTarget ? { id: this.witchSaveTarget, username: this.getSeatNum(this.witchSaveTarget) } : null,
       detail: nightDetail,
     });
 
@@ -538,7 +571,7 @@ class GameEngine extends EventEmitter {
         // Send hunter trigger
         this.sendTo(hunterDeath.id, 'hunter_trigger', {
           message: '你已被杀，请选择带走一名玩家',
-          targets: aliveAfterNight.map(p => ({ id: p.socketId, username: p.username })),
+          targets: aliveAfterNight.map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
         });
         
         // Wait for hunter action or auto-shoot after timeout
@@ -578,16 +611,16 @@ class GameEngine extends EventEmitter {
     this.gameHistory.push({
       night: this.nightCount,
       action: 'hunter_shoot',
-      actor: { id: hunterId, username: hunter.username, role: ROLE.HUNTER },
-      target: { id: randomTarget.socketId, username: randomTarget.username },
-      detail: `${hunter.username}开枪带走了${randomTarget.username}`,
+      actor: { id: hunterId, username: this.getSeatNum(hunterId), role: ROLE.HUNTER },
+      target: { id: randomTarget.socketId, username: this.getSeatNum(randomTarget.socketId) },
+      detail: `${this.getSeatNum(hunterId)}开枪带走了${this.getSeatNum(randomTarget.socketId)}`,
     });
-    
+
     // Notify everyone
     this.broadcast('hunter_result', {
-      shooter: { id: hunterId, username: hunter.username },
-      target: { id: randomTarget.socketId, username: randomTarget.username },
-      message: `${hunter.username}开枪带走了${randomTarget.username}`,
+      shooter: { id: hunterId, username: this.getSeatNum(hunterId) },
+      target: { id: randomTarget.socketId, username: this.getSeatNum(randomTarget.socketId) },
+      message: `${this.getSeatNum(hunterId)}开枪带走了${this.getSeatNum(randomTarget.socketId)}`,
     });
     
     this._continueAfterHunter();
@@ -618,7 +651,7 @@ class GameEngine extends EventEmitter {
       timeout: TIMERS.DAY,
       message: '天亮了，按顺序发言',
       currentSpeaker: this.speakingOrder[this.currentSpeakerIndex],
-      speakerName: this.getPlayer(this.speakingOrder[this.currentSpeakerIndex])?.username,
+      speakerName: this.getSeatNum(this.speakingOrder[this.currentSpeakerIndex]),
     });
 
     this.clearTimer();
@@ -667,7 +700,7 @@ class GameEngine extends EventEmitter {
       message = this._ensureMessageLength(message, player);
 
       this.broadcast('chat_message', {
-        username: player.username,
+        username: this.getSeatNum(socketId),
         message: message,
         timestamp: Date.now(),
       });
@@ -679,7 +712,7 @@ class GameEngine extends EventEmitter {
       const finalMessage = this._ensureMessageLength(fallbackMessage, player);
       
       this.broadcast('chat_message', {
-        username: player.username,
+        username: this.getSeatNum(socketId),
         message: finalMessage,
         timestamp: Date.now(),
       });
@@ -797,7 +830,7 @@ class GameEngine extends EventEmitter {
     
     this.broadcast('speaker_change', {
       currentSpeaker,
-      speakerName: this.getPlayer(currentSpeaker)?.username,
+      speakerName: this.getSeatNum(currentSpeaker),
       hasSpoken: Array.from(this.hasSpoken),
     });
 
@@ -832,7 +865,7 @@ class GameEngine extends EventEmitter {
     
     this.broadcast('speaker_change', {
       currentSpeaker: nextSpeaker,
-      speakerName: this.getPlayer(nextSpeaker)?.username,
+      speakerName: this.getSeatNum(nextSpeaker),
       hasSpoken: Array.from(this.hasSpoken),
     });
 
@@ -862,7 +895,7 @@ class GameEngine extends EventEmitter {
       phase: PHASE.VOTE,
       timeout: TIMERS.VOTE,
       message: '投票阶段，请选择要放逐的玩家',
-      candidates: alive.map(p => ({ id: p.socketId, username: p.username })),
+      candidates: alive.map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
     });
 
     this.clearTimer();
@@ -912,9 +945,9 @@ class GameEngine extends EventEmitter {
     this.gameHistory.push({
       night: this.nightCount,
       action: 'vote',
-      actor: { id: socketId, username: voter.username, role: this.roles[socketId] },
-      target: target ? { id: targetId, username: target.username } : null,
-      detail: `${voter.username}投票给了${target?.username || '未知'}`,
+      actor: { id: socketId, username: this.getSeatNum(socketId), role: this.roles[socketId] },
+      target: target ? { id: targetId, username: this.getSeatNum(targetId) } : null,
+      detail: `${this.getSeatNum(socketId)}投票给了${target ? this.getSeatNum(targetId) : '未知'}`,
     });
 
     // Notify all of vote progress (without revealing who voted for whom)
@@ -941,8 +974,7 @@ class GameEngine extends EventEmitter {
     let maxVotes = 0;
     let eliminated = null;
     const voteDetails = Object.entries(tally).map(([id, count]) => {
-      const p = this.getPlayer(id);
-      return { id, username: p?.username || '未知', votes: count };
+      return { id, username: this.getSeatNum(id), votes: count };
     });
 
     for (const [id, count] of Object.entries(tally)) {
@@ -964,11 +996,11 @@ class GameEngine extends EventEmitter {
 
     const result = {
       eliminated: eliminatedPlayer
-        ? { id: eliminatedPlayer.socketId, username: eliminatedPlayer.username, role: this.roles[eliminatedPlayer.socketId] }
+        ? { id: eliminatedPlayer.socketId, username: this.getSeatNum(eliminatedPlayer.socketId), role: this.roles[eliminatedPlayer.socketId] }
         : null,
       votes: voteDetails,
       message: eliminatedPlayer
-        ? `${eliminatedPlayer.username} 被放逐出局`
+        ? `${this.getSeatNum(eliminatedPlayer.socketId)} 被放逐出局`
         : '平票，没有人被放逐',
     };
 
@@ -1022,11 +1054,12 @@ class GameEngine extends EventEmitter {
 
     const result = this.players.map(p => ({
       id: p.socketId,
-      username: p.username,
+      username: this.getSeatNum(p.socketId),
       role: this.roles[p.socketId],
       roleName: getRoleName(this.roles[p.socketId]),
       isAlive: p.isAlive,
       isWinner: TEAM[this.roles[p.socketId]] === winner,
+      seatIndex: p.seatIndex,
     }));
 
     this.broadcast('game_over', {
