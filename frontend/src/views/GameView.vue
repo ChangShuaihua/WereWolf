@@ -3,7 +3,7 @@
     <!-- Loading overlay -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
-      <p>正在重新连接到游戏...</p>
+      <p>正在连接到游戏...</p>
     </div>
 
     <template v-else>
@@ -39,20 +39,25 @@
       <div class="game-left-panel">
         <!-- Player Grid -->
         <section class="game-section player-section">
-          <div class="section-header">
-            <h3>👥 玩家列表</h3>
-            <span class="section-badge">{{ aliveCount }}/{{ gameStore.players.length }} 存活</span>
-          </div>
-          <div class="player-grid-wrapper">
-            <PlayerList
-              :players="gameStore.players"
-              :myId="socket.id"
-              :showRoles="gameStore.isEnd"
-              :roles="gameOverRoles"
-              :aliveFilter="null"
-            />
-          </div>
-        </section>
+            <div class="section-header">
+              <div class="section-title">
+                <span class="section-icon">👥</span>
+                <span>玩家列表</span>
+              </div>
+              <span class="section-badge">{{ aliveCount }}/{{ roomStore.maxPlayers }} 存活</span>
+            </div>
+            <div class="player-grid-wrapper">
+              <PlayerList
+                :players="gameStore.players"
+                :myId="socket.id"
+                :showRoles="gameStore.isEnd"
+                :roles="gameOverRoles"
+                :maxPlayers="roomStore.maxPlayers"
+                :candidates="gameStore.candidates"
+                :currentSpeaker="gameStore.currentSpeaker"
+              />
+            </div>
+          </section>
 
         <!-- Action Panels -->
         <section class="game-section action-section">
@@ -97,7 +102,10 @@
       <aside class="game-right-panel">
         <section class="game-section chat-section">
           <div class="section-header">
-            <h3>💬 聊天</h3>
+            <div class="section-title">
+              <span class="section-icon">💬</span>
+              <span>聊天</span>
+            </div>
           </div>
           <ChatBox :messages="roomStore.chat" @send="handleChat" />
         </section>

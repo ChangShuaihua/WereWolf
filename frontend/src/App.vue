@@ -25,11 +25,25 @@
     <main class="app-main">
       <router-view />
     </main>
+    <ConfirmDialog
+      v-model="dialogVisible"
+      :title="dialogState.title"
+      :message="dialogState.message"
+      :confirm-text="dialogState.confirmText"
+      :cancel-text="dialogState.cancelText"
+      :show-cancel="dialogState.showCancel"
+      :type="dialogState.type"
+      @confirm="onDialogConfirm"
+      @cancel="onDialogCancel"
+    />
   </div>
 </template>
 
 <script setup>
 import { useUserStore } from './stores/user'
+import { useConfirmDialog } from './composables/useConfirm'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 
 const userStore = useUserStore()
+const { visible: dialogVisible, state: dialogState, onConfirm: onDialogConfirm, onCancel: onDialogCancel } = useConfirmDialog()
 </script>

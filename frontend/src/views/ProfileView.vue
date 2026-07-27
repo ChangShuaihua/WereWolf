@@ -1,7 +1,7 @@
 <template>
   <div class="profile-page">
     <header class="profile-header">
-      <button class="btn btn-sm" @click="$router.push('/lobby')">← 返回大厅</button>
+      <button class="btn btn-ai btn-sm" @click="$router.push('/lobby')">← 返回大厅</button>
       <h1>👤 个人中心</h1>
       <div class="header-spacer"></div>
     </header>
@@ -137,6 +137,9 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import api from '../api'
+import { useConfirmDialog } from '../composables/useConfirm'
+
+const { showConfirm } = useConfirmDialog()
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -268,10 +271,214 @@ async function handleSaveApiConfig() {
   }
 }
 
-function handleLogout() {
-  if (confirm('确定要退出登录吗？')) {
+async function handleLogout() {
+  const confirmed = await showConfirm({
+    title: '退出确认',
+    message: '确定要退出登录吗？',
+    confirmText: '退出',
+    cancelText: '取消',
+    type: 'warning'
+  });
+  if (confirmed) {
     userStore.logout()
     router.push('/login')
   }
 }
 </script>
+
+<style scoped>
+.profile-page {
+  min-height: calc(100vh - 76px);
+  background: var(--bg-primary);
+  padding: 40px var(--space-8);
+  position: relative;
+}
+
+.profile-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at 20% 0%, rgba(155, 109, 255, 0.08) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 100%, rgba(79, 140, 255, 0.06) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 800px;
+  margin: 0 auto 32px;
+  position: relative;
+  z-index: 1;
+}
+
+.profile-header h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.header-spacer {
+  width: 100px;
+}
+
+.profile-content {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.profile-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: var(--border-medium);
+  border-radius: var(--radius-xl);
+  padding: 32px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 24px var(--ai-glow);
+  flex-shrink: 0;
+}
+
+.avatar-icon {
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+}
+
+.profile-info h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.profile-id {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.edit-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: var(--border-medium);
+  border-radius: var(--radius-xl);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.edit-card h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.form-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: var(--border-medium);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.form-input:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.form-input:focus {
+  border-color: var(--ai-primary);
+  box-shadow: 0 0 0 3px var(--ai-glow);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.form-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.form-hint {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.form-message {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+}
+
+.form-message.success {
+  background: rgba(54, 211, 153, 0.1);
+  border: 1px solid rgba(54, 211, 153, 0.3);
+  color: var(--status-success);
+}
+
+.form-message.error {
+  background: rgba(229, 57, 53, 0.1);
+  border: 1px solid rgba(229, 57, 53, 0.3);
+  color: var(--status-error);
+}
+
+.edit-card .btn {
+  margin-top: 8px;
+}
+
+.edit-card .btn + .btn {
+  margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+  .profile-page {
+    padding: 24px 16px;
+  }
+  
+  .profile-card {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+</style>

@@ -62,7 +62,7 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 
 .speaker-info {
   text-align: center;
-  padding: 24px 20px;
+  padding: 10px 10px;
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1));
   border-radius: 12px;
   margin-bottom: 20px;
