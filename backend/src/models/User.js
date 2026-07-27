@@ -21,7 +21,7 @@ const User = {
 
   async findById(id) {
     const [rows] = await pool.query(
-      'SELECT id, username, created_at FROM users WHERE id = ?',
+      'SELECT id, username, api_key, api_url, model_name, created_at FROM users WHERE id = ?',
       [id]
     );
     return rows[0] || null;
@@ -44,6 +44,36 @@ const User = {
       const hash = await bcrypt.hash(data.password, 10);
       updates.push('password = ?');
       values.push(hash);
+    }
+
+    if (updates.length === 0) {
+      return null;
+    }
+
+    values.push(userId);
+    await pool.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    return this.findById(userId);
+  },
+
+  async updateApiConfig(userId, config) {
+    const updates = [];
+    const values = [];
+
+    if (config.api_key !== undefined) {
+      updates.push('api_key = ?');
+      values.push(config.api_key || null);
+    }
+    if (config.api_url !== undefined) {
+      updates.push('api_url = ?');
+      values.push(config.api_url || null);
+    }
+    if (config.model_name !== undefined) {
+      updates.push('model_name = ?');
+      values.push(config.model_name || null);
     }
 
     if (updates.length === 0) {

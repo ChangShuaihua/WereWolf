@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import socket from '../socket'
 import { useUserStore } from './user'
+import { useGameStore } from './game'
 
 export const useRoomStore = defineStore('room', () => {
   const roomCode = ref('')
@@ -14,6 +15,11 @@ export const useRoomStore = defineStore('room', () => {
 
   const userStore = useUserStore()
 
+  function _onRoomReset() {
+    const gameStore = useGameStore()
+    gameStore.resetRoleRevealed()
+  }
+
   // ---- event handlers (named so we can off/on) ----
   function _onRoomJoined(data) {
     console.log('[roomStore] room_joined', data)
@@ -23,6 +29,9 @@ export const useRoomStore = defineStore('room', () => {
     seats.value = data.seats || buildDefaultSeats(mp)
     hostId.value = data.hostId
     maxPlayers.value = mp
+    if (data.chat) {
+      chat.value = data.chat
+    }
   }
 
   function _onRoomUpdate(data) {
@@ -51,10 +60,12 @@ export const useRoomStore = defineStore('room', () => {
     socket.off('room_joined', _onRoomJoined)
     socket.off('room_update', _onRoomUpdate)
     socket.off('chat_message', _onChatMessage)
+    socket.off('room_reset', _onRoomReset)
 
     socket.on('room_joined', _onRoomJoined)
     socket.on('room_update', _onRoomUpdate)
     socket.on('chat_message', _onChatMessage)
+    socket.on('room_reset', _onRoomReset)
 
     console.log('[roomStore] events bound, socket.id=', socket.id, 'connected=', socket.connected)
   }
@@ -63,6 +74,7 @@ export const useRoomStore = defineStore('room', () => {
     socket.off('room_joined', _onRoomJoined)
     socket.off('room_update', _onRoomUpdate)
     socket.off('chat_message', _onChatMessage)
+    socket.off('room_reset', _onRoomReset)
   }
 
   // ---- actions ----

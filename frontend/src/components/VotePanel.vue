@@ -33,13 +33,14 @@ const props = defineProps({
   candidates: { type: Array, default: () => [] },
   votedCount: { type: Number, default: 0 },
   totalVoters: { type: Number, default: 0 },
+  existingVote: { type: String, default: '' },
 })
 
 const emit = defineEmits(['vote'])
 
 const selectedCandidate = ref(null)
-const hasVoted = ref(false)
-const votedTargetId = ref(null)
+const hasVoted = ref(!!props.existingVote)
+const votedTargetId = ref(props.existingVote || null)
 
 const votedTargetName = computed(() => {
   if (!votedTargetId.value) return ''

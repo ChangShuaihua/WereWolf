@@ -168,8 +168,8 @@ async function fetchRoomInfo() {
 
 async function fetchAIAgents() {
   try {
-    const response = await fetch('/api/ai-agents');
-    aiAgents.value = await response.json();
+    const { data } = await api.get('/ai-agents');
+    aiAgents.value = data;
   } catch (err) {
     console.error('Failed to fetch AI agents:', err);
   }

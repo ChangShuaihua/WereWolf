@@ -243,7 +243,7 @@
   },
   {
     "id": "agent-1784768753882",
-    "name": "未命名智能体",
+    "name": "小智",
     "avatar": "🤖",
     "personality": {
       "aggressiveness": 100,
@@ -271,6 +271,70 @@
       ]
     },
     "createdAt": 1784768753882,
-    "updatedAt": 1784768753882
+    "updatedAt": 1784969274151
+  },
+  {
+    "id": "agent-1784969258946",
+    "name": "小明",
+    "avatar": "👨‍🌾",
+    "personality": {
+      "aggressiveness": 50,
+      "caution": 50,
+      "cunning": 50,
+      "honesty": 50,
+      "talkativeness": 50
+    },
+    "speakingStyle": "humorous",
+    "strategy": {
+      "nightAction": "follow_teammate",
+      "dayStrategy": "passive",
+      "revealIdentity": "late"
+    },
+    "language": {
+      "prefixes": [
+        "我觉得"
+      ],
+      "suffixes": [
+        "对吧"
+      ],
+      "favoriteWords": [
+        "狼",
+        "好人"
+      ]
+    },
+    "createdAt": 1784969258946,
+    "updatedAt": 1784969258946
+  },
+  {
+    "id": "agent-1785135429481",
+    "name": "小花",
+    "avatar": "🤖",
+    "personality": {
+      "aggressiveness": 50,
+      "caution": 50,
+      "cunning": 50,
+      "honesty": 50,
+      "talkativeness": 50
+    },
+    "speakingStyle": "calm",
+    "strategy": {
+      "nightAction": "random",
+      "dayStrategy": "passive",
+      "revealIdentity": "mid"
+    },
+    "language": {
+      "prefixes": [
+        "我觉得"
+      ],
+      "suffixes": [
+        "对吧"
+      ],
+      "favoriteWords": [
+        "狼",
+        "好人"
+      ]
+    },
+    "createdAt": 1785135429481,
+    "updatedAt": 1785135429481
   }
 ]

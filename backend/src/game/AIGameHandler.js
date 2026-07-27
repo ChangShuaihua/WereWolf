@@ -12,6 +12,7 @@ class AIGameHandler {
     this.aiIdCounter = 0;
     this.aiChatTimers = {};
     this.model = null;
+    this.userModels = {}; // Store per-user model instances
     this._initModel();
   }
 
@@ -19,13 +20,52 @@ class AIGameHandler {
     if (process.env.DEEPSEEK_API_KEY) {
       this.model = new ChatOpenAI({
         apiKey: process.env.DEEPSEEK_API_KEY,
-        model: 'deepseek-3.5',
+        model: 'deepseek-chat',
         temperature: 0.7,
         maxTokens: 500,
       });
     } else {
       console.warn('[AIGameHandler] DEEPSEEK_API_KEY not set, using fallback AI logic');
     }
+  }
+
+  // Get or create model for a specific user's API config
+  _getUserModel(userId, apiKey, apiUrl, modelName) {
+    const cacheKey = `${userId}_${apiKey}_${apiUrl}_${modelName}`;
+    
+    if (this.userModels[cacheKey]) {
+      return this.userModels[cacheKey];
+    }
+
+    if (!apiKey || !apiUrl) {
+      return this.model; // Return default model
+    }
+
+    try {
+      const userModel = new ChatOpenAI({
+        apiKey: apiKey,
+        model: modelName || 'MiMo-7B',
+        temperature: 0.7,
+        maxTokens: 500,
+        configuration: {
+          baseURL: apiUrl,
+        },
+      });
+      this.userModels[cacheKey] = userModel;
+      return userModel;
+    } catch (error) {
+      console.error('[AIGameHandler] Failed to create user model:', error);
+      return this.model;
+    }
+  }
+
+  // Clear cached user model when config changes
+  clearUserModel(userId) {
+    Object.keys(this.userModels).forEach(key => {
+      if (key.startsWith(`${userId}_`)) {
+        delete this.userModels[key];
+      }
+    });
   }
 
   createAIPlayer(roomCode, agentId = null) {
@@ -95,6 +135,8 @@ class AIGameHandler {
     }
 
     const gameState = this._buildGameState(game, aiPlayer);
+    const agentConfig = aiPlayer.agentConfig || aiAgentManager.getAgentById(aiPlayer.agentId);
+    
     const outputParser = StructuredOutputParser.fromNamesAndDescriptions({
       action: '行动类型，可选值: kill, check, guard, save, poison, skip',
       targetId: '目标玩家的socketId，如果行动是skip则为null',
@@ -110,6 +152,19 @@ class AIGameHandler {
     const roleName = getRoleName(role);
     const roleAbility = this._getRoleAbility(role);
     
+    // 构建策略描述
+    let strategyDesc = '';
+    if (agentConfig?.strategy) {
+      const s = agentConfig.strategy;
+      const nightActionMap = {
+        'random': '随机选择目标',
+        'target_weak': '优先攻击发言较弱的玩家',
+        'target_strong': '优先攻击发言较强的玩家',
+        'follow_teammate': '跟随队友的选择'
+      };
+      strategyDesc = `\n=== 你的策略 ===\n夜间策略：${nightActionMap[s.nightAction] || '随机选择目标'}`;
+    }
+    
     const prompt = new PromptTemplate({
       template: `你是一个狼人杀游戏中的AI玩家。
 
@@ -120,11 +175,12 @@ class AIGameHandler {
 - 当前存活玩家：{alivePlayers}
 - 你的队友：{teammates}
 - 可疑玩家：{suspiciousPlayers}
+{strategyDesc}
 
 请根据你的角色和游戏状态做出决策。
 
 {formatInstructions}`,
-      inputVariables: ['roleName', 'roleAbility', 'alivePlayers', 'teammates', 'suspiciousPlayers', 'formatInstructions'],
+      inputVariables: ['roleName', 'roleAbility', 'alivePlayers', 'teammates', 'suspiciousPlayers', 'strategyDesc', 'formatInstructions'],
     });
 
     const chain = prompt.pipe(this.model).pipe(outputParser);
@@ -136,6 +192,7 @@ class AIGameHandler {
         alivePlayers: alivePlayersStr, 
         teammates: teammatesStr, 
         suspiciousPlayers: suspiciousStr,
+        strategyDesc,
         formatInstructions 
       });
       
@@ -250,6 +307,7 @@ class AIGameHandler {
 
     const role = game.getRole(aiPlayer.socketId);
     const team = TEAM[role];
+    const agentConfig = aiPlayer.agentConfig || aiAgentManager.getAgentById(aiPlayer.agentId);
     const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
 
     if (aliveOthers.length === 0) return null;
@@ -267,6 +325,25 @@ class AIGameHandler {
 
     const roleName = getRoleName(role);
     
+    // 构建策略描述
+    let strategyDesc = '';
+    if (agentConfig?.strategy) {
+      const s = agentConfig.strategy;
+      const dayStrategyMap = {
+        'passive': '被动跟随，不主动引导投票',
+        'active': '主动发言，积极分析局势',
+        'leader': '领袖风格，引导大家投票',
+        'follower': '跟随者，参考他人意见投票'
+      };
+      const revealMap = {
+        'early': '尽早暴露身份以获取信任',
+        'mid': '中期适时暴露身份',
+        'late': '晚期才暴露身份',
+        'never': '绝不暴露身份'
+      };
+      strategyDesc = `\n=== 你的策略 ===\n白天策略：${dayStrategyMap[s.dayStrategy] || '主动分析'}\n身份暴露：${revealMap[s.revealIdentity] || '中期暴露'}`;
+    }
+    
     const prompt = new PromptTemplate({
       template: `你是一个狼人杀游戏中的AI玩家。
 
@@ -276,17 +353,18 @@ class AIGameHandler {
 - 你的阵营：{teamName}
 - 当前存活玩家：{aliveOthers}
 - 你的目标：{goal}
+{strategyDesc}
 
 请根据游戏状态决定投票给谁。
 
 {formatInstructions}`,
-      inputVariables: ['roleName', 'teamName', 'aliveOthers', 'goal', 'formatInstructions'],
+      inputVariables: ['roleName', 'teamName', 'aliveOthers', 'goal', 'strategyDesc', 'formatInstructions'],
     });
 
     const chain = prompt.pipe(this.model).pipe(outputParser);
 
     try {
-      const result = await chain.invoke({ roleName, teamName, aliveOthers: aliveOthersStr, goal, formatInstructions });
+      const result = await chain.invoke({ roleName, teamName, aliveOthers: aliveOthersStr, goal, strategyDesc, formatInstructions });
       if (this._validateTarget(game, aiPlayer, 'vote', result.targetId)) {
         return result.targetId;
       }
@@ -428,6 +506,7 @@ class AIGameHandler {
     const gameEventsStr = gameEvents.length > 0 ? gameEvents.join('\n') : '暂无';
 
     const agentConfig = aiPlayer.agentConfig || aiAgentManager.getAgentById(aiPlayer.agentId);
+    const isWerewolf = team === 'werewolf';
     
     let personalityDesc = '';
     let speakingStyleDesc = '';
@@ -441,8 +520,21 @@ class AIGameHandler {
       if (p.caution < 30) personalityDesc += '你比较大胆，敢于说出自己的想法，不怕暴露信息。';
       if (p.cunning > 70) personalityDesc += '你很狡猾，善于伪装，说谎时面不改色，会编造合理的谎言。';
       if (p.cunning < 30) personalityDesc += '你比较老实，不擅长说谎，更喜欢说实话。';
-      if (p.honesty < 30) personalityDesc += '你喜欢说谎，可以编造查验结果和夜间信息来误导别人。';
-      if (p.honesty > 70) personalityDesc += '你很诚实，作为好人会如实汇报信息，不会编造。';
+      // 根据阵营调整诚实度描述
+      if (p.honesty < 30) {
+        if (isWerewolf) {
+          personalityDesc += '你喜欢说谎，可以编造查验结果和夜间信息来误导好人。';
+        } else {
+          personalityDesc += '你说话比较直接，有什么说什么，不会拐弯抹角。';
+        }
+      }
+      if (p.honesty > 70) {
+        if (isWerewolf) {
+          personalityDesc += '你比较诚实，不太擅长撒谎，需要尽量避免暴露。';
+        } else {
+          personalityDesc += '你很诚实，会如实汇报信息，不会编造。';
+        }
+      }
       if (p.talkativeness > 70) personalityDesc += '你话很多，发言会比较长，喜欢详细分析。';
       if (p.talkativeness < 30) personalityDesc += '你话不多，发言简短，只说关键信息。';
 
@@ -457,13 +549,13 @@ class AIGameHandler {
 
       const lang = agentConfig.language;
       if (lang.prefixes && lang.prefixes.length > 0) {
-        languageDesc += `开头常用：${lang.prefixes.join('、')}；`;
+        languageDesc += `【必须使用】发言开头请使用以下词组之一：${lang.prefixes.join('、')}`;
       }
       if (lang.suffixes && lang.suffixes.length > 0) {
-        languageDesc += `结尾常用：${lang.suffixes.join('、')}；`;
+        languageDesc += `；【必须使用】发言结尾请使用以下词组之一：${lang.suffixes.join('、')}`;
       }
       if (lang.favoriteWords && lang.favoriteWords.length > 0) {
-        languageDesc += `常用词：${lang.favoriteWords.join('、')}`;
+        languageDesc +=`；【必须使用】发言中请融入以下词汇：${lang.favoriteWords.join('、')}`;
       }
     } else {
       personalityDesc = '你是一个普通的玩家，发言比较均衡。';
@@ -496,7 +588,7 @@ class AIGameHandler {
 === 你的发言风格 ===
 {speakingStyleDesc}
 
-=== 语言习惯 ===
+=== 语言习惯（必须遵守） ===
 {languageDesc}
 
 === 最近聊天记录 ===
@@ -522,6 +614,7 @@ class AIGameHandler {
 6. **字数控制**：发言字数控制在30-50字之间，不要太长也不要太短
 7. **如果没有信息**：如果你确实没有有用的信息，就直接说"我目前没有什么线索"
 8. **符合性格**：你的发言必须符合上面描述的性格特征和发言风格
+9. **使用语言习惯**：你的发言必须使用上面标注的【必须使用】的词汇和句式
 
 === 错误示例（不要这样说） ===
 - "我是平民，完全没有头绪，只能跟着大家的节奏走，希望好人能赢。"（没有针对任何人或任何情况）

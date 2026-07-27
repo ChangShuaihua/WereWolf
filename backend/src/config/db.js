@@ -1,3 +1,4 @@
+
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
@@ -38,6 +39,14 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+
+    // Add API config columns to users table if not exist
+    await conn.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS api_key VARCHAR(500) DEFAULT NULL,
+      ADD COLUMN IF NOT EXISTS api_url VARCHAR(500) DEFAULT NULL,
+      ADD COLUMN IF NOT EXISTS model_name VARCHAR(100) DEFAULT NULL
+    `).catch(() => {}); // Ignore error if columns already exist
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS game_records (

@@ -4,6 +4,10 @@
       <h2>🐺 狼人杀</h2>
       <p class="subtitle">登录或注册</p>
 
+      <div v-if="forceLogoutMsg" class="force-logout-alert">
+        ⚠️ {{ forceLogoutMsg }}
+      </div>
+
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
           <label>用户名</label>
@@ -37,11 +41,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const isLogin = ref(true)
@@ -50,6 +55,13 @@ const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
+const forceLogoutMsg = ref('')
+
+onMounted(() => {
+  if (route.query.forceLogout === '1') {
+    forceLogoutMsg.value = route.query.message || '您的账号已在其他设备登录'
+  }
+})
 
 async function handleSubmit() {
   error.value = ''

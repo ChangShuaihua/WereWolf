@@ -49,6 +49,21 @@ function startGame(io, socket, code) {
         roomCache.set(data.roomCode, room);
         io.to(data.roomCode).emit('chat_message', replayMsg);
       }
+    } else if (event === 'chat_message') {
+      // Store chat messages in room.chat for reconnection
+      const room = roomCache.get(code);
+      if (room) {
+        const chatMsg = {
+          username: data.username,
+          message: data.message,
+          timestamp: data.timestamp || Date.now(),
+          isSystem: data.isSystem || false,
+        };
+        room.chat.push(chatMsg);
+        if (room.chat.length > 100) room.chat.shift();
+        roomCache.set(code, room);
+      }
+      io.to(code).emit(event, data);
     } else if (event === 'phase_change') {
       aiGameHandler.handlePhaseChange(code, data.phase);
       io.to(code).emit(event, data);

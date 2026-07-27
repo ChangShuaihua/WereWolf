@@ -134,10 +134,12 @@ function refreshRooms() {
 }
 
 onMounted(async () => {
-  if (!socket.connected) socket.connect()
-
   if (userStore.user) {
-    await authenticate(userStore.user.id, userStore.user.username)
+    const authPromise = authenticate(userStore.user.id, userStore.user.username)
+    if (!socket.connected) socket.connect()
+    await authPromise
+  } else {
+    if (!socket.connected) socket.connect()
   }
 
   try {

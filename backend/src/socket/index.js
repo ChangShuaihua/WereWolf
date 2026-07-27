@@ -1,38 +1,75 @@
+const jwt = require('jsonwebtoken');
 const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer } = require('./roomHandler');
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
+const { kickOldSocket, removeUserSocket, getUserBySocket } = require('../utils/userSocketMap');
 
 /**
  * Initialize Socket.io with all event handlers
  */
 function initSocket(io) {
-  io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.id}`);
+  // Socket.IO authentication middleware - verify JWT on connection
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
+    
+    if (!token) {
+      console.log(`[socket] Connection rejected - no token (${socket.id})`);
+      return next(new Error('AUTH_REQUIRED'));
+    }
 
-    // Authenticate on connection
-    socket.on('authenticate', ({ userId, username }) => {
-      const existing = socketCache.get(socket.id);
-      socketCache.set(socket.id, { userId, username, roomCode: existing?.roomCode || null });
-      socket.emit('authenticated', { socketId: socket.id });
-      console.log(`User authenticated: ${username} (${socket.id})`);
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      socket.userId = decoded.id;
+      socket.username = decoded.username;
+      
+      socketCache.set(socket.id, {
+        userId: decoded.id,
+        username: decoded.username,
+        roomCode: null,
+      });
+      
+      console.log(`[socket] Authenticated: ${decoded.username} (${socket.id})`);
+      next();
+    } catch (err) {
+      console.log(`[socket] Connection rejected - invalid token (${socket.id}): ${err.message}`);
+      return next(new Error('AUTH_FAILED'));
+    }
+  });
+
+  io.on('connection', (socket) => {
+    console.log(`User connected: ${socket.id} (${socket.username})`);
+
+    if (socket.userId) {
+      kickOldSocket(io, socket.userId, socket.id);
+    }
+
+    socket.on('error', (err) => {
+      if (err.message === 'FORCE_LOGOUT') {
+        console.log(`[socket] Socket ${socket.id} force logged out`);
+        socket.disconnect(true);
+      }
     });
+
+    socket.emit('authenticated', { socketId: socket.id });
 
     // Create room
     socket.on('create_room', ({ username, userId, maxPlayers }) => {
+      if (socket.kicked) return;
       const mode = Number(maxPlayers) || 6;
       console.log(`[socket] create_room from ${username} (${socket.id}), maxPlayers=${mode}`);
       createRoom(socket, username, userId, mode);
-      // Note: createRoom broadcasts room_created via io.emit and room_joined to creator
     });
 
     // Join room
     socket.on('join_room', ({ roomCode, username, userId }) => {
+      if (socket.kicked) return;
       console.log(`[socket] join_room ${roomCode} from ${username} (${socket.id})`);
       joinRoom(socket, roomCode, username, userId);
     });
 
     // Leave room
     socket.on('leave_room', ({ roomCode } = {}) => {
+      if (socket.kicked) return;
       const info = socketCache.get(socket.id);
       const code = roomCode || info?.roomCode;
       if (code) leaveRoom(socket, code);
@@ -148,6 +185,10 @@ function initSocket(io) {
     // Disconnect
     socket.on('disconnect', () => {
       console.log(`User disconnected: ${socket.id}`);
+      const userId = getUserBySocket(socket.id);
+      if (userId) {
+        removeUserSocket(userId, socket.id);
+      }
       handleDisconnect(socket);
     });
   });

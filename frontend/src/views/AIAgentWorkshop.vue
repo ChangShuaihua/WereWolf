@@ -238,152 +238,153 @@
   </div>
 </template>
 
-<script setup>import { ref, reactive, onMounted } from 'vue';
+<script setup>
+import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import api from '../api';
+
 const router = useRouter();
 const agents = ref([]);
 const selectedAgent = ref(null);
 const showCreateForm = ref(false);
 const editingAgent = ref(null);
 const avatars = ['🤖', '🐺', '👨‍🌾', '🔮', '🧪', '🏹', '🛡️', '😂', '😎', '🤔', '😈', '😇'];
+
 const speakingStyleNames = {
- humorous: '幽默',
- serious: '严肃',
- aggressive: '激进',
- calm: '冷静',
- mysterious: '神秘'
+  humorous: '幽默',
+  serious: '严肃',
+  aggressive: '激进',
+  calm: '冷静',
+  mysterious: '神秘'
 };
+
 const nightActionNames = {
- random: '随机攻击',
- target_weak: '攻击弱者',
- target_strong: '攻击强者',
- follow_teammate: '跟随队友'
+  random: '随机攻击',
+  target_weak: '攻击弱者',
+  target_strong: '攻击强者',
+  follow_teammate: '跟随队友'
 };
+
 const dayStrategyNames = {
- passive: '被动',
- active: '主动',
- leader: '领袖',
- follower: '跟随者'
+  passive: '被动',
+  active: '主动',
+  leader: '领袖',
+  follower: '跟随者'
 };
+
 const revealIdentityNames = {
- early: '尽早',
- mid: '中期',
- late: '晚期',
- never: '从不'
+  early: '尽早',
+  mid: '中期',
+  late: '晚期',
+  never: '从不'
 };
+
 const formData = reactive({
- name: '',
- avatar: '🤖',
- personality: {
- aggressiveness: 50,
- caution: 50,
- cunning: 50,
- honesty: 50,
- talkativeness: 50
- },
- speakingStyle: 'calm',
- strategy: {
- nightAction: 'random',
- dayStrategy: 'passive',
- revealIdentity: 'mid'
- },
- language: {
- prefixesStr: '',
- suffixesStr: '',
- favoriteWordsStr: ''
- }
+  name: '',
+  avatar: '🤖',
+  personality: {
+    aggressiveness: 50,
+    caution: 50,
+    cunning: 50,
+    honesty: 50,
+    talkativeness: 50
+  },
+  speakingStyle: 'calm',
+  strategy: {
+    nightAction: 'random',
+    dayStrategy: 'passive',
+    revealIdentity: 'mid'
+  },
+  language: {
+    prefixesStr: '',
+    suffixesStr: '',
+    favoriteWordsStr: ''
+  }
 });
+
 async function fetchAgents() {
- try {
- const response = await fetch('/api/ai-agents');
- agents.value = await response.json();
- }
- catch (err) {
- console.error('Failed to fetch agents:', err);
- }
+  try {
+    const { data } = await api.get('/ai-agents');
+    agents.value = data;
+  } catch (err) {
+    console.error('Failed to fetch agents:', err);
+  }
 }
+
 function selectAgent(agent) {
- selectedAgent.value = agent;
+  selectedAgent.value = agent;
 }
+
 function editAgent(agent) {
- editingAgent.value = agent;
- formData.name = agent.name;
- formData.avatar = agent.avatar;
- formData.personality = { ...agent.personality };
- formData.speakingStyle = agent.speakingStyle;
- formData.strategy = { ...agent.strategy };
- formData.language = {
- prefixesStr: agent.language.prefixes.join(','),
- suffixesStr: agent.language.suffixes.join(','),
- favoriteWordsStr: agent.language.favoriteWords.join(',')
- };
+  editingAgent.value = agent;
+  formData.name = agent.name;
+  formData.avatar = agent.avatar;
+  formData.personality = { ...agent.personality };
+  formData.speakingStyle = agent.speakingStyle;
+  formData.strategy = { ...agent.strategy };
+  formData.language = {
+    prefixesStr: agent.language.prefixes.join(','),
+    suffixesStr: agent.language.suffixes.join(','),
+    favoriteWordsStr: agent.language.favoriteWords.join(',')
+  };
 }
+
 function closeModal() {
- showCreateForm.value = false;
- editingAgent.value = null;
- formData.name = '';
- formData.avatar = '🤖';
- formData.personality = { aggressiveness: 50, caution: 50, cunning: 50, honesty: 50, talkativeness: 50 };
- formData.speakingStyle = 'calm';
- formData.strategy = { nightAction: 'random', dayStrategy: 'passive', revealIdentity: 'mid' };
- formData.language = { prefixesStr: '', suffixesStr: '', favoriteWordsStr: '' };
+  showCreateForm.value = false;
+  editingAgent.value = null;
+  formData.name = '';
+  formData.avatar = '🤖';
+  formData.personality = { aggressiveness: 50, caution: 50, cunning: 50, honesty: 50, talkativeness: 50 };
+  formData.speakingStyle = 'calm';
+  formData.strategy = { nightAction: 'random', dayStrategy: 'passive', revealIdentity: 'mid' };
+  formData.language = { prefixesStr: '', suffixesStr: '', favoriteWordsStr: '' };
 }
+
 async function saveAgent() {
- const data = {
- name: formData.name,
- avatar: formData.avatar,
- personality: formData.personality,
- speakingStyle: formData.speakingStyle,
- strategy: formData.strategy,
- language: {
- prefixes: formData.language.prefixesStr.split(',').map(s => s.trim()).filter(s => s),
- suffixes: formData.language.suffixesStr.split(',').map(s => s.trim()).filter(s => s),
- favoriteWords: formData.language.favoriteWordsStr.split(',').map(s => s.trim()).filter(s => s)
- }
- };
- if (data.language.prefixes.length === 0)
- data.language.prefixes = ['我觉得'];
- if (data.language.suffixes.length === 0)
- data.language.suffixes = ['对吧'];
- if (data.language.favoriteWords.length === 0)
- data.language.favoriteWords = ['狼', '好人'];
- try {
- if (editingAgent.value) {
- await fetch(`/api/ai-agents/${editingAgent.value.id}`, {
- method: 'PUT',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify(data)
- });
- }
- else {
- await fetch('/api/ai-agents', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify(data)
- });
- }
- await fetchAgents();
- closeModal();
- }
- catch (err) {
- console.error('Failed to save agent:', err);
- }
+  const data = {
+    name: formData.name,
+    avatar: formData.avatar,
+    personality: formData.personality,
+    speakingStyle: formData.speakingStyle,
+    strategy: formData.strategy,
+    language: {
+      prefixes: formData.language.prefixesStr.split(',').map(s => s.trim()).filter(s => s),
+      suffixes: formData.language.suffixesStr.split(',').map(s => s.trim()).filter(s => s),
+      favoriteWords: formData.language.favoriteWordsStr.split(',').map(s => s.trim()).filter(s => s)
+    }
+  };
+
+  if (data.language.prefixes.length === 0) data.language.prefixes = ['我觉得'];
+  if (data.language.suffixes.length === 0) data.language.suffixes = ['对吧'];
+  if (data.language.favoriteWords.length === 0) data.language.favoriteWords = ['狼', '好人'];
+
+  try {
+    if (editingAgent.value) {
+      await api.put(`/ai-agents/${editingAgent.value.id}`, data);
+    } else {
+      await api.post('/ai-agents', data);
+    }
+    await fetchAgents();
+    closeModal();
+  } catch (err) {
+    console.error('Failed to save agent:', err);
+  }
 }
+
 async function deleteAgent(id) {
- if (!confirm('确定要删除这个智能体吗？'))
- return;
- try {
- await fetch(`/api/ai-agents/${id}`, { method: 'DELETE' });
- await fetchAgents();
- if (selectedAgent.value?.id === id) {
- selectedAgent.value = null;
- }
- }
- catch (err) {
- console.error('Failed to delete agent:', err);
- }
+  if (!confirm('确定要删除这个智能体吗？')) return;
+  try {
+    await api.delete(`/ai-agents/${id}`);
+    await fetchAgents();
+    if (selectedAgent.value?.id === id) {
+      selectedAgent.value = null;
+    }
+  } catch (err) {
+    console.error('Failed to delete agent:', err);
+  }
 }
+
 onMounted(() => {
- fetchAgents();
+  fetchAgents();
 });
 </script>

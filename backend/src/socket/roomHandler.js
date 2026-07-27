@@ -67,7 +67,7 @@ function createRoom(socket, username, userId, maxPlayers = 6) {
   }
   console.log(`[roomHandler] createRoom called with userId=${userId}, maxPlayers=${maxPlayers}`);
 
-  const code = generateRoomCode();
+  let code = generateRoomCode();
 
   // Prevent duplicates
   let attempts = 0;
@@ -270,6 +270,18 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
           }
         }
 
+        // Fix currentSpeaker if it was the old socketId
+        if (game.currentSpeaker === oldSocketId) {
+          game.currentSpeaker = socket.id;
+        }
+
+        // Fix speakingOrder if it contains the old socketId
+        if (game.speakingOrder && game.speakingOrder.length > 0) {
+          game.speakingOrder = game.speakingOrder.map(id => 
+            id === oldSocketId ? socket.id : id
+          );
+        }
+
         // Send current game state to reconnected player
         const role = game.roles[socket.id];
         const roleName = role ? require('../game/RoleConfig').getRoleName(role) : '';
@@ -290,10 +302,14 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
         });
 
         // Send current phase state
+        const phaseTimeout = game.phaseTimer?._idleStart
+          ? Math.ceil((game.phaseTimer._idleEnd - Date.now()) / 1000)
+          : 0;
+
         socket.emit('phase_change', {
           phase: game.phase,
-          timeout: game.phaseTimer?._idleStart ? Math.ceil((game.phaseTimer._idleEnd - Date.now()) / 1000) : 0,
-          message: game.message || '',
+          timeout: phaseTimeout || 0,
+          message: game.lastPhaseMessage || '',
           nightCount: game.nightCount,
           candidates: game.candidates || [],
           currentSpeaker: game.currentSpeaker || null,
@@ -303,25 +319,61 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
         // Send night action prompt if player needs to act
         if (gamePlayer.isAlive && game.phase === 'NIGHT') {
           const nightRole = game.roles[socket.id];
-          if (nightRole === 'werewolf') {
+          // Check if player already submitted night action
+          const alreadyActed = game.nightActions[socket.id];
+
+          if (!alreadyActed) {
+            if (nightRole === 'werewolf') {
+              socket.emit('night_action_prompt', {
+                action: 'kill',
+                message: '请选择要击杀的玩家',
+                targets: game.alivePlayers.filter(p => p.socketId !== socket.id && game.roles[p.socketId] !== 'werewolf')
+                  .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+                teammates: game.alivePlayers.filter(p => game.roles[p.socketId] === 'werewolf' && p.socketId !== socket.id)
+                  .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+                isWerewolfTeam: true,
+                timeout: phaseTimeout,
+              });
+            } else if (nightRole === 'seer') {
+              socket.emit('night_action_prompt', {
+                action: 'check',
+                message: '请选择要查验的玩家',
+                targets: game.alivePlayers.filter(p => p.socketId !== socket.id)
+                  .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+                timeout: phaseTimeout,
+              });
+            } else if (nightRole === 'guard') {
+              socket.emit('night_action_prompt', {
+                action: 'guard',
+                message: '请选择要守护的玩家',
+                targets: game.alivePlayers.filter(p => p.socketId !== socket.id && p.socketId !== game.guardLastProtected)
+                  .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+                timeout: phaseTimeout,
+              });
+            } else if (nightRole === 'witch') {
+              const killedPlayer = game.killedByWerewolves ? game.getPlayer(game.killedByWerewolves) : null;
+              socket.emit('night_action_prompt', {
+                action: 'witch',
+                message: '请使用你的药水',
+                killed: killedPlayer ? { id: killedPlayer.socketId, username: game.getSeatNum(killedPlayer.socketId) } : null,
+                canSave: !game.witchSaveUsed && game.killedByWerewolves !== null,
+                canPoison: !game.witchPoisonUsed,
+                targets: game.alivePlayers.filter(p => p.socketId !== socket.id)
+                  .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+                timeout: phaseTimeout,
+              });
+            }
+          } else {
+            // Player already acted - send confirmation so UI shows "action done"
+            const acted = game.nightActions[socket.id];
+            const targetPlayer = acted.targetId ? game.getPlayer(acted.targetId) : null;
             socket.emit('night_action_prompt', {
-              action: 'kill',
-              message: '请选择要击杀的玩家',
-              targets: game.alivePlayers.filter(p => p.socketId !== socket.id)
-                .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
-            });
-          } else if (nightRole === 'seer') {
-            socket.emit('night_action_prompt', {
-              action: 'check',
-              message: '请选择要查验的玩家',
-              targets: game.alivePlayers.filter(p => p.socketId !== socket.id)
-                .map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
-            });
-          } else if (nightRole === 'guard') {
-            socket.emit('night_action_prompt', {
-              action: 'guard',
-              message: '请选择要守护的玩家',
-              targets: game.alivePlayers.map(p => ({ id: p.socketId, username: game.getSeatNum(p.socketId) })),
+              action: acted.action,
+              message: '你的行动已确认',
+              targets: [],
+              alreadyDone: true,
+              completedAction: acted.action,
+              completedTarget: targetPlayer ? { id: acted.targetId, username: game.getSeatNum(acted.targetId) } : null,
             });
           }
         }
@@ -330,15 +382,26 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
         if (game.phase === 'VOTE') {
           socket.emit('vote_update', {
             votedCount: Object.keys(game.votes).length,
-            totalCount: game.alivePlayers.filter(p => p.socketId !== socket.id).length,
+            totalCount: game.alivePlayers.length,
           });
+
+          // If player already voted, send confirmation
+          if (game.votes[socket.id]) {
+            const votedTarget = game.getPlayer(game.votes[socket.id]);
+            socket.emit('vote_result', {
+              eliminated: null,
+              votes: [],
+              message: `你已投票给 ${votedTarget ? game.getSeatNum(game.votes[socket.id]) : '未知'}`,
+            });
+          }
         }
 
-        // Send speaker change if in day phase and player is current speaker
-        if (game.phase === 'DAY' && game.currentSpeaker === socket.id) {
+        // Send speaker change if in day phase
+        if (game.phase === 'DAY' && game.currentSpeaker) {
           socket.emit('speaker_change', {
             currentSpeaker: game.currentSpeaker,
             speakerName: game.getSeatNum(game.currentSpeaker),
+            hasSpoken: Array.from(game.hasSpoken || []),
           });
         }
 
@@ -361,7 +424,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     }
     
     broadcastRoomUpdate(code);
-    socket.emit('room_joined', { code, players: room.players, seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers });
+    socket.emit('room_joined', { code, players: room.players, seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers, chat: room.chat || [] });
     console.log(`[roomHandler] ${username} reconnected to room ${code}`);
     return room;
   }

@@ -256,6 +256,17 @@ body {
 .login-card h2 { font-size: 2rem; margin-bottom: 8px; }
 .login-card .subtitle { color: var(--text-dim); margin-bottom: 24px; }
 
+.force-logout-alert {
+  background: rgba(255, 170, 0, 0.12);
+  border: 1px solid rgba(255, 170, 0, 0.35);
+  color: var(--warning, #ffaa00);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
 .error { color: var(--danger); font-size: 0.85rem; margin-bottom: 12px; }
 
 .toggle { margin-top: 20px; font-size: 0.9rem; color: var(--text-dim); }

@@ -12,6 +12,7 @@ export const useGameStore = defineStore('game', () => {
   const message = ref('')
   const nightCount = ref(0)
   const candidates = ref([])
+  const myVote = ref('')  // Track player's own vote for reconnection
   const votedCount = ref(0)
   const totalVoters = ref(0)
   const gameOver = ref(null)
@@ -21,6 +22,7 @@ export const useGameStore = defineStore('game', () => {
   const currentSpeaker = ref(null)
   const speakerName = ref('')
   const currentNightRole = ref(null)
+  const roleRevealed = ref(sessionStorage.getItem('werewolf_role_revealed') === 'true')
 
   const isNight = computed(() => phase.value === 'NIGHT')
   const isDay = computed(() => phase.value === 'DAY')
@@ -41,9 +43,19 @@ export const useGameStore = defineStore('game', () => {
     myRole.value = data.role
     myRoleName.value = data.roleName
     players.value = data.players
-    // Use the actual phase if provided (for reconnection), otherwise default to NIGHT
     phase.value = data.phase || 'NIGHT'
     gameOver.value = null
+    myVote.value = ''
+  }
+
+  function markRoleRevealed() {
+    roleRevealed.value = true
+    sessionStorage.setItem('werewolf_role_revealed', 'true')
+  }
+
+  function resetRoleRevealed() {
+    roleRevealed.value = false
+    sessionStorage.removeItem('werewolf_role_revealed')
   }
 
   function _onPhaseChange(data) {
@@ -53,6 +65,7 @@ export const useGameStore = defineStore('game', () => {
     message.value = data.message || ''
     if (data.nightCount) nightCount.value = data.nightCount
     if (data.candidates) candidates.value = data.candidates
+    if (data.phase === 'VOTE') myVote.value = ''
     votedCount.value = 0
     totalVoters.value = data.candidates?.length || 0
     seerResult.value = null
@@ -125,7 +138,15 @@ export const useGameStore = defineStore('game', () => {
       if (p) p.isAlive = false
     }
     message.value = data.message
-    candidates.value = []
+    // Only clear candidates when there's an actual elimination result (not reconnection confirmation)
+    if (data.eliminated || (data.votes && data.votes.length > 0)) {
+      candidates.value = []
+      myVote.value = ''
+    } else if (data.message && data.message.includes('你已投票给')) {
+      // Reconnection: extract vote target from confirmation message
+      const target = candidates.value.find(c => data.message.includes(c.username))
+      if (target) myVote.value = target.id
+    }
   }
 
   function _onGameOver(data) {
@@ -133,6 +154,7 @@ export const useGameStore = defineStore('game', () => {
     gameOver.value = data
     phase.value = 'END'
     players.value = data.players
+    resetRoleRevealed()
   }
 
   function _onPlayerDisconnected(data) {
@@ -194,6 +216,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function submitVote(targetId) {
+    myVote.value = targetId
     socket.emit('vote', { targetId })
   }
 
@@ -218,11 +241,12 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     phase, myRole, myRoleName, players, timeout, message, nightCount,
-    candidates, votedCount, totalVoters, gameOver, seerResult, nightActionPrompt, hunterPrompt,
-    currentSpeaker, speakerName, currentNightRole,
+    candidates, myVote, votedCount, totalVoters, gameOver, seerResult, nightActionPrompt, hunterPrompt,
+    currentSpeaker, speakerName, currentNightRole, roleRevealed,
     isNight, isDay, isVote, isEnd, myPlayer, alivePlayers,
     bindEvents, unbindEvents,
     submitNightAction, submitHunterShoot, submitVote, skipDay, sendChat,
     nextSpeaker, skipSpeaking,
+    markRoleRevealed, resetRoleRevealed,
   }
 })

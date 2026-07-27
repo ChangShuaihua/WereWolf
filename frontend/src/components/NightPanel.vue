@@ -19,6 +19,7 @@
         <p v-else-if="completedAction === 'kill'">🗡️ 选择击杀 <strong>{{ completedTargetName }}</strong></p>
         <p v-else-if="completedAction === 'guard'">🛡️ 选择守护 <strong>{{ completedTargetName }}</strong></p>
         <p v-else-if="completedAction === 'check'">🔮 选择查验 <strong>{{ completedTargetName }}</strong></p>
+        <p v-else-if="completedAction === 'skip'">⏭️ 选择跳过</p>
       </div>
       <div v-if="seerResult" class="seer-result">
         <p>🔮 查验结果：{{ seerResult.message }}</p>
@@ -123,12 +124,35 @@ const witchMode = ref('save')
 const selectedTarget = ref(null)
 const actionDone = ref(false)
 const completedAction = ref(null)
+const completedTarget = ref(null)
 const timeLeft = ref(30)
 const nightTimeLeft = ref(30)
 const timerInterval = ref(null)
 const nightTimerInterval = ref(null)
 
+// Handle reconnection: if prompt has alreadyDone, restore state
+watch(() => props.prompt, (newPrompt) => {
+  if (newPrompt?.alreadyDone) {
+    // Reconnection: player already acted, restore confirmation state
+    actionDone.value = true
+    completedAction.value = newPrompt.completedAction || newPrompt.action
+    completedTarget.value = newPrompt.completedTarget || null
+  } else if (newPrompt) {
+    // New prompt: reset state and start timer
+    actionDone.value = false
+    selectedTarget.value = null
+    completedAction.value = null
+    completedTarget.value = null
+    timeLeft.value = newPrompt.timeout || 30
+    startTimer()
+  } else {
+    clearInterval(timerInterval.value)
+  }
+}, { immediate: true })
+
 const completedTargetName = computed(() => {
+  // For reconnection: use the completedTarget from the prompt
+  if (completedTarget.value) return completedTarget.value.username
   if (!props.prompt?.targets || !selectedTarget.value) return ''
   const target = props.prompt.targets.find(t => t.id === selectedTarget.value)
   return target?.username || ''
@@ -141,15 +165,6 @@ const timerPercent = computed(() => {
 const nightTimerPercent = computed(() => {
   return (nightTimeLeft.value / 30) * 100
 })
-
-watch(() => props.prompt, (newPrompt) => {
-  if (newPrompt) {
-    timeLeft.value = newPrompt.timeout || 30
-    startTimer()
-  } else {
-    clearInterval(timerInterval.value)
-  }
-}, { immediate: true })
 
 watch(() => props.currentNightRole, (newRole) => {
   if (newRole) {

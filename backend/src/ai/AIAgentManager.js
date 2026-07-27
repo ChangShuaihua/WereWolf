@@ -1,3 +1,4 @@
+// 引入模块
 const fs = require('fs');
 const path = require('path');
 
@@ -153,15 +154,119 @@ const DEFAULT_AGENTS = [
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
+  },
+  {
+    id: 'agent-7',
+    name: '新手小白',
+    avatar: '🐣',
+    personality: {
+      aggressiveness: 20,
+      caution: 70,
+      cunning: 20,
+      honesty: 80,
+      talkativeness: 30
+    },
+    speakingStyle: 'calm',
+    strategy: {
+      nightAction: 'random',
+      dayStrategy: 'follower',
+      revealIdentity: 'never'
+    },
+    language: {
+      prefixes: ['我不太懂', '请问'],
+      suffixes: ['是这样吗', '我不确定'],
+      favoriteWords: ['新手', '不懂', '学习']
+    },
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  },
+  {
+    id: 'agent-8',
+    name: '话痨侦探',
+    avatar: '🔍',
+    personality: {
+      aggressiveness: 60,
+      caution: 40,
+      cunning: 70,
+      honesty: 50,
+      talkativeness: 95
+    },
+    speakingStyle: 'serious',
+    strategy: {
+      nightAction: 'target_strong',
+      dayStrategy: 'leader',
+      revealIdentity: 'mid'
+    },
+    language: {
+      prefixes: ['经过分析', '我推理'],
+      suffixes: ['这很关键', '注意听'],
+      favoriteWords: ['逻辑', '漏洞', '证据']
+    },
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  },
+  {
+    id: 'agent-9',
+    name: '沉默的守卫',
+    avatar: '🛡️',
+    personality: {
+      aggressiveness: 15,
+      caution: 95,
+      cunning: 30,
+      honesty: 85,
+      talkativeness: 20
+    },
+    speakingStyle: 'calm',
+    strategy: {
+      nightAction: 'target_weak',
+      dayStrategy: 'passive',
+      revealIdentity: 'late'
+    },
+    language: {
+      prefixes: ['嗯', '我觉得'],
+      suffixes: ['再看看', '继续观察'],
+      favoriteWords: ['守', '保护', '平安']
+    },
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  },
+  {
+    id: 'agent-10',
+    name: '暴躁老哥',
+    avatar: '😤',
+    personality: {
+      aggressiveness: 95,
+      caution: 20,
+      cunning: 40,
+      honesty: 75,
+      talkativeness: 75
+    },
+    speakingStyle: 'aggressive',
+    strategy: {
+      nightAction: 'target_weak',
+      dayStrategy: 'leader',
+      revealIdentity: 'early'
+    },
+    language: {
+      prefixes: ['我服了', '无语'],
+      suffixes: ['懂不懂', '就这'],
+      favoriteWords: ['菜', '出', '投']
+    },
+    createdAt: Date.now(),
+    updatedAt: Date.now()
   }
 ];
 
 class AIAgentManager {
+
   constructor() {
-    this.agents = [];
+    //this是AIAgentManager类
+    this.agents = [];//创建出数组来保存AI
+    this.availableAgents = [];
     this.init();
   }
 
+  // 读取本地AI的数据
   init() {
     try {
       if (fs.existsSync(DATA_FILE)) {
@@ -171,12 +276,14 @@ class AIAgentManager {
         this.agents = DEFAULT_AGENTS;
         this.save();
       }
+      this.availableAgents = [...this.agents]
     } catch (err) {
       console.error('Failed to load AI agents:', err);
       this.agents = DEFAULT_AGENTS;
+      this.availableAgents = [...this.agents];
     }
   }
-
+  // 保存数据
   save() {
     try {
       fs.writeFileSync(DATA_FILE, JSON.stringify(this.agents, null, 2));
@@ -184,11 +291,11 @@ class AIAgentManager {
       console.error('Failed to save AI agents:', err);
     }
   }
-
+  // 查询全部数据
   getAllAgents() {
     return this.agents;
   }
-
+  // 查询某个数据
   getAgentById(id) {
     return this.agents.find(a => a.id === id);
   }
@@ -198,12 +305,14 @@ class AIAgentManager {
       id: `agent-${Date.now()}`,
       name: data.name || '未命名智能体',
       avatar: data.avatar || '🤖',
+      // 五维人格  
       personality: {
-        aggressiveness: data.personality?.aggressiveness || 50,
-        caution: data.personality?.caution || 50,
-        cunning: data.personality?.cunning || 50,
-        honesty: data.personality?.honesty || 50,
-        talkativeness: data.personality?.talkativeness || 50
+        // ?.的作用：创建一个对象，如果data.personality不存在，则使用默认值50,后面的||改为??
+        aggressiveness: data.personality?.aggressiveness ?? 50,
+        caution: data.personality?.caution ?? 50,
+        cunning: data.personality?.cunning ?? 50,
+        honesty: data.personality?.honesty ?? 50,
+        talkativeness: data.personality?.talkativeness ?? 50
       },
       speakingStyle: data.speakingStyle || 'calm',
       strategy: {
@@ -232,6 +341,18 @@ class AIAgentManager {
     this.agents[index] = {
       ...agent,
       ...data,
+      personality: {
+        ...agent.personality,
+        ...(data.personality || {}),
+      },
+      strategy: {
+        ...agent.strategy,
+        ...(data.strategy || {}),
+      },
+      language: {
+        ...agent.language,
+        ...(data.language || {}),
+      },
       updatedAt: Date.now()
     };
     this.save();
@@ -241,15 +362,30 @@ class AIAgentManager {
   deleteAgent(id) {
     const index = this.agents.findIndex(a => a.id === id);
     if (index === -1) return false;
-
+    // 删除数组
     this.agents.splice(index, 1);
     this.save();
     return true;
   }
 
   getRandomAgent() {
-    if (this.agents.length === 0) return null;
-    return this.agents[Math.floor(Math.random() * this.agents.length)];
+    if (this.availableAgents.length === 0) {
+      return null;
+    }
+
+    const index = Math.floor(
+      Math.random() * this.availableAgents.length
+    );
+
+    const agent = this.availableAgents[index];
+
+    this.availableAgents.splice(index, 1);
+
+    return agent;
+  }
+
+  resetRandomAgents() {
+    this.availableAgents = [...this.agents];
   }
 }
 

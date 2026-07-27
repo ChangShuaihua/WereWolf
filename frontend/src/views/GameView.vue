@@ -87,6 +87,7 @@
             :candidates="gameStore.candidates"
             :votedCount="gameStore.votedCount"
             :totalVoters="gameStore.totalVoters"
+            :existingVote="gameStore.myVote"
             @vote="gameStore.submitVote"
           />
         </section>
@@ -133,8 +134,6 @@ const roomStore = useRoomStore()
 const userStore = useUserStore()
 
 const showRoleReveal = ref(false)
-const gameChat = ref([])
-const roleRevealed = ref(false)
 const loading = ref(true)
 
 const phaseLabel = computed(() => {
@@ -195,17 +194,29 @@ async function reconnectToRoom() {
     }
   })
 
-  // Join room - this will trigger room_joined event which sets roomCode
+  // Join room and wait for room_joined event
   roomStore.joinRoom(code)
 
-  // Wait a bit for the room_joined event to process
-  setTimeout(() => {
-    if (roomStore.roomCode) {
-      loading.value = false
-    } else {
-      router.push('/lobby')
+  // Wait for room_joined event with timeout
+  await new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      socket.off('room_joined', onJoined)
+      resolve()
+    }, 3000)
+
+    function onJoined(data) {
+      clearTimeout(timeout)
+      socket.off('room_joined', onJoined)
+      resolve()
     }
-  }, 500)
+    socket.once('room_joined', onJoined)
+  })
+
+  if (roomStore.roomCode) {
+    loading.value = false
+  } else {
+    router.push('/lobby')
+  }
 }
 
 onMounted(async () => {
@@ -215,11 +226,16 @@ onMounted(async () => {
     return
   }
 
-  if (!roleRevealed.value && gameStore.myRole) {
+  if (!gameStore.roleRevealed && gameStore.myRole) {
     showRoleReveal.value = true
-    roleRevealed.value = true
+    gameStore.markRoleRevealed()
     setTimeout(() => { showRoleReveal.value = false }, 5000)
   }
+})
+
+onUnmounted(() => {
+  roomStore.unbindEvents()
+  gameStore.unbindEvents()
 })
 
 function handleChat(message) {

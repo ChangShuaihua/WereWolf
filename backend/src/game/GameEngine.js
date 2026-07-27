@@ -34,7 +34,12 @@ class GameEngine extends EventEmitter {
     // Speaking state (turn-based)
     this.speakingOrder = [];             // Array of socketIds in speaking order
     this.currentSpeakerIndex = -1;       // Index of current speaker in speakingOrder
+    this.currentSpeaker = null;          // socketId of current speaker (for reconnection)
     this.hasSpoken = new Set();          // Set of socketIds that have spoken this round
+
+    // Vote state for reconnection
+    this.candidates = [];                // Candidates array for vote phase
+    this.lastPhaseMessage = '';          // Last phase message (for reconnection)
     
     // Game history for replay
     this.gameHistory = [];               // [{ night, action, actor, target, detail }]
@@ -165,11 +170,15 @@ class GameEngine extends EventEmitter {
 
     const nightDuration = 120;
 
+    this.lastPhaseMessage = `🌙 第 ${this.nightCount} 夜来临，请闭眼...`;
+    this.currentSpeaker = null;
+    this.candidates = [];
+
     this.broadcast('phase_change', {
       phase: PHASE.NIGHT,
       nightCount: this.nightCount,
       timeout: nightDuration,
-      message: `🌙 第 ${this.nightCount} 夜来临，请闭眼...`,
+      message: this.lastPhaseMessage,
     });
 
     // Night sub-phases handled sequentially
@@ -643,15 +652,19 @@ class GameEngine extends EventEmitter {
     this.speakingOrder = alive.map(p => p.socketId);
     this.currentSpeakerIndex = 0;
     this.hasSpoken = new Set();
+    this.candidates = [];
 
     this._skipDeadSpeakers();
+
+    this.currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
+    this.lastPhaseMessage = '天亮了，按顺序发言';
 
     this.broadcast('phase_change', {
       phase: PHASE.DAY,
       timeout: TIMERS.DAY,
-      message: '天亮了，按顺序发言',
-      currentSpeaker: this.speakingOrder[this.currentSpeakerIndex],
-      speakerName: this.getSeatNum(this.speakingOrder[this.currentSpeakerIndex]),
+      message: this.lastPhaseMessage,
+      currentSpeaker: this.currentSpeaker,
+      speakerName: this.getSeatNum(this.currentSpeaker),
     });
 
     this.clearTimer();
@@ -818,33 +831,33 @@ class GameEngine extends EventEmitter {
       this.startVote();
       return;
     }
-    
+
     this.currentSpeakerIndex++;
     if (this.currentSpeakerIndex >= this.speakingOrder.length) {
       this.currentSpeakerIndex = 0;
     }
 
     this._skipDeadSpeakers();
-    
-    const currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
-    
+
+    this.currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
+
     this.broadcast('speaker_change', {
-      currentSpeaker,
-      speakerName: this.getSeatNum(currentSpeaker),
+      currentSpeaker: this.currentSpeaker,
+      speakerName: this.getSeatNum(this.currentSpeaker),
       hasSpoken: Array.from(this.hasSpoken),
     });
 
-    if (currentSpeaker) {
-      const speakerPlayer = this.getPlayer(currentSpeaker);
+    if (this.currentSpeaker) {
+      const speakerPlayer = this.getPlayer(this.currentSpeaker);
       if (speakerPlayer && speakerPlayer.isAI) {
-        setTimeout(() => this._triggerAISpeaking(currentSpeaker), 1000);
+        setTimeout(() => this._triggerAISpeaking(this.currentSpeaker), 1000);
       }
     }
   }
 
   skipSpeaking() {
     if (this.phase !== PHASE.DAY) return;
-    
+
     const currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
     this.hasSpoken.add(currentSpeaker);
 
@@ -853,26 +866,26 @@ class GameEngine extends EventEmitter {
       this.startVote();
       return;
     }
-    
+
     this.currentSpeakerIndex++;
     if (this.currentSpeakerIndex >= this.speakingOrder.length) {
       this.currentSpeakerIndex = 0;
     }
 
     this._skipDeadSpeakers();
-    
-    const nextSpeaker = this.speakingOrder[this.currentSpeakerIndex];
-    
+
+    this.currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
+
     this.broadcast('speaker_change', {
-      currentSpeaker: nextSpeaker,
-      speakerName: this.getSeatNum(nextSpeaker),
+      currentSpeaker: this.currentSpeaker,
+      speakerName: this.getSeatNum(this.currentSpeaker),
       hasSpoken: Array.from(this.hasSpoken),
     });
 
-    if (nextSpeaker) {
-      const speakerPlayer = this.getPlayer(nextSpeaker);
+    if (this.currentSpeaker) {
+      const speakerPlayer = this.getPlayer(this.currentSpeaker);
       if (speakerPlayer && speakerPlayer.isAI) {
-        setTimeout(() => this._triggerAISpeaking(nextSpeaker), 1000);
+        setTimeout(() => this._triggerAISpeaking(this.currentSpeaker), 1000);
       }
     }
   }
@@ -882,8 +895,10 @@ class GameEngine extends EventEmitter {
   async startVote() {
     this.phase = PHASE.VOTE;
     this.votes = {};
+    this.currentSpeaker = null;
 
     const alive = this.alivePlayers;
+    this.candidates = alive.map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) }));
 
     // Wait for AI players to submit their votes first
     const aiPlayers = alive.filter(p => p.isAI);
@@ -891,11 +906,13 @@ class GameEngine extends EventEmitter {
       await this._waitForAIVotes(aiPlayers);
     }
 
+    this.lastPhaseMessage = '投票阶段，请选择要放逐的玩家';
+
     this.broadcast('phase_change', {
       phase: PHASE.VOTE,
       timeout: TIMERS.VOTE,
-      message: '投票阶段，请选择要放逐的玩家',
-      candidates: alive.map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
+      message: this.lastPhaseMessage,
+      candidates: this.candidates,
     });
 
     this.clearTimer();
