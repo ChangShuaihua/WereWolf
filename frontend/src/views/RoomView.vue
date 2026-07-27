@@ -73,7 +73,7 @@
               </option>
             </select>
             <button
-              class="btn btn-secondary"
+              class="btn btn-ai"
               :disabled="roomStore.players.length >= roomStore.maxPlayers"
               @click="handleAddAI"
             >

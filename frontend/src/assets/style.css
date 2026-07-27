@@ -161,11 +161,18 @@ body {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
-.btn-secondary { 
-  background: linear-gradient(135deg, #64748b, #475569); 
+.btn-secondary {
+  background: linear-gradient(135deg, #64748b, #475569);
 }
-.btn-secondary:hover:not(:disabled) { 
-  background: linear-gradient(135deg, #94a3b8, #64748b); 
+.btn-secondary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+}
+
+.btn-ai {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+.btn-ai:hover:not(:disabled) {
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
 }
 
 .btn-warn { 
@@ -1340,6 +1347,7 @@ body {
 
 .chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px;
   display: flex;
@@ -1428,10 +1436,13 @@ body {
 .game-sidebar {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .game-sidebar .chat-box {
   flex: 1;
+  min-height: 0;
 }
 
 /* ========== Responsive ========== */
