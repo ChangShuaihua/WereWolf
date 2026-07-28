@@ -25,7 +25,7 @@
             <div class="stat-label">进行中房间</div>
           </div>
           <div class="stat-card stat-ai">
-            <div class="stat-value">10</div>
+            <div class="stat-value">{{ aiAgentCount }}</div>
             <div class="stat-label">AI 人格</div>
           </div>
           <div class="stat-card stat-werewolf">
@@ -187,9 +187,8 @@ const gameModes = [
 ]
 
 const totalRooms = computed(() => rooms.value.length)
-const totalPlayers = computed(() => {
-  return rooms.value.reduce((sum, r) => sum + r.playerCount, 0)
-})
+const totalPlayers = ref(1) // 至少包含自己
+const aiAgentCount = ref(10)
 
 function getPlayerMode(maxPlayers) {
   return gameModes.find(m => m.players === Number(maxPlayers))?.name || `${maxPlayers}人局`
@@ -215,6 +214,12 @@ onMounted(async () => {
   try {
     const { data: roomData } = await api.get('/rooms')
     rooms.value = roomData.rooms
+  } catch (e) {}
+
+  try {
+    const { data: stats } = await api.get('/lobby-stats')
+    totalPlayers.value = stats.onlineUsers || 1
+    aiAgentCount.value = stats.aiAgentCount || 10
   } catch (e) {}
 
   roomStore.bindEvents()
@@ -302,11 +307,11 @@ function handleJoinRoom(code) {
   align-items: center;
   gap: 8px;
   padding: 6px 16px;
-  background: rgba(155, 109, 255, 0.12);
-  border: 1px solid rgba(155, 109, 255, 0.25);
+  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(20, 184, 166, 0.25);
   border-radius: var(--radius-full);
   font-size: 0.85rem;
-  color: var(--ai-light);
+  color: var(--ai-secondary);
   font-weight: 500;
   margin-bottom: 20px;
 }
@@ -364,8 +369,8 @@ function handleJoinRoom(code) {
 }
 
 .stat-ai {
-  border-color: rgba(155, 109, 255, 0.3);
-  background: rgba(155, 109, 255, 0.08);
+  border-color: rgba(20, 184, 166, 0.3);
+  background: rgba(20, 184, 166, 0.08);
 }
 
 .stat-werewolf {
@@ -484,21 +489,21 @@ function handleJoinRoom(code) {
 
 .mode-icon {
   font-size: 2.5rem;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 4px 12px var(--shadow-md));
 }
 
 .mode-badge {
   padding: 4px 12px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-secondary);
   border-radius: var(--radius-full);
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
-.mode-6 .mode-badge { background: rgba(79, 140, 255, 0.15); color: var(--villager-light); }
-.mode-8 .mode-badge { background: rgba(245, 185, 66, 0.15); color: var(--status-warning); }
-.mode-12 .mode-badge { background: rgba(229, 57, 53, 0.15); color: var(--werewolf-light); }
+.mode-6 .mode-badge { background: rgba(59, 130, 246, 0.15); color: var(--villager-secondary); }
+.mode-8 .mode-badge { background: rgba(245, 158, 11, 0.15); color: var(--status-warning); }
+.mode-12 .mode-badge { background: rgba(239, 68, 68, 0.15); color: var(--werewolf-secondary); }
 
 .mode-title {
   font-size: 1.5rem;
@@ -523,7 +528,7 @@ function handleJoinRoom(code) {
 
 .role-tag {
   padding: 4px 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.04);
   border: var(--border-thin);
   border-radius: var(--radius-full);
   font-size: 0.78rem;
@@ -645,7 +650,7 @@ function handleJoinRoom(code) {
 .players-bar {
   flex: 1;
   height: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
   border-radius: var(--radius-full);
   overflow: hidden;
 }

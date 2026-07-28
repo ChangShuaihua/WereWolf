@@ -40,24 +40,6 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
-    // Add API config columns to users table if not exist
-    const [columns] = await conn.query(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('api_key', 'api_url', 'model_name')`,
-      [DB_NAME]
-    );
-    const existingColumns = columns.map(c => c.COLUMN_NAME);
-    
-    if (!existingColumns.includes('api_key')) {
-      await conn.query(`ALTER TABLE users ADD COLUMN api_key VARCHAR(500) DEFAULT NULL`);
-    }
-    if (!existingColumns.includes('api_url')) {
-      await conn.query(`ALTER TABLE users ADD COLUMN api_url VARCHAR(500) DEFAULT NULL`);
-    }
-    if (!existingColumns.includes('model_name')) {
-      await conn.query(`ALTER TABLE users ADD COLUMN model_name VARCHAR(100) DEFAULT NULL`);
-    }
-
     await conn.query(`
       CREATE TABLE IF NOT EXISTS game_records (
         id INT AUTO_INCREMENT PRIMARY KEY,

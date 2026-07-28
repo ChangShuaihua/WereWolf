@@ -122,7 +122,7 @@ const roleNames = {
 .player-card {
   position: relative;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   text-align: center;
@@ -131,8 +131,8 @@ const roleNames = {
 }
 
 .player-card:hover:not(.is-dead):not(.player-card-empty) {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-tertiary);
+  border-color: var(--text-tertiary);
 }
 
 .player-card.is-current {
@@ -181,7 +181,7 @@ const roleNames = {
   width: 32px;
   height: 32px;
   margin: 0 auto 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -190,7 +190,7 @@ const roleNames = {
 }
 
 .empty-avatar {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   color: var(--text-tertiary);
 }
 
@@ -225,7 +225,7 @@ const roleNames = {
 }
 
 .badge-role {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
   padding: 1px 6px;
   border-radius: var(--radius-sm);
 }

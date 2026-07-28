@@ -242,12 +242,14 @@ function confirmSkip() {
 
 <style scoped>
 .night-panel {
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   padding: 24px;
   border-radius: 16px;
-  color: #fff;
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+  color: var(--text-primary);
+  border: var(--border-medium);
+  box-shadow: var(--shadow-md);
 }
 
 .night-waiting {
@@ -257,13 +259,13 @@ function confirmSkip() {
 
 .night-waiting p:first-child {
   font-size: 15px;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   margin-bottom: 16px;
 }
 
 .night-role-info {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: var(--bg-secondary);
+  border: var(--border-thin);
   border-radius: 12px;
   padding: 16px;
   margin-top: 12px;
@@ -272,11 +274,11 @@ function confirmSkip() {
 .night-role-info p {
   margin: 6px 0;
   font-size: 15px;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .role-players {
-  color: #60a5fa;
+  color: var(--villager-primary);
   font-weight: 600;
 }
 
@@ -288,12 +290,12 @@ function confirmSkip() {
 .action-done .action-message {
   font-size: 18px;
   margin-bottom: 16px;
-  color: #4ade80;
+  color: var(--status-success);
 }
 
 .confirmed-info {
-  background: rgba(74, 222, 128, 0.1);
-  border: 1px solid rgba(74, 222, 128, 0.3);
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.3);
   border-radius: 12px;
   padding: 16px;
 }
@@ -304,7 +306,7 @@ function confirmSkip() {
 }
 
 .confirmed-info strong {
-  color: #4ade80;
+  color: var(--status-success);
 }
 
 .seer-result {
@@ -320,7 +322,7 @@ function confirmSkip() {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #60a5fa;
+  color: var(--villager-primary);
 }
 
 .night-actions {
@@ -330,7 +332,7 @@ function confirmSkip() {
 .timer-bar {
   position: relative;
   height: 28px;
-  background: rgba(71, 85, 105, 0.6);
+  background: var(--bg-tertiary);
   border-radius: 14px;
   margin-bottom: 16px;
   overflow: hidden;
@@ -341,7 +343,7 @@ function confirmSkip() {
   left: 0;
   top: 0;
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #10b981);
+  background: linear-gradient(90deg, var(--villager-primary), var(--ai-primary));
   transition: width 1s linear;
   border-radius: 14px;
 }
@@ -351,7 +353,7 @@ function confirmSkip() {
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #fff;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
   z-index: 1;
@@ -361,7 +363,7 @@ function confirmSkip() {
   font-size: 15px;
   margin-bottom: 16px;
   text-align: center;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .teammates-info {
@@ -375,7 +377,7 @@ function confirmSkip() {
 
 .teammates-info p {
   margin: 0;
-  color: #fca5a5;
+  color: var(--werewolf-primary);
   font-size: 14px;
 }
 
@@ -393,24 +395,24 @@ function confirmSkip() {
 
 .btn-mode {
   padding: 10px 20px;
-  border: 2px solid rgba(71, 85, 105, 0.5);
+  border: var(--border-medium);
   border-radius: 10px;
-  background: rgba(51, 65, 85, 0.5);
-  color: #cbd5e1;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
   font-size: 13px;
 }
 
 .btn-mode:hover:not(:disabled) {
-  border-color: #64748b;
-  background: rgba(71, 85, 105, 0.7);
+  border-color: var(--text-tertiary);
+  background: var(--bg-tertiary);
 }
 
 .btn-mode.active {
-  border-color: #4ade80;
-  background: rgba(74, 222, 128, 0.15);
-  color: #4ade80;
+  border-color: var(--status-success);
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--status-success);
 }
 
 .btn-mode:disabled {
@@ -435,24 +437,24 @@ function confirmSkip() {
 
 .btn-target {
   padding: 10px 18px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: var(--border-thin);
   border-radius: 10px;
-  background: rgba(51, 65, 85, 0.5);
-  color: #e2e8f0;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
   font-size: 13px;
 }
 
 .btn-target:hover:not(:disabled) {
-  border-color: #4ade80;
-  background: rgba(74, 222, 128, 0.15);
+  border-color: var(--status-success);
+  background: rgba(52, 211, 153, 0.15);
 }
 
 .btn-target.selected {
-  border-color: #4ade80;
-  background: #4ade80;
-  color: #0f172a;
+  border-color: var(--status-success);
+  background: var(--status-success);
+  color: white;
   font-weight: 600;
 }
 
@@ -470,8 +472,8 @@ function confirmSkip() {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: #fff;
+  background: linear-gradient(135deg, var(--villager-primary), var(--villager-secondary));
+  color: white;
   border: none;
   padding: 10px 24px;
   border-radius: 10px;
@@ -482,13 +484,13 @@ function confirmSkip() {
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  background: linear-gradient(135deg, var(--villager-light), var(--villager-primary));
   transform: translateY(-1px);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: #fff;
+  background: linear-gradient(135deg, var(--werewolf-primary), var(--werewolf-secondary));
+  color: white;
   border: none;
   padding: 10px 24px;
   border-radius: 10px;
@@ -499,13 +501,13 @@ function confirmSkip() {
 }
 
 .btn-danger:hover {
-  background: linear-gradient(135deg, #f87171, #ef4444);
+  background: linear-gradient(135deg, var(--werewolf-light), var(--werewolf-primary));
   transform: translateY(-1px);
 }
 
 .btn-warn {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #0f172a;
+  background: linear-gradient(135deg, var(--status-warning), #d97706);
+  color: #1e293b;
   border: none;
   padding: 10px 24px;
   border-radius: 10px;
@@ -516,14 +518,14 @@ function confirmSkip() {
 }
 
 .btn-warn:hover {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(135deg, #fbbf24, var(--status-warning));
   transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: rgba(100, 116, 139, 0.5);
-  color: #e2e8f0;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: var(--border-medium);
   padding: 10px 24px;
   border-radius: 10px;
   cursor: pointer;
@@ -533,7 +535,7 @@ function confirmSkip() {
 }
 
 .btn-secondary:hover {
-  background: rgba(100, 116, 139, 0.7);
-  color: #f8fafc;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 </style>

@@ -198,7 +198,16 @@ async function handleSubmit() {
   display: flex;
   position: relative;
   overflow: hidden;
+  background: var(--bg-primary);
+  transition: background 0.3s ease;
+}
+
+[data-theme="dark"] .login-container {
   background: linear-gradient(180deg, #080A0F 0%, #0D1018 50%, #11141C 100%);
+}
+
+[data-theme="light"] .login-container {
+  background: linear-gradient(180deg, #e8f4f8 0%, #f0f4f8 50%, #f5f0f8 100%);
 }
 
 .login-bg {
@@ -410,15 +419,15 @@ async function handleSubmit() {
   align-items: center;
   gap: 16px;
   padding: 16px 24px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-lg);
   transition: all 0.3s ease;
 }
 
 .feature-item:hover {
-  background: rgba(155, 109, 255, 0.08);
-  border-color: rgba(155, 109, 255, 0.2);
+  background: var(--bg-tertiary);
+  border-color: var(--ai-primary);
   transform: translateX(8px);
 }
 
@@ -441,16 +450,13 @@ async function handleSubmit() {
 .login-form-card {
   width: 100%;
   max-width: 420px;
-  background: rgba(20, 24, 35, 0.85);
+  background: var(--bg-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: var(--border-medium);
   border-radius: var(--radius-xl);
   padding: 48px 40px;
-  box-shadow: 
-    var(--shadow-lg),
-    0 0 0 1px rgba(155, 109, 255, 0.1),
-    0 0 60px rgba(155, 109, 255, 0.08);
+  box-shadow: var(--shadow-lg);
   animation: cardFadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
@@ -536,7 +542,7 @@ async function handleSubmit() {
   width: 100%;
   height: 48px;
   padding: 0 16px 0 48px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border: var(--border-medium);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -547,14 +553,14 @@ async function handleSubmit() {
 }
 
 .input-wrapper input:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--text-tertiary);
+  background: var(--bg-tertiary);
 }
 
 .input-wrapper input:focus {
   border-color: var(--ai-primary);
   box-shadow: 0 0 0 3px var(--ai-glow);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
 }
 
 .input-wrapper input::placeholder {

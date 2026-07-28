@@ -39,31 +39,33 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 
 <style scoped>
 .day-panel {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   padding: 24px;
   border-radius: 16px;
-  border: 1px solid rgba(251, 191, 36, 0.2);
-  box-shadow: 0 4px 20px rgba(251, 191, 36, 0.1);
+  border: var(--border-medium);
+  box-shadow: var(--shadow-md);
 }
 
 .day-message {
   text-align: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-thin);
 }
 
 .day-message p {
   font-size: 16px;
   font-weight: 600;
-  color: #fbbf24;
+  color: var(--status-warning);
   letter-spacing: 0.5px;
 }
 
 .speaker-info {
   text-align: center;
   padding: 10px 10px;
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1));
+  background: rgba(251, 191, 36, 0.1);
   border-radius: 12px;
   margin-bottom: 20px;
   border: 1px solid rgba(251, 191, 36, 0.3);
@@ -71,7 +73,7 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 
 .speaker-label {
   font-size: 13px;
-  color: #fbbf24;
+  color: var(--status-warning);
   margin-bottom: 8px;
   opacity: 0.8;
 }
@@ -79,24 +81,24 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 .speaker-name {
   font-size: 28px;
   font-weight: 700;
-  color: #fde047;
+  color: var(--status-warning);
   margin-bottom: 8px;
   text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
 }
 
 .my-turn {
   font-size: 15px;
-  color: #22c55e;
+  color: var(--status-success);
   font-weight: 600;
   padding: 6px 12px;
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(52, 211, 153, 0.15);
   border-radius: 20px;
   display: inline-block;
 }
 
 .wait-hint {
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   margin: 0;
 }
 
@@ -118,7 +120,7 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 }
 
 .day-dead p {
-  color: #ef4444;
+  color: var(--status-error);
   font-size: 14px;
   font-style: italic;
   opacity: 0.8;
@@ -135,26 +137,26 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+  background: linear-gradient(135deg, var(--villager-primary), var(--villager-secondary));
+  color: white;
+  box-shadow: 0 4px 14px var(--villager-glow);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  background: linear-gradient(135deg, var(--villager-light), var(--villager-primary));
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 6px 20px var(--villager-glow);
 }
 
 .btn-ghost {
   background: transparent;
-  color: #94a3b8;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: var(--text-tertiary);
+  border: var(--border-medium);
 }
 
 .btn-ghost:hover {
-  background: rgba(148, 163, 184, 0.1);
-  color: #e2e8f0;
-  border-color: rgba(148, 163, 184, 0.5);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
 }
 </style>

@@ -168,13 +168,13 @@ function handleCancel() {
 }
 
 .btn-cancel {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-secondary);
   color: var(--text-secondary);
   border: var(--border-medium);
 }
 
 .btn-cancel:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 

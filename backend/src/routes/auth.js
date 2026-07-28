@@ -87,50 +87,6 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/auth/api-config
-router.get('/api-config', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: '用户不存在' });
-    }
-    res.json({
-      api_key: user.api_key || '',
-      api_url: user.api_url || '',
-      model_name: user.model_name || '',
-    });
-  } catch (err) {
-    console.error('Get API config error:', err);
-    res.status(500).json({ message: '获取API配置失败' });
-  }
-});
-
-// PUT /api/auth/api-config
-router.put('/api-config', authMiddleware, async (req, res) => {
-  try {
-    const { api_key, api_url, model_name } = req.body;
-    
-    const updated = await User.updateApiConfig(req.user.id, {
-      api_key,
-      api_url,
-      model_name,
-    });
-
-    if (!updated) {
-      return res.status(400).json({ message: '更新失败' });
-    }
-
-    res.json({
-      api_key: updated.api_key || '',
-      api_url: updated.api_url || '',
-      model_name: updated.model_name || '',
-    });
-  } catch (err) {
-    console.error('Update API config error:', err);
-    res.status(500).json({ message: '更新API配置失败，请稍后重试' });
-  }
-});
-
 // PUT /api/auth/me
 router.put('/me', authMiddleware, async (req, res) => {
   try {

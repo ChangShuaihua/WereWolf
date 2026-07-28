@@ -80,54 +80,6 @@
         </button>
       </div>
 
-      <div class="edit-card">
-        <h3>🤖 大模型API配置</h3>
-        
-        <div class="form-group">
-          <label>API Key</label>
-          <input
-            v-model="apiForm.api_key"
-            type="password"
-            placeholder="输入大模型API Key"
-            class="form-input"
-          />
-          <span class="form-hint">用于AI功能的API密钥</span>
-        </div>
-
-        <div class="form-group">
-          <label>API URL</label>
-          <input
-            v-model="apiForm.api_url"
-            type="text"
-            placeholder="例如: https://api.openai.com/v1"
-            class="form-input"
-          />
-          <span class="form-hint">大模型API的访问地址</span>
-        </div>
-
-        <div class="form-group">
-          <label>模型名称</label>
-          <input
-            v-model="apiForm.model_name"
-            type="text"
-            placeholder="例如: gpt-4o, claude-3-5-sonnet"
-            class="form-input"
-          />
-          <span class="form-hint">使用的模型名称</span>
-        </div>
-
-        <div v-if="apiMessage" class="form-message" :class="apiMessageType">
-          {{ apiMessage }}
-        </div>
-
-        <button
-          class="btn btn-primary"
-          @click="handleSaveApiConfig"
-          :disabled="apiSaving"
-        >
-          {{ apiSaving ? '保存中...' : '保存API配置' }}
-        </button>
-      </div>
     </div>
   </div>
 </template>
@@ -155,31 +107,9 @@ const saving = ref(false)
 const message = ref('')
 const messageType = ref('success')
 
-const apiForm = ref({
-  api_key: '',
-  api_url: '',
-  model_name: '',
-})
-
-const apiSaving = ref(false)
-const apiMessage = ref('')
-const apiMessageType = ref('success')
-
-onMounted(async () => {
+onMounted(() => {
   if (userStore.user) {
     form.value.username = userStore.user.username
-  }
-  
-  // Load API config
-  try {
-    const { data } = await api.get('/auth/api-config')
-    apiForm.value = {
-      api_key: data.api_key || '',
-      api_url: data.api_url || '',
-      model_name: data.model_name || '',
-    }
-  } catch (err) {
-    console.error('Failed to load API config:', err)
   }
 })
 
@@ -244,33 +174,6 @@ async function handleSave() {
   }
 }
 
-async function handleSaveApiConfig() {
-  apiMessage.value = ''
-  apiSaving.value = true
-
-  try {
-    const { data } = await api.put('/auth/api-config', {
-      api_key: apiForm.value.api_key,
-      api_url: apiForm.value.api_url,
-      model_name: apiForm.value.model_name,
-    })
-
-    apiForm.value = {
-      api_key: data.api_key || '',
-      api_url: data.api_url || '',
-      model_name: data.model_name || '',
-    }
-
-    apiMessage.value = 'API配置保存成功！'
-    apiMessageType.value = 'success'
-  } catch (err) {
-    apiMessage.value = err.response?.data?.message || '保存失败'
-    apiMessageType.value = 'error'
-  } finally {
-    apiSaving.value = false
-  }
-}
-
 async function handleLogout() {
   const confirmed = await showConfirm({
     title: '退出确认',
@@ -299,8 +202,9 @@ async function handleLogout() {
   position: fixed;
   inset: 0;
   background: 
-    radial-gradient(ellipse at 20% 0%, rgba(155, 109, 255, 0.08) 0%, transparent 40%),
-    radial-gradient(ellipse at 80% 100%, rgba(79, 140, 255, 0.06) 0%, transparent 40%);
+    radial-gradient(ellipse at 20% 0%, rgba(20, 184, 166, 0.1) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 50%, rgba(94, 234, 212, 0.05) 0%, transparent 60%);
   pointer-events: none;
   z-index: 0;
 }
@@ -415,7 +319,7 @@ async function handleLogout() {
   width: 100%;
   height: 44px;
   padding: 0 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border: var(--border-medium);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -426,18 +330,26 @@ async function handleLogout() {
 }
 
 .form-input:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--ai-primary);
+  background: var(--bg-tertiary);
 }
 
 .form-input:focus {
   border-color: var(--ai-primary);
   box-shadow: 0 0 0 3px var(--ai-glow);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
 }
 
 .form-input::placeholder {
   color: var(--text-tertiary);
+}
+
+[data-theme="dark"] .form-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="light"] .form-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
 }
 
 .form-hint {

@@ -1,47 +1,48 @@
-/* ========== WEREWOLF AI Design System ========== */
+/* ========== WEREWOLF AI Design System - Light Theme ========== */
 
 /* CSS Variables - Design Tokens */
 :root {
-  /* Background Colors */
-  --bg-primary: #080A0F;
-  --bg-secondary: #0D1018;
-  --bg-tertiary: #11141C;
-  --bg-card: rgba(20, 24, 35, 0.85);
-  --bg-card-hover: rgba(30, 36, 50, 0.9);
+  /* Background Colors - Light */
+  --bg-primary: #f0f4f8;
+  --bg-secondary: #e8edf3;
+  --bg-tertiary: #dde4ec;
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-card-hover: rgba(255, 255, 255, 0.95);
+  --bg-hover: rgba(255, 255, 255, 0.92);
   
-  /* Glass Effect */
-  --glass-bg: rgba(20, 24, 35, 0.75);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  /* Glass Effect - Light */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.06);
   --glass-blur: 16px;
   
-  /* AI Purple Theme */
-  --ai-primary: #9B6DFF;
-  --ai-secondary: #6D5CE7;
-  --ai-light: #B59CFF;
-  --ai-glow: rgba(155, 109, 255, 0.35);
-  
+  /* AI Teal Theme (replacing purple) */
+  --ai-primary: #0d9488;
+  --ai-secondary: #0f766e;
+  --ai-light: #115e59;
+  --ai-glow: rgba(20, 184, 166, 0.25);
+
   /* Werewolf Red Theme */
-  --werewolf-primary: #E53935;
-  --werewolf-secondary: #8E2020;
-  --werewolf-light: #FF5A5A;
-  --werewolf-glow: rgba(229, 57, 53, 0.35);
-  
+  --werewolf-primary: #dc2626;
+  --werewolf-secondary: #b91c1c;
+  --werewolf-light: #991b1b;
+  --werewolf-glow: rgba(239, 68, 68, 0.25);
+
   /* Villager Blue Theme */
-  --villager-primary: #4F8CFF;
-  --villager-secondary: #3478DB;
-  --villager-light: #78A9FF;
-  --villager-glow: rgba(79, 140, 255, 0.35);
+  --villager-primary: #2563eb;
+  --villager-secondary: #1d4ed8;
+  --villager-light: #1e40af;
+  --villager-glow: rgba(59, 130, 246, 0.25);
   
   /* Status Colors */
-  --status-success: #36D399;
-  --status-warning: #F5B942;
-  --status-error: #E53935;
-  --status-dead: #555B68;
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-error: #ef4444;
+  --status-dead: #94a3b8;
   
-  /* Text Colors */
-  --text-primary: #F5F7FA;
-  --text-secondary: #8B93A7;
-  --text-tertiary: #5C6375;
+  /* Text Colors - Dark for light bg */
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
   
   /* Typography */
   --font-sans: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -65,17 +66,75 @@
   --radius-xl: 18px;
   --radius-full: 9999px;
   
-  /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  /* Shadows - Softer for light theme */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-glow-ai: 0 0 16px var(--ai-glow);
+  --shadow-glow-werewolf: 0 0 16px var(--werewolf-glow);
+  --shadow-glow-villager: 0 0 16px var(--villager-glow);
+  
+  /* Border - Darker for light bg */
+  --border-thin: 1px solid rgba(0, 0, 0, 0.06);
+  --border-medium: 1px solid rgba(0, 0, 0, 0.1);
+  --border-thick: 2px solid rgba(0, 0, 0, 0.12);
+}
+
+/* ========== Dark Theme ========== */
+[data-theme="dark"] {
+  /* Background Colors - Dark */
+  --bg-primary: #0f1419;
+  --bg-secondary: #1a2028;
+  --bg-tertiary: #252d38;
+  --bg-card: rgba(30, 36, 46, 0.85);
+  --bg-card-hover: rgba(40, 48, 60, 0.95);
+  --bg-hover: rgba(50, 58, 70, 0.95);
+  
+  /* Glass Effect - Dark */
+  --glass-bg: rgba(20, 24, 35, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 16px;
+  
+  /* AI Teal Theme - Dark */
+  --ai-primary: #14b8a6;
+  --ai-secondary: #0d9488;
+  --ai-light: #5eead4;
+  --ai-glow: rgba(20, 184, 166, 0.35);
+  
+  /* Werewolf Red Theme - Dark */
+  --werewolf-primary: #ef4444;
+  --werewolf-secondary: #dc2626;
+  --werewolf-light: #f87171;
+  --werewolf-glow: rgba(239, 68, 68, 0.35);
+  
+  /* Villager Blue Theme - Dark */
+  --villager-primary: #3b82f6;
+  --villager-secondary: #2563eb;
+  --villager-light: #60a5fa;
+  --villager-glow: rgba(59, 130, 246, 0.35);
+  
+  /* Status Colors */
+  --status-success: #34d399;
+  --status-warning: #fbbf24;
+  --status-error: #f87171;
+  --status-dead: #64748b;
+  
+  /* Text Colors - Light for dark bg */
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  
+  /* Shadows - Brighter for dark theme */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
   --shadow-glow-ai: 0 0 20px var(--ai-glow);
   --shadow-glow-werewolf: 0 0 20px var(--werewolf-glow);
   --shadow-glow-villager: 0 0 20px var(--villager-glow);
   
-  /* Border */
-  --border-thin: 1px solid rgba(255, 255, 255, 0.06);
-  --border-medium: 1px solid rgba(255, 255, 255, 0.1);
+  /* Border - Lighter for dark bg */
+  --border-thin: 1px solid rgba(255, 255, 255, 0.08);
+  --border-medium: 1px solid rgba(255, 255, 255, 0.12);
   --border-thick: 2px solid rgba(255, 255, 255, 0.15);
 }
 
@@ -99,6 +158,17 @@ body {
   min-height: 100vh;
   line-height: 1.6;
   letter-spacing: -0.01em;
+  background-image: 
+    radial-gradient(ellipse at 20% 0%, rgba(20, 184, 166, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
+  background-attachment: fixed;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+[data-theme="dark"] body {
+  background-image: 
+    radial-gradient(ellipse at 20% 0%, rgba(20, 184, 166, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
 }
 
 #app {
@@ -115,15 +185,17 @@ body {
   border: var(--border-medium);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .glass-card-strong {
-  background: rgba(20, 24, 35, 0.92);
+  background: var(--bg-card);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: var(--border-medium);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 /* ========== Buttons ========== */
@@ -216,14 +288,15 @@ body {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-secondary);
   border: var(--border-medium);
   backdrop-filter: blur(8px);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-tertiary);
+  border-color: var(--text-tertiary);
 }
 
 .btn-success {
@@ -278,7 +351,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 0 var(--space-8);
-  background: rgba(8, 10, 15, 0.75);
+  background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border-bottom: var(--border-thin);
@@ -287,6 +360,8 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.3s ease;
 }
 
 .header-brand {
@@ -306,7 +381,7 @@ body {
   font-weight: 800;
   color: var(--text-primary);
   letter-spacing: 0.05em;
-  background: linear-gradient(135deg, var(--ai-light), var(--ai-primary));
+  background: linear-gradient(135deg, var(--ai-primary), var(--villager-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -337,13 +412,13 @@ body {
 
 .tab-item:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
 }
 
 .tab-active {
-  color: var(--ai-light) !important;
+  color: var(--ai-secondary) !important;
   border-bottom-color: var(--ai-primary);
-  background: rgba(155, 109, 255, 0.05);
+  background: var(--ai-glow);
 }
 
 .tab-icon {
@@ -352,6 +427,9 @@ body {
 
 .header-user {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .user-link {
@@ -364,13 +442,13 @@ body {
   text-decoration: none;
   font-size: 0.9rem;
   transition: all 0.2s;
-  background: rgba(155, 109, 255, 0.1);
-  border: 1px solid rgba(155, 109, 255, 0.2);
+  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(20, 184, 166, 0.2);
 }
 
 .user-link:hover {
-  background: rgba(155, 109, 255, 0.18);
-  border-color: rgba(155, 109, 255, 0.35);
+  background: rgba(20, 184, 166, 0.18);
+  border-color: rgba(20, 184, 166, 0.35);
 }
 
 .user-icon {
@@ -399,7 +477,7 @@ body {
   width: 100%;
   height: 44px;
   padding: 0 var(--space-4);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border: var(--border-medium);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -410,14 +488,14 @@ body {
 }
 
 .input-field:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--text-tertiary);
+  background: var(--bg-tertiary);
 }
 
 .input-field:focus {
   border-color: var(--ai-primary);
   box-shadow: 0 0 0 3px var(--ai-glow);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
 }
 
 .input-field::placeholder {
@@ -442,16 +520,16 @@ textarea.input-field {
 
 .card-hover:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: var(--text-tertiary);
   box-shadow: var(--shadow-md);
 }
 
 .card-glow-ai {
-  border-color: rgba(155, 109, 255, 0.3);
+  border-color: rgba(20, 184, 166, 0.3);
 }
 
 .card-glow-ai:hover {
-  border-color: rgba(155, 109, 255, 0.6);
+  border-color: rgba(20, 184, 166, 0.6);
   box-shadow: var(--shadow-glow-ai);
 }
 
@@ -486,9 +564,9 @@ textarea.input-field {
 }
 
 .badge-ai {
-  background: rgba(155, 109, 255, 0.15);
-  color: var(--ai-light);
-  border: 1px solid rgba(155, 109, 255, 0.3);
+  background: rgba(20, 184, 166, 0.12);
+  color: var(--ai-secondary);
+  border: 1px solid rgba(20, 184, 166, 0.3);
 }
 
 .badge-werewolf {
@@ -585,18 +663,18 @@ textarea.input-field {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-secondary);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--text-tertiary);
   border-radius: 4px;
   transition: background 0.2s;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--text-secondary);
 }
 
 /* ========== Utilities ========== */
@@ -635,8 +713,8 @@ textarea.input-field {
   position: fixed;
   inset: 0;
   background: 
-    radial-gradient(ellipse at top left, rgba(155, 109, 255, 0.06) 0%, transparent 40%),
-    radial-gradient(ellipse at bottom right, rgba(79, 140, 255, 0.05) 0%, transparent 40%);
+    radial-gradient(ellipse at top left, var(--werewolf-glow) 0%, transparent 40%),
+    radial-gradient(ellipse at bottom right, var(--villager-glow) 0%, transparent 40%);
   pointer-events: none;
   z-index: 0;
 }
@@ -647,7 +725,7 @@ textarea.input-field {
   justify-content: space-between;
   align-items: center;
   padding: 12px 24px;
-  background: rgba(8, 10, 15, 0.88);
+  background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: var(--border-thin);
@@ -655,6 +733,8 @@ textarea.input-field {
   position: sticky;
   top: 0;
   z-index: 50;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.3s ease;
 }
 
 .game-header-left,
@@ -685,10 +765,10 @@ textarea.input-field {
 }
 
 .phase-indicator.night {
-  background: rgba(109, 92, 231, 0.2);
-  border-color: rgba(155, 109, 255, 0.4);
-  color: var(--ai-light);
-  box-shadow: 0 0 20px rgba(155, 109, 255, 0.15);
+  background: rgba(20, 184, 166, 0.15);
+  border-color: rgba(20, 184, 166, 0.4);
+  color: var(--ai-secondary);
+  box-shadow: 0 0 20px rgba(20, 184, 166, 0.15);
 }
 
 .phase-indicator.day {
@@ -728,7 +808,7 @@ textarea.input-field {
 
 .night-number {
   padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   font-weight: 700;
@@ -756,7 +836,7 @@ textarea.input-field {
 
 .game-message {
   padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
   color: var(--text-secondary);
@@ -817,7 +897,7 @@ textarea.input-field {
 
 .section-badge {
   padding: 3px 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border-radius: var(--radius-full);
   font-size: 0.78rem;
   color: var(--text-secondary);
@@ -877,16 +957,16 @@ textarea.input-field {
 
 .chat-message {
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
   line-height: 1.5;
 }
 
 .chat-message.is-system {
-  background: rgba(155, 109, 255, 0.1);
+  background: rgba(20, 184, 166, 0.1);
   border-left: 3px solid var(--ai-primary);
-  color: var(--ai-light);
+  color: var(--ai-secondary);
 }
 
 .chat-message.is-werewolf {
@@ -923,7 +1003,7 @@ textarea.input-field {
   flex: 1;
   height: 40px;
   padding: 0 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-card);
   border: var(--border-medium);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -977,7 +1057,7 @@ textarea.input-field {
 .loading-spinner {
   width: 48px;
   height: 48px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
+  border: 3px solid var(--bg-tertiary);
   border-top-color: var(--ai-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -998,7 +1078,7 @@ textarea.input-field {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-secondary);
   border: var(--border-medium);
   border-radius: var(--radius-full);
   font-weight: 600;
@@ -1065,7 +1145,7 @@ textarea.input-field {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -1073,12 +1153,12 @@ textarea.input-field {
 }
 
 .target-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-tertiary);
+  border-color: var(--text-tertiary);
 }
 
 .target-item.selected {
-  background: rgba(155, 109, 255, 0.15);
+  background: rgba(20, 184, 166, 0.12);
   border-color: var(--ai-primary);
 }
 
@@ -1120,7 +1200,7 @@ textarea.input-field {
 
 .vote-option {
   padding: 16px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-secondary);
   border: var(--border-medium);
   border-radius: var(--radius-md);
   text-align: center;
@@ -1129,7 +1209,7 @@ textarea.input-field {
 }
 
 .vote-option:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
 }
 
 .vote-option.selected {

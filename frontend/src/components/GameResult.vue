@@ -10,7 +10,6 @@
 
       <div class="result-players">
         <div v-for="p in result?.players || []" :key="p.id" class="result-player" :class="{ winner: p.isWinner, dead: !p.isAlive }">
-          <span class="rp-order">{{ p.id }}号</span>
           <span class="rp-role">{{ p.roleName }}</span>
           <span class="rp-name">{{ p.username }}</span>
           <span class="rp-status">{{ p.isAlive ? '存活' : '死亡' }}</span>
@@ -181,18 +180,18 @@ function formatDuration(seconds) {
 
 .result-player {
   display: grid;
-  grid-template-columns: 50px 70px 1fr 50px 30px;
+  grid-template-columns: 70px 1fr 50px 30px;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   transition: all 0.2s ease;
 }
 
 .result-player:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-tertiary);
 }
 
 .result-player.winner {
@@ -202,12 +201,6 @@ function formatDuration(seconds) {
 
 .result-player.dead {
   opacity: 0.6;
-}
-
-.rp-order {
-  font-size: 0.85rem;
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
 }
 
 .rp-role {
@@ -273,13 +266,13 @@ function formatDuration(seconds) {
 }
 
 .btn-lobby {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-secondary);
   color: var(--text-secondary);
   border: var(--border-medium);
 }
 
 .btn-lobby:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--bg-tertiary);
   color: var(--text-primary);
   transform: translateY(-2px);
 }
@@ -294,7 +287,7 @@ function formatDuration(seconds) {
   }
 
   .result-player {
-    grid-template-columns: 40px 60px 1fr 45px 24px;
+    grid-template-columns: 60px 1fr 45px 24px;
     gap: 6px;
     padding: 10px 12px;
   }

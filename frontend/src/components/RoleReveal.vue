@@ -149,10 +149,7 @@ const roleDesc = computed(() => roleDescs[props.role] || '')
   font-size: 2rem;
   font-weight: 800;
   margin: 0 0 20px;
-  background: linear-gradient(135deg, #fff, var(--text-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #f1f5f9;
 }
 
 .role-reveal-desc {

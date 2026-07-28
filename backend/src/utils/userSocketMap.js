@@ -21,6 +21,10 @@ function removeUserSocket(userId, socketId) {
   return false;
 }
 
+function getUserCount() {
+  return userToSocket.size;
+}
+
 function getUserBySocket(socketId) {
   for (const [userId, sId] of userToSocket.entries()) {
     if (sId === socketId) return userId;
@@ -108,5 +112,6 @@ module.exports = {
   setUserSocket,
   removeUserSocket,
   getUserBySocket,
+  getUserCount,
   kickOldSocket,
 };

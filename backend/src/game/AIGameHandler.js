@@ -12,7 +12,6 @@ class AIGameHandler {
     this.aiIdCounter = 0;
     this.aiChatTimers = {};
     this.model = null;
-    this.userModels = {}; // Store per-user model instances
     this._initModel();
   }
 
@@ -27,45 +26,6 @@ class AIGameHandler {
     } else {
       console.warn('[AIGameHandler] DEEPSEEK_API_KEY not set, using fallback AI logic');
     }
-  }
-
-  // Get or create model for a specific user's API config
-  _getUserModel(userId, apiKey, apiUrl, modelName) {
-    const cacheKey = `${userId}_${apiKey}_${apiUrl}_${modelName}`;
-    
-    if (this.userModels[cacheKey]) {
-      return this.userModels[cacheKey];
-    }
-
-    if (!apiKey || !apiUrl) {
-      return this.model; // Return default model
-    }
-
-    try {
-      const userModel = new ChatOpenAI({
-        apiKey: apiKey,
-        model: modelName || 'MiMo-7B',
-        temperature: 0.7,
-        maxTokens: 500,
-        configuration: {
-          baseURL: apiUrl,
-        },
-      });
-      this.userModels[cacheKey] = userModel;
-      return userModel;
-    } catch (error) {
-      console.error('[AIGameHandler] Failed to create user model:', error);
-      return this.model;
-    }
-  }
-
-  // Clear cached user model when config changes
-  clearUserModel(userId) {
-    Object.keys(this.userModels).forEach(key => {
-      if (key.startsWith(`${userId}_`)) {
-        delete this.userModels[key];
-      }
-    });
   }
 
   createAIPlayer(roomCode, agentId = null) {

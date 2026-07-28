@@ -7,6 +7,8 @@ require('dotenv').config();
 
 const { initDB } = require('./config/db');
 const { roomCache } = require('./utils/cache');
+const { getUserCount } = require('./utils/userSocketMap');
+const aiAgentManager = require('./ai/AIAgentManager');
 const authRoutes = require('./routes/auth');
 const aiAgentRoutes = require('./routes/aiAgentRoutes');
 const initSocket = require('./socket');
@@ -79,6 +81,14 @@ app.use((req, res, next) => {
 // REST Routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/ai-agents', aiAgentRoutes);
+
+// GET /api/lobby-stats - lobby stats (online users + AI agent count)
+app.get('/api/lobby-stats', (req, res) => {
+  res.json({
+    onlineUsers: getUserCount(),
+    aiAgentCount: aiAgentManager.getAllAgents().length,
+  });
+});
 
 // GET /api/rooms - list active rooms
 app.get('/api/rooms', (req, res) => {

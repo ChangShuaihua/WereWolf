@@ -415,8 +415,8 @@ onMounted(async () => {
   position: fixed;
   inset: 0;
   background: 
-    radial-gradient(ellipse at 20% 0%, rgba(155, 109, 255, 0.1) 0%, transparent 40%),
-    radial-gradient(ellipse at 80% 100%, rgba(109, 92, 231, 0.08) 0%, transparent 40%);
+    radial-gradient(ellipse at 20% 0%, rgba(20, 184, 166, 0.1) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.08) 0%, transparent 40%);
   pointer-events: none;
   z-index: 0;
 }
@@ -489,7 +489,7 @@ onMounted(async () => {
   align-items: center;
   gap: 14px;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-lg);
   margin-bottom: 12px;
@@ -498,14 +498,14 @@ onMounted(async () => {
 }
 
 .agent-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-tertiary);
+  border-color: var(--text-tertiary);
 }
 
 .agent-card.active {
-  background: rgba(155, 109, 255, 0.12);
+  background: rgba(20, 184, 166, 0.12);
   border-color: var(--ai-primary);
-  box-shadow: 0 0 20px rgba(155, 109, 255, 0.15);
+  box-shadow: 0 0 20px rgba(20, 184, 166, 0.15);
 }
 
 .agent-avatar {
@@ -547,7 +547,7 @@ onMounted(async () => {
 
 .tag.aggressive { background: rgba(229, 57, 53, 0.15); color: #FF5A5A; }
 .tag.cautious { background: rgba(79, 140, 255, 0.15); color: #78A9FF; }
-.tag.cunning { background: rgba(155, 109, 255, 0.15); color: var(--ai-light); }
+.tag.cunning { background: rgba(20, 184, 166, 0.15); color: var(--ai-secondary); }
 .tag.honest { background: rgba(54, 211, 153, 0.15); color: var(--status-success); }
 .tag.talkative { background: rgba(245, 185, 66, 0.15); color: var(--status-warning); }
 
@@ -560,7 +560,7 @@ onMounted(async () => {
 .btn-delete {
   width: 32px;
   height: 32px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -572,7 +572,7 @@ onMounted(async () => {
 }
 
 .btn-edit:hover {
-  background: rgba(155, 109, 255, 0.15);
+  background: rgba(20, 184, 166, 0.15);
   border-color: var(--ai-primary);
 }
 
@@ -657,7 +657,7 @@ onMounted(async () => {
 .progress-bar {
   flex: 1;
   height: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
@@ -694,7 +694,7 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
 }
@@ -781,7 +781,7 @@ onMounted(async () => {
   width: 100%;
   height: 44px;
   padding: 0 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border: var(--border-medium);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -805,7 +805,7 @@ onMounted(async () => {
 .avatar-option {
   width: 48px;
   height: 48px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   display: flex;
@@ -817,11 +817,11 @@ onMounted(async () => {
 }
 
 .avatar-option:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-tertiary);
 }
 
 .avatar-option.selected {
-  background: rgba(155, 109, 255, 0.2);
+  background: rgba(20, 184, 166, 0.2);
   border-color: var(--ai-primary);
   box-shadow: 0 0 12px var(--ai-glow);
 }
@@ -848,7 +848,7 @@ onMounted(async () => {
   flex: 1;
   height: 6px;
   -webkit-appearance: none;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-tertiary);
   border-radius: var(--radius-full);
   outline: none;
 }
@@ -871,7 +871,7 @@ onMounted(async () => {
 
 .style-btn {
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
@@ -881,14 +881,14 @@ onMounted(async () => {
 }
 
 .style-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 
 .style-btn.active {
-  background: rgba(155, 109, 255, 0.2);
+  background: rgba(20, 184, 166, 0.2);
   border-color: var(--ai-primary);
-  color: var(--ai-light);
+  color: var(--ai-secondary);
 }
 
 .strategy-form,
@@ -929,7 +929,7 @@ onMounted(async () => {
 
 .btn-cancel {
   padding: 10px 24px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-secondary);
   border: var(--border-medium);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
@@ -939,7 +939,7 @@ onMounted(async () => {
 }
 
 .btn-cancel:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 

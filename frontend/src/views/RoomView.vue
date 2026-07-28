@@ -266,8 +266,8 @@ function copyCode() {
   position: fixed;
   inset: 0;
   background: 
-    radial-gradient(ellipse at 15% 0%, rgba(155, 109, 255, 0.08) 0%, transparent 45%),
-    radial-gradient(ellipse at 85% 100%, rgba(79, 140, 255, 0.06) 0%, transparent 45%);
+    radial-gradient(ellipse at 15% 0%, rgba(20, 184, 166, 0.1) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 100%, rgba(59, 130, 246, 0.08) 0%, transparent 45%);
   pointer-events: none;
   z-index: 0;
 }
@@ -299,7 +299,7 @@ function copyCode() {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
@@ -312,8 +312,8 @@ function copyCode() {
 }
 
 .btn-back:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-tertiary);
+  border-color: var(--text-tertiary);
   color: var(--text-primary);
 }
 
@@ -341,10 +341,10 @@ function copyCode() {
 
 .room-code {
   font-family: var(--font-mono);
-  background: rgba(155, 109, 255, 0.12);
+  background: rgba(20, 184, 166, 0.1);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
-  color: var(--ai-light);
+  color: var(--ai-secondary);
   font-size: 0.95rem;
 }
 
@@ -357,8 +357,8 @@ function copyCode() {
 
 .room-mode-badge {
   padding: 2px 10px;
-  background: rgba(155, 109, 255, 0.1);
-  color: var(--ai-light);
+  background: rgba(20, 184, 166, 0.1);
+  color: var(--ai-secondary);
   border-radius: var(--radius-full);
   font-weight: 600;
 }
@@ -379,7 +379,7 @@ function copyCode() {
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
@@ -391,9 +391,9 @@ function copyCode() {
 }
 
 .btn-copy:hover {
-  background: rgba(155, 109, 255, 0.1);
-  border-color: rgba(155, 109, 255, 0.25);
-  color: var(--ai-light);
+  background: rgba(20, 184, 166, 0.1);
+  border-color: rgba(20, 184, 166, 0.3);
+  color: var(--ai-secondary);
 }
 
 .btn-copy.copied {
@@ -458,7 +458,7 @@ function copyCode() {
 .panel-title-badge {
   margin-left: auto;
   padding: 2px 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: var(--radius-full);
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -486,7 +486,7 @@ function copyCode() {
 
 .seat-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--bg-card);
   border: var(--border-thin);
   border-radius: var(--radius-lg);
   padding: 16px 12px 14px;
@@ -501,12 +501,12 @@ function copyCode() {
 }
 
 .seat-card:hover {
-  background: rgba(255, 255, 255, 0.035);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-hover);
+  border-color: var(--text-tertiary);
 }
 
 .seat-occupied {
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--bg-secondary);
   border-color: var(--border-thin);
 }
 
@@ -521,8 +521,8 @@ function copyCode() {
 
 .seat-me {
   border-color: var(--ai-primary);
-  background: rgba(155, 109, 255, 0.07);
-  box-shadow: 0 0 20px rgba(155, 109, 255, 0.1);
+  background: rgba(20, 184, 166, 0.08);
+  box-shadow: 0 0 20px rgba(20, 184, 166, 0.1);
 }
 
 .seat-host {
@@ -534,7 +534,7 @@ function copyCode() {
 }
 
 .seat-ai {
-  border-color: rgba(155, 109, 255, 0.4);
+  border-color: rgba(20, 184, 166, 0.4);
 }
 
 .seat-index {
@@ -552,7 +552,7 @@ function copyCode() {
   width: 48px;
   height: 48px;
   margin: 4px auto 2px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -560,7 +560,7 @@ function copyCode() {
   font-size: 1.2rem;
   font-weight: 600;
   color: var(--text-primary);
-  border: 2px solid rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(0, 0, 0, 0.08);
 }
 
 .seat-avatar.ai-avatar {
@@ -571,8 +571,8 @@ function copyCode() {
 }
 
 .seat-avatar-empty {
-  background: rgba(255, 255, 255, 0.02);
-  border: 2px dashed rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
+  border: 2px dashed var(--text-tertiary);
   color: var(--text-tertiary);
 }
 
@@ -652,7 +652,7 @@ function copyCode() {
   flex: 1;
   height: 42px;
   padding: 0 14px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -664,7 +664,8 @@ function copyCode() {
 }
 
 .agent-select:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: var(--ai-primary);
+  background: var(--bg-tertiary);
 }
 
 .agent-select:focus {
@@ -673,7 +674,7 @@ function copyCode() {
 }
 
 .agent-select option {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   color: var(--text-primary);
 }
 

@@ -95,7 +95,7 @@ watch(() => props.messages.length, async () => {
 
 .chat-msg {
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   font-size: 0.88rem;
@@ -105,7 +105,7 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-msg:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-tertiary);
 }
 
 .chat-msg.ai-msg {
@@ -148,7 +148,7 @@ watch(() => props.messages.length, async () => {
   flex: 1;
   height: 40px;
   padding: 0 14px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-secondary);
   border: var(--border-thin);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -163,13 +163,13 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-input-field:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: var(--text-tertiary);
 }
 
 .chat-input-field:focus {
   border-color: var(--ai-primary);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 0 3px rgba(155, 109, 255, 0.15);
+  background: var(--bg-tertiary);
+  box-shadow: 0 0 0 3px var(--ai-glow);
 }
 
 .chat-send-btn {
@@ -205,11 +205,11 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--text-tertiary);
   border-radius: 3px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--text-secondary);
 }
 </style>
