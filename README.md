@@ -64,6 +64,7 @@ Newwerewolf/
 │   │   │   └── style.css             # 全局样式
 │   │   ├── components/
 │   │   │   ├── ChatBox.vue           # 聊天组件
+│   │   │   ├── ConfirmDialog.vue    # 全局确认对话框
 │   │   │   ├── Countdown.vue         # 倒计时组件
 │   │   │   ├── DayPanel.vue          # 白天发言面板
 │   │   │   ├── NightPanel.vue        # 夜晚行动面板
@@ -72,6 +73,8 @@ Newwerewolf/
 │   │   │   ├── PlayerList.vue        # 玩家列表
 │   │   │   ├── RoleReveal.vue        # 身份揭示
 │   │   │   └── GameResult.vue        # 游戏结果
+│   │   ├── composables/
+│   │   │   └── useConfirm.js         # 确认对话框逻辑
 │   │   ├── views/
 │   │   │   ├── LoginView.vue         # 登录页
 │   │   │   ├── LobbyView.vue         # 大厅页
@@ -82,7 +85,8 @@ Newwerewolf/
 │   │   ├── stores/
 │   │   │   ├── user.js               # 用户状态
 │   │   │   ├── room.js               # 房间状态
-│   │   │   └── game.js               # 游戏状态
+│   │   │   ├── game.js               # 游戏状态
+│   │   │   └── theme.js              # 主题状态（暗色/亮色切换）
 │   │   ├── router/
 │   │   │   └── index.js              # 路由配置
 │   │   ├── api.js                    # API 封装
@@ -242,12 +246,14 @@ npm run dev
 - 💡 AI 自动发言和决策（支持 LLM 或 fallback 模板）
 
 ### 特色功能
+- 🌓 **暗色/亮色主题切换**：一键切换界面主题，偏好自动保存
 - 📜 游戏结束自动复盘（身份揭晓、行动记录）
 - 🔄 断线重连保持游戏状态
-- 🌓 响应式布局，支持移动端
+- 📱 响应式布局，支持移动端
 - 🔐 JWT 认证 + Socket.IO 认证中间件
 - 🛡️ 接口限流保护
 - 🤝 同一账号多设备登录自动踢出旧连接
+- 💬 自定义弹窗系统：替换浏览器原生 alert/confirm，提供统一美观的对话框体验
 
 ## 📡 API 接口
 

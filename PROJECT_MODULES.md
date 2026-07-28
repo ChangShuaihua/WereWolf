@@ -33,13 +33,15 @@
   - [用户状态 (stores/user.js)](#5-用户状态-storesuserjs)
   - [房间状态 (stores/room.js)](#6-房间状态-storesroomjs)
   - [游戏状态 (stores/game.js)](#7-游戏状态-storesgamejs)
-  - [登录页 (views/LoginView.vue)](#8-登录页-viewsloginviewvue)
-  - [大厅页 (views/LobbyView.vue)](#9-大厅页-viewslobbyviewvue)
-  - [房间页 (views/RoomView.vue)](#10-房间页-viewsroomviewvue)
-  - [游戏页 (views/GameView.vue)](#11-游戏页-viewsgameviewvue)
-  - [AI工坊 (views/AIAgentWorkshop.vue)](#12-ai工坊-viewsaiagentworkshopvue)
-  - [个人中心 (views/ProfileView.vue)](#13-个人中心-viewsprofileviewvue)
-  - [游戏组件](#14-游戏组件)
+  - [主题状态 (stores/theme.js)](#8-主题状态-storesthemejs)
+  - [确认对话框逻辑 (composables/useConfirm.js)](#9-确认对话框逻辑-composablesuseconfirmjs)
+  - [登录页 (views/LoginView.vue)](#10-登录页-viewsloginviewvue)
+  - [大厅页 (views/LobbyView.vue)](#11-大厅页-viewslobbyviewvue)
+  - [房间页 (views/RoomView.vue)](#12-房间页-viewsroomviewvue)
+  - [游戏页 (views/GameView.vue)](#13-游戏页-viewsgameviewvue)
+  - [AI工坊 (views/AIAgentWorkshop.vue)](#14-ai工坊-viewsaiagentworkshopvue)
+  - [个人中心 (views/ProfileView.vue)](#15-个人中心-viewsprofileviewvue)
+  - [游戏组件](#16-游戏组件)
 
 ---
 
@@ -413,11 +415,16 @@ game_players: id, game_id, user_id, role, is_winner
 **功能**：Vue 应用的初始化和根组件。
 
 **实现方式**：
-- `main.js`：创建 Vue 应用，注册 Pinia 和 Vue Router
+- `main.js`：
+  - 创建 Vue 应用，注册 Pinia 和 Vue Router
+  - 初始化主题设置（从 localStorage 读取保存的主题偏好）
+  - 应用主题到 `documentElement`
 - `App.vue`：
   - 条件渲染顶部导航栏（登录页不显示）
-  - 导航栏包含：品牌标识、大厅/AI工坊标签页、用户信息
+  - 导航栏包含：品牌标识、大厅/AI工坊标签页、主题切换按钮、用户信息
+  - 全局 ConfirmDialog 组件（替换浏览器原生 alert/confirm）
   - 使用 `router-view` 渲染当前路由组件
+  - 使用 composable 模式管理确认对话框状态
 
 ---
 
@@ -516,7 +523,51 @@ game_players: id, game_id, user_id, role, is_winner
 
 ---
 
-### 8. 登录页 (`views/LoginView.vue`)
+### 8. 主题状态 (`stores/theme.js`)
+
+**功能**：Pinia store，管理暗色/亮色主题切换。
+
+**实现方式**：
+- **State**：
+  - `theme`：当前主题（'light' 或 'dark'）
+  - `isDark`：是否为暗色模式
+- **Actions**：
+  - `toggleTheme()`：切换主题
+  - `setTheme(newTheme)`：设置指定主题
+  - `applyTheme()`：将主题应用到 `documentElement`（设置 `data-theme` 属性）
+- **持久化**：主题偏好存储在 localStorage 中，key 为 `werewolf_theme`
+- **响应式**：通过 watch 监听主题变化，自动更新 DOM
+
+---
+
+### 9. 确认对话框逻辑 (`composables/useConfirm.js`)
+
+**功能**：可复用的确认对话框 composable，替换浏览器原生 alert/confirm。
+
+**实现方式**：
+- **State**：
+  - `visible`：对话框是否可见
+  - `state`：对话框状态（标题、消息、按钮文字、类型）
+- **方法**：
+  - `showConfirm(options)`：显示确认对话框，返回 Promise
+    - options 包含：title、message、confirmText、cancelText、showCancel、type
+    - type 可选：success/warning/error/info
+  - `onConfirm()`：确认回调，resolve Promise
+  - `onCancel()`：取消回调，reject Promise
+- **使用示例**：
+  ```js
+  const { showConfirm } = useConfirm()
+  const confirmed = await showConfirm({
+    title: '删除确认',
+    message: '确定要删除吗？',
+    type: 'warning'
+  })
+  if (confirmed) { /* 执行删除 */ }
+  ```
+
+---
+
+### 10. 登录页 (`views/LoginView.vue`)
 
 **功能**：用户登录和注册。
 
@@ -526,10 +577,11 @@ game_players: id, game_id, user_id, role, is_winner
 - 显示强制下线提示（从 URL 参数读取 `forceLogout`）
 - 调用 userStore 的 login/register 方法
 - 成功后跳转到大厅
+- **主题支持**：背景渐变、输入框样式随主题切换
 
 ---
 
-### 9. 大厅页 (`views/LobbyView.vue`)
+### 11. 大厅页 (`views/LobbyView.vue`)
 
 **功能**：游戏大厅，展示房间列表和创建房间。
 
@@ -540,10 +592,11 @@ game_players: id, game_id, user_id, role, is_winner
 - 使用 REST API 获取房间列表
 - Socket 事件监听：`room_joined`（跳转房间）、`room_created`（添加到列表）、`room_deleted`（从列表移除）
 - 定期刷新房间列表
+- **主题支持**：卡片、徽章、按钮样式随主题切换
 
 ---
 
-### 10. 房间页 (`views/RoomView.vue`)
+### 12. 房间页 (`views/RoomView.vue`)
 
 **功能**：房间等待界面，管理玩家和准备状态。
 
@@ -556,10 +609,11 @@ game_players: id, game_id, user_id, role, is_winner
 - 房间聊天面板
 - 复制房间号功能
 - 游戏开始时自动跳转到游戏页
+- **主题支持**：座位卡片、选择框、按钮样式随主题切换
 
 ---
 
-### 11. 游戏页 (`views/GameView.vue`)
+### 13. 游戏页 (`views/GameView.vue`)
 
 **功能**：游戏主界面，整合所有游戏组件。
 
@@ -573,7 +627,7 @@ game_players: id, game_id, user_id, role, is_winner
 
 ---
 
-### 12. AI工坊 (`views/AIAgentWorkshop.vue`)
+### 14. AI工坊 (`views/AIAgentWorkshop.vue`)
 
 **功能**：AI 智能体的创建、编辑、删除和详情查看。
 
@@ -587,12 +641,14 @@ game_players: id, game_id, user_id, role, is_winner
   - 策略配置：3个下拉选择
   - 语言习惯：3个文本输入（逗号分隔）
 - 使用 REST API 进行 CRUD 操作
+- **主题支持**：卡片、表单、滑块样式随主题切换
+- **自定义弹窗**：删除操作使用 ConfirmDialog 确认
 
 ---
 
-### 13. 个人中心 (`views/ProfileView.vue`)
+### 15. 个人中心 (`views/ProfileView.vue`)
 
-**功能**：用户资料编辑和 AI API 配置。
+**功能**：用户资料编辑、AI API 配置和主题设置。
 
 **实现方式**：
 - **用户信息卡片**：显示用户名首字母头像和 ID
@@ -600,16 +656,25 @@ game_players: id, game_id, user_id, role, is_winner
 - **AI API 配置表单**：配置 API Key、API URL、模型名称
   - 用于 AI 智能体的 LLM 调用
   - 支持自定义 OpenAI 兼容 API
-- **退出登录按钮**
+- **退出登录按钮**（使用自定义确认对话框）
+- **表单样式**：支持暗色/亮色主题切换
 
 ---
 
-### 14. 游戏组件
+### 16. 游戏组件
+
+#### ConfirmDialog.vue - 确认对话框组件
+- 全局确认对话框，替换浏览器原生 alert/confirm
+- 支持多种类型：success/warning/error/info
+- 玻璃拟态效果（Glassmorphism）
+- 平滑动画过渡
+- 通过 useConfirm composable 使用
 
 #### ChatBox.vue - 聊天组件
 - 显示聊天消息列表（支持系统消息、AI 消息样式）
 - 消息输入框和发送按钮
 - 新消息自动滚动到底部
+- **主题支持**：消息气泡、输入框、滚动条样式随主题切换
 
 #### Countdown.vue - 倒计时组件
 - 进度条倒计时显示
@@ -623,11 +688,13 @@ game_players: id, game_id, user_id, role, is_winner
 - 守卫：选择守护目标
 - 行动完成后显示确认信息
 - 内置倒计时
+- **主题支持**：面板、按钮、计时器样式随主题切换
 
 #### DayPanel.vue - 白天发言面板
 - 显示当前发言者信息
 - 当前玩家发言时显示"结束发言"和"跳过发言"按钮
 - 死亡玩家显示"已死亡"提示
+- **主题支持**：面板、按钮样式随主题切换
 
 #### VotePanel.vue - 投票面板
 - 显示候选人列表和投票进度
@@ -643,16 +710,19 @@ game_players: id, game_id, user_id, role, is_winner
 - 按座位号排序显示所有玩家
 - 显示状态标签：房主👑、AI🤖、已准备✅、已死亡💀
 - 游戏结束时显示角色信息
+- **主题支持**：玩家卡片、头像、徽章样式随主题切换
 
 #### RoleReveal.vue - 身份揭示组件
 - 全屏遮罩显示角色信息
 - 角色图标、名称、能力描述
+- 玻璃拟态效果 + 角色专属颜色
 
 #### GameResult.vue - 游戏结果组件
 - 全屏遮罩显示游戏结果
 - 获胜阵营、游戏时长
 - 所有玩家的角色和胜负状态
 - 返回房间/返回大厅按钮
+- 玻璃拟态效果 + 胜利/失败状态样式
 
 ---
 
@@ -692,3 +762,18 @@ game_players: id, game_id, user_id, role, is_winner
 ### 错误处理
 - 后端：AppError 自定义错误类 + Express 全局错误处理
 - 前端：Axios 拦截器 + try-catch + 用户友好提示
+
+### 主题系统
+- CSS 变量驱动的主题切换机制
+- 通过 `data-theme` 属性应用主题到 `documentElement`
+- 亮色主题：浅灰背景 + 深色文字 + 白色毛玻璃卡片
+- 暗色主题：深色背景 + 浅色文字 + 深色毛玻璃卡片
+- 所有组件样式使用 CSS 变量，确保主题响应一致性
+- 主题偏好持久化到 localStorage
+
+### 弹窗系统
+- 自定义 ConfirmDialog 组件替换浏览器原生 alert/confirm
+- 通过 useConfirm composable 实现 Promise 化调用
+- 支持 success/warning/error/info 四种类型
+- 玻璃拟态效果 + 平滑动画
+- 统一的交互体验和视觉风格
