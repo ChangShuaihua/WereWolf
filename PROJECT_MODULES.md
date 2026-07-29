@@ -9,6 +9,7 @@
 - [后端模块](#后端模块)
   - [应用入口 (app.js)](#1-应用入口-appjs)
   - [数据库配置 (config/db.js)](#2-数据库配置-configdbjs)
+  - [Redis 配置 (config/redis.js)](#21-redis-配置-configredisjs)
   - [认证中间件 (middleware/auth.js)](#3-认证中间件-middlewareauthjs)
   - [用户模型 (models/User.js)](#4-用户模型-modelsuserjs)
   - [游戏记录模型 (models/GameRecord.js)](#5-游戏记录模型-modelsgamerecordjs)
@@ -59,11 +60,12 @@
 - 配置接口限流：认证接口 20次/分钟，通用 API 100次/分钟
 - 注册 REST 路由：`/api/auth`、`/api/ai-agents`、`/api/rooms`、`/api/room/:code`、`/api/health`
 - 全局错误处理（支持 AppError 自定义错误、CORS 错误、请求体过大错误）
-- 启动时自动初始化数据库并监听端口
+- 启动时自动初始化数据库、初始化 Redis，并监听端口
 
 **关键设计**：
 - 使用 `app.getIO()` 方法将 Socket.IO 实例暴露给其他模块，避免循环依赖
-- 启动时清空 `roomCache` 确保干净状态
+- `/api/health` 返回服务状态和 Redis 连接状态
+- 启动时清空 `roomCache` 确保干净状态，房间仍按临时大厅语义处理
 
 ---
 
@@ -86,6 +88,26 @@ users: id, username, password, api_key, api_url, model_name, created_at
 game_records: id, room_code, winner, player_count, duration, created_at
 game_players: id, game_id, user_id, role, is_winner
 ```
+
+---
+
+### 2.1 Redis 配置 (`config/redis.js`)
+
+**功能**：管理 Redis 客户端连接、连接状态、失败降级和进程退出时的关闭逻辑。
+
+**实现方式**：
+- 使用官方 `redis` 客户端创建连接
+- 优先读取 `REDIS_URL`，也支持 `REDIS_HOST`、`REDIS_PORT`、`REDIS_DB` 组合配置
+- `initRedis()` 在后端启动时执行；连接失败时不会阻塞服务启动，而是降级为内存缓存
+- `getRedisClient()` 只在客户端 ready 时返回实例，缓存层据此决定是否同步 Redis
+- `getRedisStatus()` 用于 `/api/health` 返回当前 Redis 状态
+- `shutdownRedis()` 在 SIGINT/SIGTERM 时关闭连接
+
+**关键环境变量**：
+- `REDIS_URL`：Redis 连接地址，Docker 环境为 `redis://redis:6379/0`
+- `REDIS_KEY_PREFIX`：Redis key 前缀，默认 `werewolf`
+- `REDIS_DISABLED=true`：禁用 Redis，完全使用内存缓存
+- `REDIS_RECONNECT_RETRIES`：初始连接失败时的重试次数，默认 5
 
 ---
 
@@ -368,14 +390,18 @@ game_players: id, game_id, user_id, role, is_winner
 
 ### 16. 缓存工具 (`utils/cache.js`)
 
-**功能**：基于 `node-cache` 的内存缓存管理。
+**功能**：基于 `node-cache` 的进程内热缓存，并将可同步数据异步写入 Redis。
 
 **实现方式**：
 - `roomCache`：房间数据缓存（TTL 2小时）
-- `gameCache`：游戏引擎实例缓存（TTL 2小时）
+- `gameCache`：游戏引擎实例缓存（TTL 2小时），Redis 中保存可序列化的游戏快照
 - `socketCache`：Socket 连接信息缓存（TTL 4小时）
 - `cache`：通用缓存（TTL 10分钟）
 - 房间过期时自动清理关联的 socket 缓存
+- 读写接口保持同步，避免大面积改造 Socket 业务代码
+- Redis 可用时写入 `werewolf:rooms:*`、`werewolf:games:*`、`werewolf:sockets:*`、`werewolf:general:*`
+- Redis 不可用时自动退回纯内存缓存，不影响当前单进程游戏流程
+- `clear()` 会同时清理进程内缓存和对应 Redis key 前缀
 
 ---
 
@@ -737,7 +763,7 @@ game_players: id, game_id, user_id, role, is_winner
                                         ↓
                               GameEngine / AIGameHandler
                                         ↓
-                              MySQL / node-cache
+                              MySQL / node-cache / Redis
 ```
 
 ## 关键技术实现
@@ -755,9 +781,10 @@ game_players: id, game_id, user_id, role, is_winner
 - 支持用户自定义 API 配置
 
 ### 游戏状态管理
-- 服务器端：GameEngine 实例（内存 + node-cache）
+- 服务器端：GameEngine 实例（内存 + node-cache，Redis 同步快照）
 - 客户端：Pinia store（响应式状态）
 - 同步机制：Socket.IO 事件驱动
+- Redis 负责缓存数据的跨进程可观测与后续扩展基础，当前实时游戏逻辑仍以内存中的 GameEngine 实例为准
 
 ### 错误处理
 - 后端：AppError 自定义错误类 + Express 全局错误处理

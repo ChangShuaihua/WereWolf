@@ -8,7 +8,7 @@
 - **Node.js** + **Express** - Web 服务
 - **Socket.IO** - 实时通信
 - **MySQL** - 数据存储
-- **node-cache** - 内存缓存
+- **Redis** + **node-cache** - 缓存同步与进程内热缓存
 - **bcryptjs** - 密码加密
 - **JWT** - 用户认证
 - **LangChain** + **OpenAI API** - AI 智能体集成
@@ -28,7 +28,8 @@ Newwerewolf/
 │   ├── src/
 │   │   ├── app.js                    # 应用入口
 │   │   ├── config/
-│   │   │   └── db.js                 # 数据库配置与初始化
+│   │   │   ├── db.js                 # 数据库配置与初始化
+│   │   │   └── redis.js              # Redis 连接与状态管理
 │   │   ├── ai/
 │   │   │   └── AIAgentManager.js     # AI 智能体管理
 │   │   ├── game/
@@ -115,7 +116,7 @@ Newwerewolf/
 git clone <your-repo-url>
 cd Newwerewolf
 
-# 一键启动（前端 + 后端 + MySQL）
+# 一键启动（前端 + 后端 + MySQL + Redis）
 docker-compose up -d --build
 ```
 
@@ -128,7 +129,7 @@ docker-compose logs -f
 # 停止服务
 docker-compose down
 
-# 停止并清空数据库
+# 停止并清空数据库与 Redis 数据
 docker-compose down -v
 ```
 
@@ -147,13 +148,13 @@ docker-compose down -v
 ┌──────────────┐
 │   backend    │  Node.js :3001
 │  (Express)   │
-└──────┬───────┘
-       │
-       ▼
-┌──────────────┐
-│    mysql     │  MySQL 8.0 :3306
-│  (数据库)    │
-└──────────────┘
+└───┬────────┬─┘
+    │        │
+    ▼        ▼
+┌────────┐ ┌────────┐
+│ mysql  │ │ redis  │
+│ 数据库 │ │ 缓存   │
+└────────┘ └────────┘
 ```
 
 ### 方式二：本地开发
@@ -161,6 +162,7 @@ docker-compose down -v
 #### 环境要求
 - Node.js >= 18.x
 - MySQL >= 8.0
+- Redis >= 7.0（Docker 开发模式会自动启动）
 
 #### 1. 安装依赖
 
@@ -189,6 +191,10 @@ DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=your_password
 DB_NAME=werewolf
+
+# Redis 缓存配置
+REDIS_URL=redis://localhost:6379/0
+REDIS_KEY_PREFIX=werewolf
 
 # JWT 配置
 JWT_SECRET=please_generate_a_strong_secret_key
@@ -281,7 +287,7 @@ npm run dev
 |------|------|------|
 | GET  | `/api/rooms` | 获取活跃房间列表 |
 | GET  | `/api/room/:code` | 获取房间详情 |
-| GET  | `/api/health` | 健康检查 |
+| GET  | `/api/health` | 健康检查（含 Redis 状态） |
 
 ## 🔌 Socket 事件
 

@@ -53,18 +53,30 @@ function initSocket(io) {
     socket.emit('authenticated', { socketId: socket.id });
 
     // Create room
-    socket.on('create_room', ({ username, userId, maxPlayers }) => {
+    socket.on('create_room', ({ username, userId, maxPlayers } = {}) => {
       if (socket.kicked) return;
+      const finalUsername = socket.username || username;
+      const finalUserId = socket.userId || userId;
+      if (!finalUsername || !finalUserId) {
+        socket.emit('error', { message: '用户未认证，无法创建房间' });
+        return;
+      }
       const mode = Number(maxPlayers) || 6;
-      console.log(`[socket] create_room from ${username} (${socket.id}), maxPlayers=${mode}`);
-      createRoom(socket, username, userId, mode);
+      console.log(`[socket] create_room from ${finalUsername} (${socket.id}), maxPlayers=${mode}`);
+      createRoom(socket, finalUsername, finalUserId, mode);
     });
 
     // Join room
-    socket.on('join_room', ({ roomCode, username, userId }) => {
+    socket.on('join_room', ({ roomCode, username, userId } = {}) => {
       if (socket.kicked) return;
-      console.log(`[socket] join_room ${roomCode} from ${username} (${socket.id})`);
-      joinRoom(socket, roomCode, username, userId);
+      const finalUsername = socket.username || username;
+      const finalUserId = socket.userId || userId;
+      if (!finalUsername || !finalUserId) {
+        socket.emit('error', { message: '用户未认证，无法加入房间' });
+        return;
+      }
+      console.log(`[socket] join_room ${roomCode} from ${finalUsername} (${socket.id})`);
+      joinRoom(socket, roomCode, finalUsername, finalUserId);
     });
 
     // Leave room

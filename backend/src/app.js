@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const { initDB } = require('./config/db');
+const { initRedis, getRedisStatus, shutdownRedis } = require('./config/redis');
 const { roomCache } = require('./utils/cache');
 const { getUserCount } = require('./utils/userSocketMap');
 const aiAgentManager = require('./ai/AIAgentManager');
@@ -44,9 +45,6 @@ const io = new Server(server, {
 
 // Make io accessible to socket handlers
 app.getIO = () => io;
-
-// Clear roomCache on server startup to ensure fresh data
-roomCache.clear();
 
 // Rate limiting - auth routes (20 attempts per minute)
 const authLimiter = rateLimit({
@@ -132,7 +130,7 @@ app.get('/api/room/:code', (req, res) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: Date.now() });
+  res.json({ status: 'ok', redis: getRedisStatus(), timestamp: Date.now() });
 });
 
 // 404 handler
@@ -168,6 +166,9 @@ const PORT = process.env.PORT || 3001;
 async function start() {
   try {
     await initDB();
+    await initRedis();
+    // Rooms are ephemeral; start each process with a fresh lobby view.
+    roomCache.clear();
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Werewolf server running on http://0.0.0.0:${PORT}`);
     });
@@ -180,3 +181,13 @@ async function start() {
 module.exports = app;
 
 start();
+
+process.on('SIGINT', async () => {
+  await shutdownRedis();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await shutdownRedis();
+  process.exit(0);
+});

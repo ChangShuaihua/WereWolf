@@ -22,6 +22,10 @@ socket.on('connect_error', (err) => {
   }
 })
 
+socket.on('error', (err) => {
+  console.error('[socket] Server error:', err?.message || err)
+})
+
 socket.on('force_logout', (data) => {
   console.warn('[socket] Force logout:', data.message)
   localStorage.removeItem('werewolf_token')
