@@ -16,15 +16,23 @@ class AIGameHandler {
   }
 
   _initModel() {
-    if (process.env.DEEPSEEK_API_KEY) {
+    const apiKey = process.env.XIAOMI_API_KEY || process.env.DEEPSEEK_API_KEY;
+    const apiUrl = process.env.XIAOMI_API_URL || process.env.DEEPSEEK_API_URL || 'https://api.xiaomimimo.com';
+    const modelName = process.env.XIAOMI_MODEL_NAME || process.env.MODEL_NAME || 'mimo-v2-flash';
+    
+    if (apiKey) {
       this.model = new ChatOpenAI({
-        apiKey: process.env.DEEPSEEK_API_KEY,
-        model: 'deepseek-chat',
+        apiKey,
+        modelName,
+        configuration: {
+          baseURL: apiUrl,
+        },
         temperature: 0.7,
         maxTokens: 500,
       });
+      console.log(`[AIGameHandler] Model initialized: ${modelName} (${apiUrl})`);
     } else {
-      console.warn('[AIGameHandler] DEEPSEEK_API_KEY not set, using fallback AI logic');
+      console.warn('[AIGameHandler] No AI API key set, using fallback AI logic. Set XIAOMI_API_KEY or DEEPSEEK_API_KEY in .env');
     }
   }
 

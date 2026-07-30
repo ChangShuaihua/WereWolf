@@ -62,6 +62,10 @@ services:
       PORT: 3001
       CORS_ORIGINS: http://localhost,http://localhost:5173
       REDIS_URL: redis://redis:6379/0
+      # AI API 配置（小米 MiMo）
+      XIAOMI_API_KEY: ${XIAOMI_API_KEY:-}
+      XIAOMI_API_URL: ${XIAOMI_API_URL:-https://api.xiaomimimo.com}
+      XIAOMI_MODEL_NAME: ${XIAOMI_MODEL_NAME:-mimo-v2-flash}
     ports:
       - "3001:3001"
     volumes:
