@@ -8,8 +8,6 @@ services:
       MYSQL_DATABASE: werewolf
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
-    ports:
-      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
@@ -23,8 +21,6 @@ services:
     image: redis:7-alpine
     container_name: werewolf-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -48,15 +44,14 @@ services:
       DB_USER: root
       DB_PASSWORD: werewolf123
       DB_NAME: werewolf
-      JWT_SECRET: your_jwt_secret_change_this_in_production
+      JWT_SECRET: 509127582efb5331eca8bc722ae4c7ed9ecffb06f9a576f0740b7bd5418d185af49934aaec96290a44a3c0e54683262521c6d0b089051c4a7a8e7f1c57
       JWT_EXPIRES_IN: 7d
       PORT: 3001
-      CORS_ORIGINS: http://localhost,http://localhost:80
+      CORS_ORIGINS: http://121.196.239.144
       REDIS_URL: redis://redis:6379/0
-      # AI API 配置（小米 MiMo）
-      XIAOMI_API_KEY: ${XIAOMI_API_KEY:-}
-      XIAOMI_API_URL: ${XIAOMI_API_URL:-https://api.xiaomimimo.com}
-      XIAOMI_MODEL_NAME: ${XIAOMI_MODEL_NAME:-mimo-v2-flash}
+      XIAOMI_API_KEY: ""
+      XIAOMI_API_URL: https://api.xiaomimimo.com
+      XIAOMI_MODEL_NAME: mimo-v2-flash
     depends_on:
       mysql:
         condition: service_healthy

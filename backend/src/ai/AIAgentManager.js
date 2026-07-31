@@ -1,8 +1,4 @@
-// 引入模块
-const fs = require('fs');
-const path = require('path');
-
-const DATA_FILE = path.join(__dirname, '../../data/aiAgents.json');
+const AIAgent = require('../models/AIAgent');
 
 const DEFAULT_AGENTS = [
   {
@@ -257,135 +253,112 @@ const DEFAULT_AGENTS = [
   }
 ];
 
+function normalizeAgent(data = {}, existing = null) {
+  const now = Date.now();
+
+  return {
+    id: existing?.id || data.id || `agent-${now}`,
+    name: data.name || existing?.name || '未命名智能体',
+    avatar: data.avatar || existing?.avatar || '🤖',
+    personality: {
+      aggressiveness: data.personality?.aggressiveness ?? existing?.personality?.aggressiveness ?? 50,
+      caution: data.personality?.caution ?? existing?.personality?.caution ?? 50,
+      cunning: data.personality?.cunning ?? existing?.personality?.cunning ?? 50,
+      honesty: data.personality?.honesty ?? existing?.personality?.honesty ?? 50,
+      talkativeness: data.personality?.talkativeness ?? existing?.personality?.talkativeness ?? 50,
+    },
+    speakingStyle: data.speakingStyle || existing?.speakingStyle || 'calm',
+    strategy: {
+      nightAction: data.strategy?.nightAction || existing?.strategy?.nightAction || 'random',
+      dayStrategy: data.strategy?.dayStrategy || existing?.strategy?.dayStrategy || 'passive',
+      revealIdentity: data.strategy?.revealIdentity || existing?.strategy?.revealIdentity || 'mid',
+    },
+    language: {
+      prefixes: data.language?.prefixes || existing?.language?.prefixes || ['我觉得'],
+      suffixes: data.language?.suffixes || existing?.language?.suffixes || ['对吧'],
+      favoriteWords: data.language?.favoriteWords || existing?.language?.favoriteWords || ['狼', '好人'],
+    },
+    createdAt: existing?.createdAt || data.createdAt || now,
+    updatedAt: existing ? now : (data.updatedAt || now),
+  };
+}
+
 class AIAgentManager {
-
   constructor() {
-    //this是AIAgentManager类
-    this.agents = [];//创建出数组来保存AI
     this.availableAgents = [];
-    this.init();
+    this.initialized = false;
   }
 
-  // 读取本地AI的数据
-  init() {
-    try {
-      if (fs.existsSync(DATA_FILE)) {
-        const data = fs.readFileSync(DATA_FILE, 'utf-8');
-        this.agents = JSON.parse(data);
-      } else {
-        this.agents = DEFAULT_AGENTS;
-        this.save();
-      }
-      this.availableAgents = [...this.agents]
-    } catch (err) {
-      console.error('Failed to load AI agents:', err);
-      this.agents = DEFAULT_AGENTS;
-      this.availableAgents = [...this.agents];
+  async init() {
+    if (this.initialized) return;
+
+    await AIAgent.bulkInsertIfEmpty(DEFAULT_AGENTS.map(agent => normalizeAgent(agent)));
+    await this.resetRandomAgents();
+    this.initialized = true;
+  }
+
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.init();
     }
   }
-  // 保存数据
-  save() {
-    try {
-      fs.writeFileSync(DATA_FILE, JSON.stringify(this.agents, null, 2));
-    } catch (err) {
-      console.error('Failed to save AI agents:', err);
+
+  async getAllAgents() {
+    await this.ensureInitialized();
+    return AIAgent.findAll();
+  }
+
+  async getAgentById(id) {
+    await this.ensureInitialized();
+    return AIAgent.findById(id);
+  }
+
+  async createAgent(data) {
+    await this.ensureInitialized();
+    const agent = normalizeAgent(data);
+    const created = await AIAgent.create(agent);
+    await this.resetRandomAgents();
+    return created;
+  }
+
+  async updateAgent(id, data) {
+    await this.ensureInitialized();
+    const existing = await AIAgent.findById(id);
+    if (!existing) return null;
+
+    const updated = await AIAgent.update(id, normalizeAgent(data, existing));
+    await this.resetRandomAgents();
+    return updated;
+  }
+
+  async deleteAgent(id) {
+    await this.ensureInitialized();
+    const success = await AIAgent.delete(id);
+    if (success) {
+      await this.resetRandomAgents();
     }
-  }
-  // 查询全部数据
-  getAllAgents() {
-    return this.agents;
-  }
-  // 查询某个数据
-  getAgentById(id) {
-    return this.agents.find(a => a.id === id);
+    return success;
   }
 
-  createAgent(data) {
-    const agent = {
-      id: `agent-${Date.now()}`,
-      name: data.name || '未命名智能体',
-      avatar: data.avatar || '🤖',
-      // 五维人格  
-      personality: {
-        // ?.的作用：创建一个对象，如果data.personality不存在，则使用默认值50,后面的||改为??
-        aggressiveness: data.personality?.aggressiveness ?? 50,
-        caution: data.personality?.caution ?? 50,
-        cunning: data.personality?.cunning ?? 50,
-        honesty: data.personality?.honesty ?? 50,
-        talkativeness: data.personality?.talkativeness ?? 50
-      },
-      speakingStyle: data.speakingStyle || 'calm',
-      strategy: {
-        nightAction: data.strategy?.nightAction || 'random',
-        dayStrategy: data.strategy?.dayStrategy || 'passive',
-        revealIdentity: data.strategy?.revealIdentity || 'mid'
-      },
-      language: {
-        prefixes: data.language?.prefixes || ['我觉得'],
-        suffixes: data.language?.suffixes || ['对吧'],
-        favoriteWords: data.language?.favoriteWords || ['狼', '好人']
-      },
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    this.agents.push(agent);
-    this.save();
-    return agent;
-  }
+  async getRandomAgent() {
+    await this.ensureInitialized();
 
-  updateAgent(id, data) {
-    const index = this.agents.findIndex(a => a.id === id);
-    if (index === -1) return null;
+    if (this.availableAgents.length === 0) {
+      await this.resetRandomAgents();
+    }
 
-    const agent = this.agents[index];
-    this.agents[index] = {
-      ...agent,
-      ...data,
-      personality: {
-        ...agent.personality,
-        ...(data.personality || {}),
-      },
-      strategy: {
-        ...agent.strategy,
-        ...(data.strategy || {}),
-      },
-      language: {
-        ...agent.language,
-        ...(data.language || {}),
-      },
-      updatedAt: Date.now()
-    };
-    this.save();
-    return this.agents[index];
-  }
-
-  deleteAgent(id) {
-    const index = this.agents.findIndex(a => a.id === id);
-    if (index === -1) return false;
-    // 删除数组
-    this.agents.splice(index, 1);
-    this.save();
-    return true;
-  }
-
-  getRandomAgent() {
     if (this.availableAgents.length === 0) {
       return null;
     }
 
-    const index = Math.floor(
-      Math.random() * this.availableAgents.length
-    );
-
+    const index = Math.floor(Math.random() * this.availableAgents.length);
     const agent = this.availableAgents[index];
-
     this.availableAgents.splice(index, 1);
-
     return agent;
   }
 
-  resetRandomAgents() {
-    this.availableAgents = [...this.agents];
+  async resetRandomAgents() {
+    this.availableAgents = await AIAgent.findAll();
   }
 }
 

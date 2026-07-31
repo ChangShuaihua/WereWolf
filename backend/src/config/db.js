@@ -63,6 +63,21 @@ async function initDB() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS ai_agents (
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        avatar VARCHAR(32) NOT NULL,
+        personality JSON NOT NULL,
+        speaking_style VARCHAR(32) NOT NULL,
+        strategy JSON NOT NULL,
+        language JSON NOT NULL,
+        created_at_ms BIGINT NOT NULL,
+        updated_at_ms BIGINT NOT NULL,
+        INDEX idx_ai_agents_created_at (created_at_ms)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
     console.log(`Database "${DB_NAME}" initialized successfully`);
   } finally {
     conn.release();

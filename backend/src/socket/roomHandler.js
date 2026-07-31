@@ -107,7 +107,7 @@ function isHost(socketId, room) {
 /**
  * Add an AI player to a room (host only)
  */
-function addAIPlayer(socket, code, agentId = null) {
+async function addAIPlayer(socket, code, agentId = null) {
   const room = roomCache.get(code);
   if (!room) return null;
 
@@ -130,7 +130,7 @@ function addAIPlayer(socket, code, agentId = null) {
     return null;
   }
 
-  const aiPlayer = aiGameHandler.createAIPlayer(code, agentId);
+  const aiPlayer = await aiGameHandler.createAIPlayer(code, agentId);
   aiPlayer.isReady = true;
 
   // Assign to first empty seat

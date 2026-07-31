@@ -16,6 +16,7 @@ const initSocket = require('./socket');
 const AppError = require('./utils/AppError');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // CORS configuration
@@ -81,11 +82,16 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/ai-agents', aiAgentRoutes);
 
 // GET /api/lobby-stats - lobby stats (online users + AI agent count)
-app.get('/api/lobby-stats', (req, res) => {
-  res.json({
-    onlineUsers: getUserCount(),
-    aiAgentCount: aiAgentManager.getAllAgents().length,
-  });
+app.get('/api/lobby-stats', async (req, res, next) => {
+  try {
+    const aiAgents = await aiAgentManager.getAllAgents();
+    res.json({
+      onlineUsers: getUserCount(),
+      aiAgentCount: aiAgents.length,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /api/rooms - list active rooms
@@ -166,6 +172,7 @@ const PORT = process.env.PORT || 3001;
 async function start() {
   try {
     await initDB();
+    await aiAgentManager.init();
     await initRedis();
     // Rooms are ephemeral; start each process with a fresh lobby view.
     roomCache.clear();

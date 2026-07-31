@@ -95,15 +95,20 @@ function initSocket(io) {
     });
 
     // Add AI player
-    socket.on('add_ai_player', ({ roomCode, agentId } = {}) => {
+    socket.on('add_ai_player', async ({ roomCode, agentId } = {}) => {
       console.log(`[socket] add_ai_player event received from socket=${socket.id}, roomCode=${roomCode}, agentId=${agentId}`);
       const info = socketCache.get(socket.id);
       console.log(`[socket] socketCache info:`, info);
       const code = roomCode || info?.roomCode;
       console.log(`[socket] resolved code: ${code}`);
       if (code) {
-        const result = addAIPlayer(socket, code, agentId);
-        console.log(`[socket] addAIPlayer result:`, result ? result.username : 'null');
+        try {
+          const result = await addAIPlayer(socket, code, agentId);
+          console.log(`[socket] addAIPlayer result:`, result ? result.username : 'null');
+        } catch (err) {
+          console.error('[socket] addAIPlayer failed:', err);
+          socket.emit('error', { message: '添加AI玩家失败' });
+        }
       }
     });
 

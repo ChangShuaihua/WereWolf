@@ -36,14 +36,16 @@ class AIGameHandler {
     }
   }
 
-  createAIPlayer(roomCode, agentId = null) {
+  async createAIPlayer(roomCode, agentId = null) {
     this.aiIdCounter++;
     
     const room = roomCache.get(roomCode);
     const existingAICount = room ? room.players.filter(p => p.isAI).length : 0;
     const aiNumber = existingAICount + 1;
     
-    const agent = agentId ? aiAgentManager.getAgentById(agentId) : aiAgentManager.getRandomAgent();
+    const agent = agentId
+      ? await aiAgentManager.getAgentById(agentId)
+      : await aiAgentManager.getRandomAgent();
     
     return {
       socketId: `ai_${roomCode}_${this.aiIdCounter}`,
@@ -103,7 +105,7 @@ class AIGameHandler {
     }
 
     const gameState = this._buildGameState(game, aiPlayer);
-    const agentConfig = aiPlayer.agentConfig || aiAgentManager.getAgentById(aiPlayer.agentId);
+    const agentConfig = aiPlayer.agentConfig || await aiAgentManager.getAgentById(aiPlayer.agentId);
     
     const outputParser = StructuredOutputParser.fromNamesAndDescriptions({
       action: '行动类型，可选值: kill, check, guard, save, poison, skip',
@@ -275,7 +277,7 @@ class AIGameHandler {
 
     const role = game.getRole(aiPlayer.socketId);
     const team = TEAM[role];
-    const agentConfig = aiPlayer.agentConfig || aiAgentManager.getAgentById(aiPlayer.agentId);
+    const agentConfig = aiPlayer.agentConfig || await aiAgentManager.getAgentById(aiPlayer.agentId);
     const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
 
     if (aliveOthers.length === 0) return null;
@@ -473,7 +475,7 @@ class AIGameHandler {
     }
     const gameEventsStr = gameEvents.length > 0 ? gameEvents.join('\n') : '暂无';
 
-    const agentConfig = aiPlayer.agentConfig || aiAgentManager.getAgentById(aiPlayer.agentId);
+    const agentConfig = aiPlayer.agentConfig || await aiAgentManager.getAgentById(aiPlayer.agentId);
     const isWerewolf = team === 'werewolf';
     
     let personalityDesc = '';

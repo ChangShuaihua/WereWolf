@@ -53,8 +53,6 @@ Newwerewolf/
 │   │       ├── AppError.js           # 自定义错误类
 │   │       ├── cache.js              # 缓存工具
 │   │       └── userSocketMap.js      # 用户-Socket映射
-│   ├── data/
-│   │   └── aiAgents.json             # AI 智能体数据
 │   ├── .env                          # 环境变量
 │   ├── .env.example                  # 环境变量示例
 │   ├── Dockerfile                    # 后端 Docker 镜像
@@ -395,6 +393,7 @@ npm start
 - `users` - 用户表（id, username, password, api_key, api_url, model_name, created_at）
 - `game_records` - 游戏记录表（id, room_code, winner, player_count, duration, created_at）
 - `game_players` - 游戏玩家表（id, game_id, user_id, role, is_winner）
+- `ai_agents` - AI 智能体表（id, name, avatar, personality, speaking_style, strategy, language, created_at_ms, updated_at_ms）
 
 ## 📄 License
 

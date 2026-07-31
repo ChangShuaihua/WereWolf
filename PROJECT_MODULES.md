@@ -242,7 +242,7 @@ game_players: id, game_id, user_id, role, is_winner
 - `broadcastRoomUpdate()` 统一广播房间状态更新
 
 ---
-
+ 
 ### 10. 游戏事件处理器 (`socket/gameHandler.js`)
 
 **功能**：处理游戏开始、夜晚行动、投票、猎人开枪等游戏事件。
@@ -394,9 +394,9 @@ game_players: id, game_id, user_id, role, is_winner
 **功能**：AI 智能体的 CRUD 和持久化。
 
 **实现方式**：
-- 数据存储在 `data/aiAgents.json` 文件中
-- 初始化时从文件加载，不存在则使用默认智能体（10个预设）
-- 所有修改操作自动保存到文件
+- 数据存储在 MySQL 的 `ai_agents` 表中
+- 初始化时如果表为空，则写入默认智能体（10个预设）
+- 所有修改操作自动保存到数据库
 - **智能体属性**：
   - 基本信息：name、avatar
   - 性格参数：aggressiveness、caution、cunning、honesty、talkativeness（0-100）
