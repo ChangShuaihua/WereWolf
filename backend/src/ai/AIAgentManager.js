@@ -1,5 +1,6 @@
 const AIAgent = require('../models/AIAgent');
 
+// 默认智能体
 const DEFAULT_AGENTS = [
   {
     id: 'agent-1',
@@ -255,7 +256,7 @@ const DEFAULT_AGENTS = [
 
 function normalizeAgent(data = {}, existing = null) {
   const now = Date.now();
-
+  // 生成唯一ID
   return {
     id: existing?.id || data.id || `agent-${now}`,
     name: data.name || existing?.name || '未命名智能体',
@@ -285,13 +286,12 @@ function normalizeAgent(data = {}, existing = null) {
 
 class AIAgentManager {
   constructor() {
-    this.availableAgents = [];
-    this.initialized = false;
+    this.availableAgents = [];// 默认智能体列表
+    this.initialized = false;// 初始化状态
   }
 
   async init() {
     if (this.initialized) return;
-
     await AIAgent.bulkInsertIfEmpty(DEFAULT_AGENTS.map(agent => normalizeAgent(agent)));
     await this.resetRandomAgents();
     this.initialized = true;
@@ -312,7 +312,7 @@ class AIAgentManager {
     await this.ensureInitialized();
     return AIAgent.findById(id);
   }
-
+// 创建一个智能体
   async createAgent(data) {
     await this.ensureInitialized();
     const agent = normalizeAgent(data);
@@ -320,7 +320,7 @@ class AIAgentManager {
     await this.resetRandomAgents();
     return created;
   }
-
+// 更新一个智能体
   async updateAgent(id, data) {
     await this.ensureInitialized();
     const existing = await AIAgent.findById(id);
@@ -330,7 +330,7 @@ class AIAgentManager {
     await this.resetRandomAgents();
     return updated;
   }
-
+// 删除一个智能体
   async deleteAgent(id) {
     await this.ensureInitialized();
     const success = await AIAgent.delete(id);
@@ -339,7 +339,7 @@ class AIAgentManager {
     }
     return success;
   }
-
+// 随机获取一个智能体
   async getRandomAgent() {
     await this.ensureInitialized();
 
@@ -356,7 +356,7 @@ class AIAgentManager {
     this.availableAgents.splice(index, 1);
     return agent;
   }
-
+// 重置随机获取的智能体
   async resetRandomAgents() {
     this.availableAgents = await AIAgent.findAll();
   }

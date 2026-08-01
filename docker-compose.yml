@@ -4,15 +4,15 @@ services:
     container_name: werewolf-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: werewolf123
-      MYSQL_DATABASE: werewolf
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-werewolf}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
     volumes:
       - mysql_data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pwerewolf123"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,21 +37,22 @@ services:
     container_name: werewolf-backend
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "127.0.0.1:${BACKEND_PORT:-3001}:3001"
     environment:
+      NODE_ENV: production
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: root
-      DB_PASSWORD: werewolf123
-      DB_NAME: werewolf
-      JWT_SECRET: 509127582efb5331eca8bc722ae4c7ed9ecffb06f9a576f0740b7bd5418d185af49934aaec96290a44a3c0e54683262521c6d0b089051c4a7a8e7f1c57
-      JWT_EXPIRES_IN: 7d
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      DB_NAME: ${MYSQL_DATABASE:-werewolf}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: 3001
-      CORS_ORIGINS: http://121.196.239.144
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://121.196.239.144}
       REDIS_URL: redis://redis:6379/0
-      XIAOMI_API_KEY: ""
-      XIAOMI_API_URL: https://api.xiaomimimo.com
-      XIAOMI_MODEL_NAME: mimo-v2-flash
+      XIAOMI_API_KEY: ${XIAOMI_API_KEY:-}
+      XIAOMI_API_URL: ${XIAOMI_API_URL:-https://api.xiaomimimo.com}
+      XIAOMI_MODEL_NAME: ${XIAOMI_MODEL_NAME:-mimo-v2-flash}
     depends_on:
       mysql:
         condition: service_healthy
@@ -65,7 +66,7 @@ services:
     container_name: werewolf-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${HTTP_PORT:-80}:80"
     depends_on:
       - backend
 
