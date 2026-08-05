@@ -42,8 +42,11 @@ function startGame(io, socket, code) {
       if (room) {
         const replayMsg = {
           username: '系统',
-          message: data.message,
+          message: '🎮 上一轮复盘',
           timestamp: Date.now(),
+          isSystem: true,
+          isReplay: true,
+          replayData: data.message,
         };
         room.chat.push(replayMsg);
         if (room.chat.length > 100) room.chat = room.chat.slice(-100);

@@ -404,6 +404,11 @@ function handleLeave() {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+.room-players-panel .panel-title {
+  flex-shrink: 0;
 }
 
 .room-actions-panel {
@@ -445,6 +450,26 @@ function handleLeave() {
   gap: 14px;
   flex: 1;
   align-content: start;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.seat-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.seat-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.seat-grid::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border-radius: 3px;
+}
+
+.seat-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
 .seat-grid-6 {

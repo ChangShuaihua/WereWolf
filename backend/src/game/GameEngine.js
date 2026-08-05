@@ -1518,79 +1518,75 @@ class GameEngine extends EventEmitter {
   }
   
   generateReplayMessage(players, winner, message) {
-    let replay = `--- 🎮 上一轮复盘 ---
-${message}
-
-👥 身份揭晓：`;
+    const result = {
+      type: 'replay',
+      title: '🎮 上一轮复盘',
+      summary: message,
+      roles: {
+        werewolves: [],
+        seer: null,
+        witch: null,
+        guard: null,
+        hunter: null,
+        civilians: []
+      },
+      result: {
+        winner: winner === 'werewolf' ? '狼人阵营' : '村民阵营',
+        winners: [],
+        losers: []
+      },
+      history: []
+    };
     
     const werewolves = players.filter(p => p.role === ROLE.WEREWOLF);
     const villagers = players.filter(p => p.role !== ROLE.WEREWOLF);
     
-    if (werewolves.length > 0) {
-      replay += `
-🐺 狼人：${werewolves.map(p => p.username).join('、')}`;
-    }
+    result.roles.werewolves = werewolves.map(p => p.username);
     
     const seer = players.find(p => p.role === ROLE.SEER);
-    if (seer) {
-      replay += `
-🔮 预言家：${seer.username}`;
-    }
+    if (seer) result.roles.seer = seer.username;
     
     const witch = players.find(p => p.role === ROLE.WITCH);
-    if (witch) {
-      replay += `
-🧪 女巫：${witch.username}`;
-    }
+    if (witch) result.roles.witch = witch.username;
     
     const guard = players.find(p => p.role === ROLE.GUARD);
-    if (guard) {
-      replay += `
-🛡️ 守卫：${guard.username}`;
-    }
+    if (guard) result.roles.guard = guard.username;
     
     const hunter = players.find(p => p.role === ROLE.HUNTER);
-    if (hunter) {
-      replay += `
-🔫 猎人：${hunter.username}`;
-    }
+    if (hunter) result.roles.hunter = hunter.username;
     
     const civilians = villagers.filter(p => p.role === ROLE.VILLAGER);
-    if (civilians.length > 0) {
-      replay += `
-👤 平民：${civilians.map(p => p.username).join('、')}`;
-    }
+    result.roles.civilians = civilians.map(p => p.username);
     
-    replay += `
-
-🏆 胜负结果：`;
     const winners = players.filter(p => p.isWinner);
     const losers = players.filter(p => !p.isWinner);
+    result.result.winners = winners.map(p => p.username);
+    result.result.losers = losers.map(p => p.username);
     
-    replay += `
-胜利方：${winners.map(p => p.username).join('、')}
-失败方：${losers.map(p => p.username).join('、')}`;
-    
+    // Group history by night
     if (this.gameHistory.length > 0) {
-      replay += `
-
-📜 行动记录：`;
-      let currentNight = -1;
+      const nightGroups = {};
       this.gameHistory.forEach(h => {
-        if (h.night !== currentNight) {
-          currentNight = h.night;
-          replay += `\n🌙 第${currentNight}夜：`;
+        const night = h.night || 0;
+        if (!nightGroups[night]) {
+          nightGroups[night] = [];
         }
         const detail = h.detail || `${h.action || '未知行动'}${h.actor?.username ? ' - ' + h.actor.username : ''}`;
-        replay += `\n  - ${detail}`;
+        nightGroups[night].push({
+          action: h.action,
+          detail: detail
+        });
       });
+      
+      result.history = Object.keys(nightGroups)
+        .sort((a, b) => Number(a) - Number(b))
+        .map(night => ({
+          night: Number(night),
+          events: nightGroups[night]
+        }));
     }
     
-    replay += `
-
-----------------------`;
-    
-    return replay;
+    return result;
   }
 
   // ==================== Cleanup ====================

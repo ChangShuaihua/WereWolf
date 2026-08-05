@@ -6,8 +6,60 @@
         <p>暂无消息，开始聊天吧</p>
       </div>
       <!-- W18: 使用 timestamp+username+index 组合 key，避免列表变动时复用错位 -->
-      <div v-for="(msg, i) in messages" :key="(msg.timestamp || '') + '_' + (msg.username || '') + '_' + i" class="chat-msg" :class="{ 'ai-msg': msg.isAI, 'system-msg': msg.isSystem }">
-        <span v-if="msg.isSystem" class="chat-system">{{ msg.message }}</span>
+      <div v-for="(msg, i) in messages" :key="(msg.timestamp || '') + '_' + (msg.username || '') + '_' + i" class="chat-msg" :class="{ 'ai-msg': msg.isAI, 'system-msg': msg.isSystem && !msg.isReplay }">
+        <!-- Replay Card -->
+        <div v-if="msg.isReplay && msg.replayData" class="replay-card">
+          <div class="replay-header">
+            <span class="replay-title">{{ msg.replayData.title }}</span>
+          </div>
+          <div class="replay-summary">{{ msg.replayData.summary }}</div>
+          
+          <div class="replay-section" v-if="msg.replayData.roles.werewolves?.length">
+            <div class="replay-section-title">🐺 狼人阵营</div>
+            <div class="replay-players">
+              <span v-for="(w, idx) in msg.replayData.roles.werewolves" :key="'w'+idx" class="replay-player werewolf">{{ w }}</span>
+            </div>
+          </div>
+          
+          <div class="replay-section" v-if="msg.replayData.roles.civilians?.length">
+            <div class="replay-section-title">👤 村民阵营</div>
+            <div class="replay-players">
+              <span v-if="msg.replayData.roles.seer" class="replay-player seer">🔮 {{ msg.replayData.roles.seer }}</span>
+              <span v-if="msg.replayData.roles.witch" class="replay-player witch">🧪 {{ msg.replayData.roles.witch }}</span>
+              <span v-if="msg.replayData.roles.guard" class="replay-player guard">🛡️ {{ msg.replayData.roles.guard }}</span>
+              <span v-if="msg.replayData.roles.hunter" class="replay-player hunter">🔫 {{ msg.replayData.roles.hunter }}</span>
+              <span v-for="(c, idx) in msg.replayData.roles.civilians" :key="'c'+idx" class="replay-player civilian">{{ c }}</span>
+            </div>
+          </div>
+          
+          <div class="replay-section replay-result">
+            <div class="replay-section-title">🏆 胜负结果</div>
+            <div class="replay-winner">
+              <span class="winner-label">胜利方</span>
+              <span class="winner-name">{{ msg.replayData.result.winner }}</span>
+            </div>
+            <div class="replay-players">
+              <span v-for="(w, idx) in msg.replayData.result.winners" :key="'win'+idx" class="replay-tag winner">{{ w }}</span>
+              <span v-for="(l, idx) in msg.replayData.result.losers" :key="'lose'+idx" class="replay-tag loser">{{ l }}</span>
+            </div>
+          </div>
+          
+          <div class="replay-section" v-if="msg.replayData.history?.length">
+            <div class="replay-section-title">📜 行动记录</div>
+            <div class="replay-history">
+              <div v-for="(night, nIdx) in msg.replayData.history" :key="'night'+nIdx" class="replay-night">
+                <div class="replay-night-title">🌙 第{{ night.night }}夜</div>
+                <div class="replay-events">
+                  <div v-for="(evt, eIdx) in night.events" :key="'evt'+nIdx+'-'+eIdx" class="replay-event">
+                    {{ evt.detail }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <span v-else-if="msg.isSystem" class="chat-system">{{ msg.message }}</span>
         <template v-else>
           <span class="chat-user">{{ msg.isAI ? '🤖 ' : '' }}{{ msg.username }}:</span>
           <span class="chat-text">{{ msg.message }}</span>
@@ -309,5 +361,192 @@ watch(() => props.messages.length, async () => {
 
 .chat-input-wrapper.is-disabled .chat-send-btn:disabled {
   opacity: 0.5;
+}
+
+/* Replay Card Styles */
+.replay-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 8px 0;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+  max-width: 100%;
+}
+
+.replay-header {
+  text-align: center;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.replay-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #a5b4fc;
+  letter-spacing: 0.05em;
+}
+
+.replay-summary {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  margin-bottom: 12px;
+}
+
+.replay-section {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 8px;
+}
+
+.replay-section-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 8px;
+}
+
+.replay-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.replay-player {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: rgba(51, 65, 85, 0.5);
+  color: #e2e8f0;
+}
+
+.replay-player.werewolf {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.replay-player.seer {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.replay-player.witch {
+  background: rgba(168, 85, 247, 0.2);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.replay-player.guard {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.replay-player.hunter {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fdba74;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.replay-player.civilian {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.replay-section.replay-result {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.replay-winner {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.winner-label {
+  display: inline-block;
+  padding: 2px 10px;
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.winner-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+.replay-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+
+.replay-tag.winner {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.replay-tag.loser {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.replay-history {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.replay-night {
+  margin-bottom: 10px;
+}
+
+.replay-night-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fbbf24;
+  margin-bottom: 6px;
+}
+
+.replay-events {
+  padding-left: 8px;
+}
+
+.replay-event {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+}
+
+.replay-event:last-child {
+  border-bottom: none;
+}
+
+.replay-history::-webkit-scrollbar {
+  width: 4px;
+}
+
+.replay-history::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.replay-history::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 2px;
 }
 </style>

@@ -569,16 +569,19 @@ onMounted(async () => {
   justify-content: center;
   font-size: 0.9rem;
   transition: all 0.2s;
+  color: var(--text-primary);
 }
 
 .btn-edit:hover {
   background: rgba(20, 184, 166, 0.15);
   border-color: var(--ai-primary);
+  color: var(--ai-primary);
 }
 
 .btn-delete:hover {
   background: rgba(229, 57, 53, 0.15);
   border-color: var(--status-error);
+  color: var(--status-error);
 }
 
 .agent-detail {
@@ -728,6 +731,15 @@ onMounted(async () => {
   padding: 0 24px;
   font-size: 0.9rem;
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+.detail-actions .btn-edit:hover {
+  color: var(--ai-primary);
+}
+
+.detail-actions .btn-delete:hover {
+  color: var(--status-error);
 }
 
 .modal-overlay {
