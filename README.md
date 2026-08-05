@@ -2,7 +2,27 @@
 
 一款基于 WebSocket 的多人实时狼人杀游戏，支持 AI 智能体，可在 AI 工坊中创建自定义 AI 角色。
 
-## 🛠️ 技术栈
+## �️ 界面展示
+
+### 登录页
+![登录页](pic/login.png)
+
+### 大厅页
+![大厅页1](pic/sy1.png)
+![大厅页2](pic/sy2.png)
+![大厅页3](pic/sy3.png)
+
+### 房间页
+![房间页](pic/room.png)
+
+### 游戏页
+![游戏页](pic/game.png)
+![游戏结果](pic/games.png)
+
+### AI 工坊
+![AI 工坊](pic/AI.png)
+
+## �🛠️ 技术栈
 
 ### 后端
 - **Node.js** + **Express** - Web 服务
