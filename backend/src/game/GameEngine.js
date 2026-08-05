@@ -506,13 +506,11 @@ class GameEngine extends EventEmitter {
       case 'save':
         this.witchSaveTarget = this.killedByWerewolves;
         this.witchSaveUsed = true;
-        this.notifyWitch(); // re-notify to hide save button
         break;
 
       case 'poison':
         this.killedByWitch = targetId;
         this.witchPoisonUsed = true;
-        this.notifyWitch(); // re-notify to hide poison option
         break;
     }
   }
@@ -572,9 +570,17 @@ class GameEngine extends EventEmitter {
       const player = this.getPlayer(socketId);
       if (player) {
         player.isAlive = false;
-        deathList.push({ id: socketId, username: this.getSeatNum(socketId), role: this.roles[socketId] });
+        deathList.push({ id: socketId, username: this.getSeatNum(socketId), role: this.roles[socketId], socketId: socketId });
       }
     }
+
+    // Save dead players for last will phase
+    this.lastWillDeadPlayers = deathList.map(d => {
+      const player = this.getPlayer(d.socketId);
+      return player;
+    }).filter(p => p);
+
+    console.log(`[GameEngine] Night deaths: ${deathList.map(d => d.username).join(', ')}. Last will players: ${this.lastWillDeadPlayers?.length || 0}`);
 
     const nightMessage = deathList.length === 0 ? '🌅 天亮了，昨晚是平安夜' : `🌅 天亮了，昨晚 ${deathList.map(d => d.username).join('、')} 死亡`;
     
@@ -705,9 +711,150 @@ class GameEngine extends EventEmitter {
     setTimeout(() => this.startDay(), 2000);
   }
 
-  // ==================== Day Phase ====================
+  // ==================== Discussion Phase ====================
 
-  startDay() {
+  startFreeDiscussion() {
+    this.phase = PHASE.DISCUSSION;
+    this.lastPhaseMessage = '自由讨论阶段，所有人可以发言';
+
+    this.broadcast('phase_change', {
+      phase: PHASE.DISCUSSION,
+      timeout: TIMERS.DISCUSSION,
+      message: this.lastPhaseMessage,
+    });
+
+    this.broadcast('chat_message', {
+      username: '系统',
+      message: `💬 自由讨论阶段开始，所有人可以发言（${TIMERS.DISCUSSION}秒）`,
+      timestamp: Date.now(),
+      isSystem: true,
+    });
+
+    // Trigger AI players to speak during free discussion
+    const allAlive = this.alivePlayers;
+    const aiPlayers = allAlive.filter(p => p.isAI);
+    console.log(`[GameEngine] Free discussion: ${allAlive.length} alive players, ${aiPlayers.length} AI players`);
+    console.log(`[GameEngine] AI players:`, aiPlayers.map(p => ({ username: p.username, isAI: p.isAI, alive: p.isAlive })));
+    
+    if (aiPlayers.length > 0) {
+      this._triggerAIFreeDiscussion(aiPlayers);
+    } else {
+      console.warn('[GameEngine] No AI players found for free discussion');
+    }
+
+    this.clearTimer();
+    this.phaseTimer = setTimeout(() => this.startOrderedSpeaking(), TIMERS.DISCUSSION * 1000);
+  }
+
+  _triggerAIFreeDiscussion(aiPlayers) {
+    const aiGameHandler = require('./AIGameHandler');
+
+    console.log(`[GameEngine] Starting AI free discussion for ${aiPlayers.length} AI players`);
+
+    // Launch all AI players in parallel with independent random delays
+    // Each AI speaks 1-2 times during the discussion period
+    const aiPromises = aiPlayers.map((aiPlayer, index) => {
+      return new Promise(async (resolve) => {
+        try {
+          // First message: delay 2-8 seconds
+          const firstDelay = 2000 + Math.random() * 6000;
+          console.log(`[GameEngine] AI ${aiPlayer.username} first speak after ${(firstDelay / 1000).toFixed(1)}s`);
+          
+          await new Promise(r => setTimeout(r, firstDelay));
+
+          // Check if still in discussion phase
+          if (this.phase !== PHASE.DISCUSSION) {
+            console.log(`[GameEngine] Phase changed, AI ${aiPlayer.username} skipping`);
+            resolve();
+            return;
+          }
+
+          // Check if player is still alive
+          if (!aiPlayer.alive) {
+            console.log(`[GameEngine] AI ${aiPlayer.username} is dead, skipping`);
+            resolve();
+            return;
+          }
+
+          // Generate first message with fallback
+          console.log(`[GameEngine] AI ${aiPlayer.username} generating first message...`);
+          let message = await aiGameHandler._generateChatMessage(this, aiPlayer);
+          
+          // Fallback to template message if empty
+          if (!message || !message.trim()) {
+            console.warn(`[GameEngine] AI ${aiPlayer.username} generated empty message, using fallback`);
+            message = aiGameHandler._getFallbackChatMessage(this, aiPlayer);
+          }
+
+          if (message && message.trim()) {
+            const finalMessage = this._ensureMessageLength(message, aiPlayer);
+            console.log(`[GameEngine] AI ${aiPlayer.username} broadcasting: "${finalMessage?.substring(0, 50)}..."`);
+            this.broadcast('chat_message', {
+              username: this.getSeatNum(aiPlayer.socketId),
+              message: finalMessage,
+              timestamp: Date.now(),
+            });
+          }
+
+          // Second message: delay 15-30 seconds after first
+          const secondDelay = 15000 + Math.random() * 15000;
+          console.log(`[GameEngine] AI ${aiPlayer.username} second speak after ${(secondDelay / 1000).toFixed(1)}s`);
+          
+          await new Promise(r => setTimeout(r, secondDelay));
+
+          // Check if still in discussion phase and alive
+          if (this.phase !== PHASE.DISCUSSION || !aiPlayer.alive) {
+            resolve();
+            return;
+          }
+
+          // Generate second message with different context
+          console.log(`[GameEngine] AI ${aiPlayer.username} generating second message...`);
+          let message2 = await aiGameHandler._generateChatMessage(this, aiPlayer);
+          
+          // Fallback to template message if empty
+          if (!message2 || !message2.trim()) {
+            console.warn(`[GameEngine] AI ${aiPlayer.username} generated empty second message, using fallback`);
+            message2 = aiGameHandler._getFallbackChatMessage(this, aiPlayer);
+          }
+
+          if (message2 && message2.trim()) {
+            const finalMessage2 = this._ensureMessageLength(message2, aiPlayer);
+            console.log(`[GameEngine] AI ${aiPlayer.username} broadcasting second: "${finalMessage2?.substring(0, 50)}..."`);
+            this.broadcast('chat_message', {
+              username: this.getSeatNum(aiPlayer.socketId),
+              message: finalMessage2,
+              timestamp: Date.now(),
+            });
+          }
+        } catch (error) {
+          console.error(`[GameEngine] AI discussion error for ${aiPlayer.username}:`, error);
+          
+          // Emergency fallback: send a basic message
+          try {
+            const fallbackMessage = aiGameHandler._getFallbackChatMessage(this, aiPlayer);
+            if (fallbackMessage) {
+              this.broadcast('chat_message', {
+                username: this.getSeatNum(aiPlayer.socketId),
+                message: fallbackMessage,
+                timestamp: Date.now(),
+              });
+            }
+          } catch (e) {
+            console.error(`[GameEngine] Emergency fallback failed for ${aiPlayer.username}:`, e);
+          }
+        }
+        resolve();
+      });
+    });
+
+    // Run all AI players in parallel
+    Promise.all(aiPromises).then(() => {
+      console.log('[GameEngine] All AI free discussion promises resolved');
+    });
+  }
+
+  startOrderedSpeaking() {
     this.phase = PHASE.DAY;
 
     const alive = this.alivePlayers;
@@ -719,7 +866,7 @@ class GameEngine extends EventEmitter {
     this._skipDeadSpeakers();
 
     this.currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
-    this.lastPhaseMessage = '天亮了，按顺序发言';
+    this.lastPhaseMessage = `按顺序发言阶段（每人${TIMERS.DAY}秒）`;
 
     this.broadcast('phase_change', {
       phase: PHASE.DAY,
@@ -727,6 +874,13 @@ class GameEngine extends EventEmitter {
       message: this.lastPhaseMessage,
       currentSpeaker: this.currentSpeaker,
       speakerName: this.getSeatNum(this.currentSpeaker),
+    });
+
+    this.broadcast('chat_message', {
+      username: '系统',
+      message: `🎤 按顺序发言开始，请 ${this.getSeatNum(this.currentSpeaker)} 发言（${TIMERS.DAY}秒）`,
+      timestamp: Date.now(),
+      isSystem: true,
     });
 
     this.clearTimer();
@@ -738,7 +892,121 @@ class GameEngine extends EventEmitter {
         setTimeout(() => this._triggerAISpeaking(currentSpeaker), 1000);
       }
     }
+
+    // Set timer for current speaker
+    this.phaseTimer = setTimeout(() => {
+      this.nextSpeaker();
+    }, TIMERS.DAY * 1000);
   }
+
+  // ==================== Day Phase ====================
+
+  startDay() {
+    // Check for players who died during the night and need to leave last words
+    const lastWillPlayers = this.lastWillDeadPlayers || [];
+    this.lastWillDeadPlayers = null;
+
+    if (lastWillPlayers.length > 0) {
+      // Start last will phase for dead players
+      this.startLastWill(lastWillPlayers);
+    } else {
+      // No deaths, go straight to free discussion
+      this.startFreeDiscussion();
+    }
+  }
+
+  // ==================== Last Will Phase ====================
+
+  startLastWill(deadPlayers) {
+    this.phase = PHASE.LAST_WILL;
+    this.lastWillQueue = [...deadPlayers];
+    this.lastWillIndex = 0;
+
+    const deadNames = deadPlayers.map(p => this.getSeatNum(p.socketId)).join('、');
+    this.lastPhaseMessage = `死亡遗言阶段：${deadNames}`;
+
+    this.broadcast('phase_change', {
+      phase: PHASE.LAST_WILL,
+      timeout: TIMERS.LAST_WILL,
+      message: this.lastPhaseMessage,
+      lastWillPlayers: deadPlayers.map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
+    });
+
+    this.broadcast('chat_message', {
+      username: '系统',
+      message: `💀 ${deadNames} 请发表死亡遗言（每人${TIMERS.LAST_WILL}秒）`,
+      timestamp: Date.now(),
+      isSystem: true,
+    });
+
+    // Start first dead player's last will
+    this._startLastWillSpeaker();
+  }
+
+  _startLastWillSpeaker() {
+    if (!this.lastWillQueue || this.lastWillIndex >= this.lastWillQueue.length) {
+      // All last wills done, move to free discussion
+      this.startFreeDiscussion();
+      return;
+    }
+
+    const deadPlayer = this.lastWillQueue[this.lastWillIndex];
+    this.lastPhaseMessage = `${this.getSeatNum(deadPlayer.socketId)} 的死亡遗言`;
+
+    this.broadcast('phase_change', {
+      phase: PHASE.LAST_WILL,
+      timeout: TIMERS.LAST_WILL,
+      message: this.lastPhaseMessage,
+      currentSpeaker: deadPlayer.socketId,
+      speakerName: this.getSeatNum(deadPlayer.socketId),
+      lastWillPlayers: this.lastWillQueue.map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
+    });
+
+    const player = this.getPlayer(deadPlayer.socketId);
+    
+    // If AI player, generate last will message
+    if (player && player.isAI) {
+      setTimeout(() => this._generateAILastWill(deadPlayer.socketId), 1000);
+    }
+
+    // Auto-advance after timer
+    this.clearTimer();
+    this.phaseTimer = setTimeout(() => {
+      this._nextLastWillSpeaker();
+    }, TIMERS.LAST_WILL * 1000);
+  }
+
+  async _generateAILastWill(socketId) {
+    const aiGameHandler = require('./AIGameHandler');
+    const player = this.getPlayer(socketId);
+    if (!player) return;
+
+    try {
+      const message = await aiGameHandler._generateLastWillMessage(this, player);
+      if (message && message.trim()) {
+        this.broadcast('chat_message', {
+          username: this.getSeatNum(socketId),
+          message: message,
+          timestamp: Date.now(),
+        });
+      }
+    } catch (error) {
+      console.error(`[GameEngine] AI last will error for ${player.username}:`, error);
+      const fallbackMessage = `我是${this.getSeatNum(socketId)}，希望好人阵营能赢。`;
+      this.broadcast('chat_message', {
+        username: this.getSeatNum(socketId),
+        message: fallbackMessage,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  _nextLastWillSpeaker() {
+    this.lastWillIndex++;
+    this._startLastWillSpeaker();
+  }
+
+  // ==================== Discussion Phase ====================
 
   _skipDeadSpeakers() {
     const aliveSpeakers = this.speakingOrder.filter(socketId => {
@@ -913,12 +1181,25 @@ class GameEngine extends EventEmitter {
       hasSpoken: Array.from(this.hasSpoken),
     });
 
+    this.broadcast('chat_message', {
+      username: '系统',
+      message: `🎤 请 ${this.getSeatNum(this.currentSpeaker)} 发言（${TIMERS.DAY}秒）`,
+      timestamp: Date.now(),
+      isSystem: true,
+    });
+
     if (this.currentSpeaker) {
       const speakerPlayer = this.getPlayer(this.currentSpeaker);
       if (speakerPlayer && speakerPlayer.isAI) {
         setTimeout(() => this._triggerAISpeaking(this.currentSpeaker), 1000);
       }
     }
+
+    // Set timer for current speaker
+    this.clearTimer();
+    this.phaseTimer = setTimeout(() => {
+      this.nextSpeaker();
+    }, TIMERS.DAY * 1000);
   }
 
   skipSpeaking() {
@@ -1145,10 +1426,16 @@ class GameEngine extends EventEmitter {
     this.candidates = pkCandidates;
     this.lastPhaseMessage = `${pkCandidates.map(id => this.getSeatNum(id)).join('、')} 进入PK，请再次投票`;
 
+    // Convert socketId array to {id, username} format for frontend
+    const candidatesForFrontend = pkCandidates.map(id => ({
+      id,
+      username: this.getSeatNum(id),
+    }));
+
     this.broadcast('phase_change', {
       phase: PHASE.VOTE,
       isPK: true,
-      candidates: pkCandidates,
+      candidates: candidatesForFrontend,
       timeout: 30,
       message: this.lastPhaseMessage,
     });

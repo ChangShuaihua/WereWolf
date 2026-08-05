@@ -82,6 +82,10 @@ function cancelSelect() {
   border-radius: 16px;
   border: 1px solid rgba(239, 68, 68, 0.2);
   box-shadow: 0 4px 20px rgba(239, 68, 68, 0.1);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .vote-title {

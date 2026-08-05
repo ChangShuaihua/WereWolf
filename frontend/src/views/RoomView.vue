@@ -253,7 +253,8 @@ function handleLeave() {
 
 <style scoped>
 .room-page {
-  min-height: calc(100vh - 76px);
+  height: calc(100vh - 76px);
+  max-height: calc(100vh - 76px);
   background: var(--bg-primary);
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -261,6 +262,7 @@ function handleLeave() {
   padding: 20px 24px;
   position: relative;
   align-items: stretch;
+  overflow: hidden;
 }
 
 .room-page::before {
@@ -282,6 +284,8 @@ function handleLeave() {
   z-index: 1;
   min-width: 0;
   height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .room-header {
@@ -386,6 +390,8 @@ function handleLeave() {
   gap: 16px;
   flex: 1;
   min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .room-players-panel {
@@ -665,7 +671,9 @@ function handleLeave() {
   position: relative;
   z-index: 1;
   height: 100%;
+  max-height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .room-chat-panel > :deep(.chat-box) {

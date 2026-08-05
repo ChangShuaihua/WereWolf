@@ -19,13 +19,21 @@ function validateAgent(body, partial = false) {
     }
   }
   if (!partial || personality !== undefined) {
-    if (typeof personality !== 'string' || personality.trim().length < 2 || personality.length > 200) {
-      errors.push('性格描述长度应为2-200个字符');
+    if (typeof personality !== 'object' || personality === null) {
+      errors.push('性格参数格式错误');
+    } else {
+      const personalityKeys = ['aggressiveness', 'caution', 'cunning', 'honesty', 'talkativeness'];
+      for (const key of personalityKeys) {
+        const value = personality[key];
+        if (typeof value !== 'number' || value < 0 || value > 100) {
+          errors.push(`性格参数 ${key} 应为0-100的数值`);
+        }
+      }
     }
   }
   if (!partial || speakingStyle !== undefined) {
-    if (typeof speakingStyle !== 'string' || speakingStyle.trim().length < 2 || speakingStyle.length > 200) {
-      errors.push('说话风格长度应为2-200个字符');
+    if (typeof speakingStyle !== 'string' || speakingStyle.trim().length === 0) {
+      errors.push('发言风格不能为空');
     }
   }
   return errors;
@@ -53,8 +61,10 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
 
 router.post('/', authMiddleware, async (req, res, next) => {
   try {
+    console.log('Received agent creation request:', JSON.stringify(req.body, null, 2));
     const errors = validateAgent(req.body, false);
     if (errors.length > 0) {
+      console.log('Validation errors:', errors);
       return res.status(400).json({ message: errors.join('；') });
     }
     const agent = await aiAgentManager.createAgent(req.body);
@@ -66,8 +76,10 @@ router.post('/', authMiddleware, async (req, res, next) => {
 
 router.put('/:id', authMiddleware, async (req, res, next) => {
   try {
+    console.log('Received agent update request:', JSON.stringify(req.body, null, 2));
     const errors = validateAgent(req.body, true);
     if (errors.length > 0) {
+      console.log('Validation errors:', errors);
       return res.status(400).json({ message: errors.join('；') });
     }
     const agent = await aiAgentManager.updateAgent(req.params.id, req.body);

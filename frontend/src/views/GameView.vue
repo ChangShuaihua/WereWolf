@@ -30,7 +30,7 @@
           <span class="role-emoji">{{ roleIcon }}</span>
           <span class="role-name">{{ gameStore.myRoleName }}</span>
         </div>
-        <Countdown v-if="gameStore.isNight" :timeout="gameStore.timeout" :phase="gameStore.phase" />
+        <Countdown v-if="gameStore.isNight || gameStore.phase === 'LAST_WILL' || gameStore.phase === 'DISCUSSION' || gameStore.phase === 'DAY'" :timeout="gameStore.timeout" :phase="gameStore.phase" />
       </div>
 
       <div class="game-header-right">
@@ -112,7 +112,13 @@
               <span>聊天</span>
             </div>
           </div>
-          <ChatBox :messages="roomStore.chat" @send="handleChat" />
+          <ChatBox 
+            :messages="roomStore.chat" 
+            :phase="gameStore.phase"
+            :current-speaker="gameStore.currentSpeaker"
+            :is-alive="gameStore.myPlayer?.isAlive ?? true"
+            @send="handleChat" 
+          />
         </section>
       </aside>
     </div>
@@ -153,12 +159,12 @@ const loading = ref(true)
 const mySocketId = computed(() => socket.id || '')
 
 const phaseLabel = computed(() => {
-  const labels = { WAITING: '等待中', NIGHT: '夜晚', DAY: '白天', VOTE: '投票', END: '游戏结束' }
+  const labels = { WAITING: '等待中', NIGHT: '夜晚', LAST_WILL: '死亡遗言', DISCUSSION: '自由讨论', DAY: '轮流发言', VOTE: '投票', END: '游戏结束' }
   return labels[gameStore.phase] || gameStore.phase
 })
 
 const phaseIcon = computed(() => {
-  const icons = { WAITING: '⏳', NIGHT: '🌙', DAY: '☀️', VOTE: '🗳️', END: '🏆' }
+  const icons = { WAITING: '⏳', NIGHT: '🌙', LAST_WILL: '💀', DISCUSSION: '💬', DAY: '🎤', VOTE: '🗳️', END: '🏆' }
   return icons[gameStore.phase] || '❓'
 })
 

@@ -652,6 +652,36 @@ function addChat(socket, code, message) {
   const player = room.players.find(p => p.socketId === socket.id);
   if (!player) { console.log('[roomHandler] addChat: player not found, socketId=', socket.id); return; }
 
+  // Check chat permissions based on game phase
+  const game = gameCache.get(code);
+  if (game && game.phase !== 'WAITING') {
+    const { PHASE } = require('../game/constants');
+
+    // During night, vote, and end phases, no chat allowed
+    if (game.phase === PHASE.NIGHT || game.phase === PHASE.VOTE || game.phase === PHASE.END) {
+      socket.emit('error', { message: '当前阶段不能发言' });
+      return;
+    }
+
+    // During last will phase, only the current dead speaker can chat
+    if (game.phase === PHASE.LAST_WILL) {
+      if (game.currentSpeaker !== socket.id) {
+        socket.emit('error', { message: '现在是死亡遗言阶段，只有死者可以发言' });
+        return;
+      }
+    }
+
+    // During day phase (ordered speaking), only current speaker can chat
+    if (game.phase === PHASE.DAY) {
+      if (game.currentSpeaker !== socket.id) {
+        socket.emit('error', { message: '现在轮到其他人发言' });
+        return;
+      }
+    }
+
+    // During discussion phase, everyone can chat (no restriction)
+  }
+
   // W9: rate-limit chat (max 3 messages per second per socket)
   if (isChatRateLimited(socket.id)) {
     socket.emit('error', { message: '发言过快，请稍后再试' });
@@ -659,7 +689,6 @@ function addChat(socket, code, message) {
   }
 
   // Use seat number if game is in progress
-  const game = gameCache.get(code);
   let displayName;
   if (game && game.phase !== 'WAITING') {
     const seatNum = (player.seatIndex !== undefined ? player.seatIndex : 0) + 1;

@@ -46,6 +46,10 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
   border-radius: 16px;
   border: var(--border-medium);
   box-shadow: var(--shadow-md);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .day-message {

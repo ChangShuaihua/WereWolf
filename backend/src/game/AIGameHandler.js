@@ -741,6 +741,78 @@ class AIGameHandler {
     return message;
   }
 
+  async _generateLastWillMessage(game, aiPlayer) {
+    if (!this.model) {
+      return this._getFallbackLastWillMessage(game, aiPlayer);
+    }
+
+    try {
+      const role = game.getRole(aiPlayer.socketId);
+      const roleName = getRoleName(role);
+      const seatNum = game.getSeatNum(aiPlayer.socketId);
+      
+      const prompt = `你是一个${roleName}，${seatNum}号，刚刚在狼人杀游戏中死亡了。请发表你的死亡遗言，告诉其他玩家你的身份和怀疑对象。用中文回答，30-50字。`;
+
+      const response = await this.model.generateContent(prompt);
+      const text = response.response.text();
+      
+      if (text && text.trim()) {
+        return text.trim();
+      }
+    } catch (error) {
+      console.error('[AIGameHandler] _generateLastWillMessage error:', error);
+    }
+
+    return this._getFallbackLastWillMessage(game, aiPlayer);
+  }
+
+  _getFallbackLastWillMessage(game, aiPlayer) {
+    const role = game.getRole(aiPlayer.socketId);
+    const templates = {
+      [ROLE.WEREWOLF]: [
+        '我是狼人，我们已经赢了！好人阵营太天真了！',
+        '说实话我是狼人，大家被我骗了，狼人阵营必胜！',
+        '我是狼人，好人们太善良了，我们赢定了。',
+      ],
+      [ROLE.SEER]: [
+        '我是预言家，昨晚查了XX是好人，希望我的信息能帮到好人阵营。',
+        '我是真预言家，昨晚验了XX是狼人，可惜我走了，希望大家能记住这个信息。',
+        '我是预言家，把我的查验记录告诉大家，希望好人能赢。',
+      ],
+      [ROLE.WITCH]: [
+        '我是女巫，昨晚救了一个人，希望好人能赢，我的药水没有白费。',
+        '我是女巫，手里还有毒药，希望好人能利用好这个信息。',
+        '我是女巫，昨晚的操作希望帮到了好人阵营，大家加油。',
+      ],
+      [ROLE.GUARD]: [
+        '我是守卫，昨晚守了XX，希望我的守护没有白费。',
+        '我是守卫，把我的守护信息告诉大家，希望能帮到好人。',
+        '我是守卫，今晚本来想守预言家的，可惜我走了，大家保护好自己。',
+      ],
+      [ROLE.HUNTER]: [
+        '我是猎人，身份很硬，我怀疑XX是狼人，希望大家能把他投出去。',
+        '我是猎人，我的枪已经用了（或留着），希望好人能赢。',
+        '我是猎人，怀疑XX和XX是狼人，大家注意一下。',
+      ],
+      [ROLE.VILLAGER]: [
+        '我是平民，没有什么信息，希望好人阵营能赢。',
+        '我是平民，跟着好人阵营走，相信大家的判断。',
+        '我是平民，没什么线索，希望预言家能带领好人获胜。',
+      ],
+    };
+
+    const messages = templates[role] || templates[ROLE.VILLAGER];
+    let message = messages[Math.floor(Math.random() * messages.length)];
+    
+    const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
+    if (aliveOthers.length > 0 && message.includes('XX')) {
+      const randomPlayer = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+      message = message.replace(/XX/g, game.getSeatNum(randomPlayer.socketId));
+    }
+
+    return message;
+  }
+
   _sendChatMessage(roomCode, aiPlayer, message) {
     const room = roomCache.get(roomCode);
     if (!room) return;

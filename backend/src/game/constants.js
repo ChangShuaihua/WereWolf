@@ -2,7 +2,9 @@
 const PHASE = {
   WAITING: 'WAITING',
   NIGHT: 'NIGHT',
-  DAY: 'DAY',
+  LAST_WILL: 'LAST_WILL',  // 死亡遗言阶段
+  DISCUSSION: 'DISCUSSION',  // 自由讨论阶段
+  DAY: 'DAY',  // 轮流发言阶段
   VOTE: 'VOTE',
   END: 'END',
 };
@@ -20,7 +22,9 @@ const ROLE = {
 // Phase timers (seconds)
 const TIMERS = {
   NIGHT: 25,
-  DAY: 60,
+  LAST_WILL: 15,  // 死亡遗言每人15秒
+  DISCUSSION: 45,  // 自由讨论45秒
+  DAY: 30,  // 轮流发言每人30秒
   VOTE: 30,
   END: 15,
 };

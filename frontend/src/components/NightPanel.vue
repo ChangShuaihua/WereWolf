@@ -38,8 +38,11 @@
         <p>🐺 你的队友：{{ prompt.teammates.map(t => t.username).join('、') }}</p>
       </div>
 
-      <!-- Witch special: show killed info + save/poison options with toggle -->
+      <!-- Witch special: show killed info + save/poison options -->
       <div v-if="prompt.action === 'witch'" class="witch-options">
+        <div class="witch-hint">
+          <span>💡 今晚你只能使用一次药水，请选择一种行动：</span>
+        </div>
         <div class="witch-mode-toggle">
           <button
             class="btn btn-mode"
@@ -47,7 +50,7 @@
             :disabled="!prompt.canSave || actionDone"
             @click="witchMode = 'save'"
           >
-            💚 解药模式
+            💚 解药
           </button>
           <button
             class="btn btn-mode"
@@ -55,7 +58,15 @@
             :disabled="!prompt.canPoison || actionDone"
             @click="witchMode = 'poison'"
           >
-            💀 毒药模式
+            💀 毒药
+          </button>
+          <button
+            class="btn btn-mode btn-mode-skip"
+            :class="{ active: witchMode === 'skip' }"
+            :disabled="actionDone"
+            @click="witchMode = 'skip'"
+          >
+            ⏭️ 跳过
           </button>
         </div>
 
@@ -63,8 +74,7 @@
           <p v-if="prompt.killed">
             今晚 <strong>{{ prompt.killed.username }}</strong> 被杀，是否使用解药？
           </p>
-          <button class="btn btn-warn" @click="confirmSave">💚 使用解药</button>
-          <button class="btn btn-secondary" @click="confirmSkip">跳过</button>
+          <button class="btn btn-warn" :disabled="actionDone" @click="confirmSave">💚 使用解药</button>
         </div>
 
         <div v-if="witchMode === 'poison' && prompt.canPoison" class="poison-option">
@@ -85,6 +95,11 @@
             <button class="btn btn-danger" @click="confirmAction">💀 确认下毒</button>
             <button class="btn btn-secondary" @click="selectedTarget = null">取消</button>
           </div>
+        </div>
+
+        <div v-if="witchMode === 'skip'" class="skip-option">
+          <p>今晚不使用任何药水，直接跳过。</p>
+          <button class="btn btn-secondary" :disabled="actionDone" @click="confirmSkip">⏭️ 确认跳过</button>
         </div>
       </div>
 
@@ -146,6 +161,16 @@ watch(() => props.prompt, (newPrompt) => {
     completedAction.value = null
     completedTarget.value = null
     timeLeft.value = newPrompt.timeout || 30
+    // Reset witch mode based on available options
+    if (newPrompt.action === 'witch') {
+      if (newPrompt.canSave) {
+        witchMode.value = 'save'
+      } else if (newPrompt.canPoison) {
+        witchMode.value = 'poison'
+      } else {
+        witchMode.value = 'skip'
+      }
+    }
     startTimer()
   } else {
     // prompt 已清空，无动作
@@ -252,6 +277,10 @@ function confirmSkip() {
   color: var(--text-primary);
   border: var(--border-medium);
   box-shadow: var(--shadow-md);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .night-waiting {
@@ -389,6 +418,16 @@ function confirmSkip() {
   gap: 16px;
 }
 
+.witch-hint {
+  text-align: center;
+  padding: 10px 14px;
+  background: rgba(155, 109, 255, 0.1);
+  border: 1px solid rgba(155, 109, 255, 0.3);
+  border-radius: 10px;
+  color: var(--ai-light);
+  font-size: 0.85rem;
+}
+
 .witch-mode-toggle {
   display: flex;
   gap: 10px;
@@ -417,6 +456,12 @@ function confirmSkip() {
   color: var(--status-success);
 }
 
+.btn-mode-skip.active {
+  border-color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
 .btn-mode:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -428,6 +473,16 @@ function confirmSkip() {
 
 .save-option p {
   margin-bottom: 16px;
+}
+
+.skip-option {
+  text-align: center;
+  padding: 16px;
+}
+
+.skip-option p {
+  margin-bottom: 16px;
+  color: var(--text-secondary);
 }
 
 .target-grid {
