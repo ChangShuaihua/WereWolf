@@ -107,6 +107,7 @@
 users: id, username, password, api_key, api_url, model_name, created_at
 game_records: id, room_code, winner, player_count, duration, created_at
 game_players: id, game_id, user_id, role, is_winner
+ai_agents: id, name, avatar, personality(JSON), speaking_style, strategy(JSON), language(JSON), created_at_ms, updated_at_ms
 ```
 
 ---
@@ -273,34 +274,41 @@ game_players: id, game_id, user_id, role, is_winner
 **实现方式**：
 - 继承 `EventEmitter`，通过事件机制与外部通信
 - **游戏状态**：
-  - `phase`：当前阶段（WAITING/NIGHT/DAY/VOTE/END）
-  - `roles`：角色分配表 `{socketId: role}`
+  - `phase`：当前阶段（WAITING/NIGHT/LAST_WILL/DISCUSSION/DAY/VOTE/END）
+  - `roles`：角色分配表 `{socketId: role}`（同时持久化到 `p.role` 便于重连恢复）
   - `nightActions`：夜晚行动记录
   - `votes`：投票记录
   - `speakingOrder`：发言顺序
   - `gameHistory`：游戏历史记录（用于复盘）
+  - `pkCandidates`：PK 加赛候选人列表
 
 - **夜晚阶段** (`startNight` → `runNightSequence`)：
-  1. 守卫守护（30秒）
-  2. 狼人杀人（30秒，所有狼人必须选择同一目标）
+  1. 守卫守护（30秒，不能连续两晚守护同一人）
+  2. 狼人杀人（30秒，多狼投票多数决，平票取第一个）
   3. 预言家查验（30秒）
-  4. 女巫行动（30秒，可同时使用解药和毒药）
+  4. 女巫行动（30秒，每晚三选一：救人/毒人/跳过，解药毒药各限用一次）
   5. 解析夜晚结果 (`resolveNight`)
+  - 整个夜晚有 150 秒总时间预算，超时强制结算
 
 - **夜晚结果解析** (`resolveNight`)：
   - 应用守卫保护和女巫解药
-  - 同守同救规则：守卫守护 + 女巫解药 = 死亡
-  - 应用女巫毒药
-  - 检查猎人死亡触发（被毒杀时不可开枪）
+  - 同守同救规则：守卫守护 + 女巫解药 = 死亡；只守或只救则存活
+  - 应用女巫毒药（被毒者无条件死亡）
+  - 检查猎人死亡触发（被毒杀时不可开枪，只广播提示）
 
 - **白天阶段** (`startDay`)：
-  - 按座位号顺序发言
+  - 若夜晚有人死亡，先进入 `LAST_WILL`（死亡遗言，每人 15 秒，死者依次发言）
+  - 遗言结束后进入 `DISCUSSION`（自由讨论，45 秒，所有人可发言，AI 并行发言 1-2 次）
+  - 讨论结束后进入 `DAY`（按座位号顺序轮流发言，每人 30 秒）
   - 支持跳过发言、下一位发言
   - 所有人发言完毕自动进入投票
+  - 若夜晚平安夜（无人死亡），跳过遗言直接进入自由讨论
 
 - **投票阶段** (`startVote` → `resolveVote`)：
   - 计票并处理平票情况
-  - 最高票数者被放逐
+  - 平票时进入 PK 加赛（`_startPKVote`）：仅限平票候选人投票，30 秒
+  - PK 轮再次平票则无人出局，进入下一夜晚
+  - 非平票时最高票数者被放逐
 
 - **胜负判定** (`checkWinCondition`)：
   - 狼人全灭 → 村民获胜
@@ -308,19 +316,23 @@ game_players: id, game_id, user_id, role, is_winner
 
 - **游戏结束** (`endGame`)：
   - 广播 `game_over` 事件
-  - 生成复盘消息（身份揭晓、行动记录）
+  - `generateReplayMessage` 生成结构化复盘 JSON（roles 各角色身份、result 胜负方和输赢玩家、history 按夜分组的事件详情）
+  - 通过 `__game_replay` 事件下发，前端 ChatBox 以复盘卡片渲染
   - 触发游戏结果持久化
 
 - **AI 集成**：
   - `_waitForAINightActions`：等待 AI 夜晚行动（3秒超时）
   - `_waitForAIVotes`：等待 AI 投票（3秒超时）
   - `_triggerAISpeaking`：触发 AI 发言（5秒超时）
+  - `_triggerAIFreeDiscussion`：自由讨论阶段并行触发所有 AI 发言（每 AI 1-2 次，随机延迟）
+  - `_generateAILastWill`：AI 死亡遗言生成
   - `_ensureMessageLength`：确保 AI 消息在 30-50 字之间
 
 **关键设计**：
 - 使用 Promise + 事件监听实现异步等待（如 `_waitForRoleActions`）
 - 超时机制确保游戏不会因玩家不操作而卡住
-- 猎人死亡时自动开枪（10秒超时后随机选择目标）
+- 猎人死亡时进入 10 秒开枪决策窗口（`pendingHunterId` 标记），超时自动随机带走一人
+- 断线重连通过 `socketId=null` + `disconnectTime` 标记保留玩家，不直接删除
 
 ---
 
@@ -329,9 +341,10 @@ game_players: id, game_id, user_id, role, is_winner
 **功能**：AI 玩家的决策逻辑，包括夜晚行动、投票和发言。
 
 **实现方式**：
-- **LLM 集成**：使用 LangChain + OpenAI API（兼容 DeepSeek 等 OpenAI 兼容 API）
-- **Fallback 机制**：LLM 不可用时使用随机/模板逻辑
+- **LLM 集成**：使用 LangChain + ChatOpenAI，默认接入小米 mimo-v2-flash 模型（`XIAOMI_API_KEY`/`XIAOMI_API_URL`/`XIAOMI_MODEL_NAME`），也兼容 DeepSeek 等 OpenAI 兼容 API
+- **Fallback 机制**：LLM 不可用或未配置 API Key 时使用随机/模板逻辑
 - **用户自定义 API**：支持每个用户配置自己的 API Key、URL 和模型名称
+- **并发控制**：`pLimit` 限制最多 5 个并行 AI LLM 调用，避免突发请求过多
 
 - **夜晚决策** (`_decideNightAction`)：
   - 构建游戏状态提示词（角色、能力、存活玩家、队友、可疑玩家）
@@ -379,9 +392,9 @@ game_players: id, game_id, user_id, role, is_winner
 **功能**：定义游戏中使用的所有常量。
 
 **常量列表**：
-- `PHASE`：游戏阶段（WAITING/NIGHT/DAY/VOTE/END）
+- `PHASE`：游戏阶段（WAITING/NIGHT/LAST_WILL/DISCUSSION/DAY/VOTE/END）
 - `ROLE`：角色类型（werewolf/villager/seer/witch/hunter/guard）
-- `TIMERS`：阶段计时器（NIGHT:25s, DAY:60s, VOTE:30s, END:15s）
+- `TIMERS`：阶段计时器（NIGHT:25s, LAST_WILL:15s/人, DISCUSSION:45s, DAY:30s/人, VOTE:30s, END:15s）
 - `ROLE_NAMES`：角色中文名称映射
 - `TEAM`：角色所属阵营映射
 - `GAME_MODES`：支持的游戏模式（6/8/12人）
