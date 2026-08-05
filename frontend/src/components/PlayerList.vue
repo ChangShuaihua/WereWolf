@@ -1,38 +1,40 @@
 <template>
   <div class="player-grid" :class="gridClass">
-    <template v-for="i in maxPlayers" :key="i">
+    <!-- W19: 使用预计算的 seatList，避免模板内多次调用 getPlayer -->
+    <template v-for="seat in seatList" :key="seat.seatNum">
       <div
-        v-if="getPlayer(i - 1)"
+        v-if="seat.player"
         class="player-card"
         :class="{
-          alive: getPlayer(i - 1).isAlive !== false,
-          dead: getPlayer(i - 1).isAlive === false,
-          me: (getPlayer(i - 1).id || getPlayer(i - 1).socketId) === myId,
-          host: (getPlayer(i - 1).socketId || getPlayer(i - 1).id) === hostId,
-          targetable: isTargetable(getPlayer(i - 1)),
-          current: isCurrent(getPlayer(i - 1)),
+          alive: seat.player.isAlive !== false,
+          'is-dead': seat.player.isAlive === false,
+          me: (seat.player.id || seat.player.socketId) === myId,
+          host: (seat.player.socketId || seat.player.id) === hostId,
+          targetable: seat.targetable,
+          current: seat.current,
         }"
       >
         <div class="seat-num-badge">
-          {{ i }}号
+          {{ seat.seatNum }}号
         </div>
 
-        <div class="player-avatar">
-          {{ (getPlayer(i - 1).username || '?')[0] }}
+        <div class="player-avatar" :class="{ 'is-dead-avatar': seat.player.isAlive === false }">
+          {{ (seat.player.username || '?')[0] }}
+          <span v-if="seat.player.isAlive === false" class="avatar-skull">💀</span>
         </div>
-        <div class="player-name">{{ getPlayer(i - 1).username }}</div>
+        <div class="player-name" :class="{ 'is-dead-name': seat.player.isAlive === false }">{{ seat.player.username }}</div>
         <div class="player-badges">
-          <span v-if="(getPlayer(i - 1).socketId || getPlayer(i - 1).id) === hostId" class="badge badge-host">👑</span>
-          <span v-if="getPlayer(i - 1).isAI" class="badge badge-ai">🤖</span>
-          <span v-if="showReady && getPlayer(i - 1).isReady" class="badge badge-ready">✅</span>
-          <span v-if="getPlayer(i - 1).isAlive === false" class="badge badge-dead">💀</span>
-          <span v-if="showRoles && roles[getPlayer(i - 1).id || getPlayer(i - 1).socketId]" class="badge badge-role">
-            {{ roleNames[roles[getPlayer(i - 1).id || getPlayer(i - 1).socketId]] }}
+          <span v-if="(seat.player.socketId || seat.player.id) === hostId" class="badge badge-host">👑</span>
+          <span v-if="seat.player.isAI" class="badge badge-ai">🤖</span>
+          <span v-if="showReady && seat.player.isReady" class="badge badge-ready">✅</span>
+          <span v-if="seat.player.isAlive === false" class="badge badge-dead">💀 已淘汰</span>
+          <span v-if="showRoles && roles[seat.player.id || seat.player.socketId]" class="badge badge-role">
+            {{ roleNames[roles[seat.player.id || seat.player.socketId]] }}
           </span>
         </div>
       </div>
       <div v-else class="player-card player-card-empty">
-        <div class="seat-num-badge">{{ i }}号</div>
+        <div class="seat-num-badge">{{ seat.seatNum }}号</div>
         <div class="player-avatar empty-avatar">—</div>
         <div class="player-name empty-name">等待中</div>
       </div>
@@ -62,34 +64,34 @@ const gridClass = computed(() => {
   return `grid-${props.maxPlayers}`
 })
 
-const playerBySeat = computed(() => {
+// W19: 一次性计算座位列表（含 player/targetable/current），避免模板重复调用
+const seatList = computed(() => {
   const map = {}
   for (const p of props.players) {
     const seat = p.seatIndex !== undefined ? p.seatIndex : (p.seatNum !== undefined ? p.seatNum - 1 : 999)
     map[seat] = p
   }
-  return map
+  const list = []
+  for (let i = 0; i < props.maxPlayers; i++) {
+    const player = map[i] || null
+    const targetable = (() => {
+      if (!player || player.isAlive === false) return false
+      if (props.candidates && props.candidates.length > 0) {
+        return props.candidates.some(c => (c.id || c.socketId) === (player.id || player.socketId))
+      }
+      return false
+    })()
+    const current = (() => {
+      if (!player) return false
+      if (props.currentSpeaker) {
+        return (player.id || player.socketId) === props.currentSpeaker
+      }
+      return false
+    })()
+    list.push({ seatNum: i + 1, player, targetable, current })
+  }
+  return list
 })
-
-function getPlayer(seatIndex) {
-  return playerBySeat.value[seatIndex] || null
-}
-
-function isTargetable(player) {
-  if (!player || player.isAlive === false) return false
-  if (props.candidates && props.candidates.length > 0) {
-    return props.candidates.some(c => (c.id || c.socketId) === (player.id || player.socketId))
-  }
-  return false
-}
-
-function isCurrent(player) {
-  if (!player) return false
-  if (props.currentSpeaker) {
-    return (player.id || player.socketId) === props.currentSpeaker
-  }
-  return false
-}
 
 const roleNames = {
   werewolf: '🐺狼人',
@@ -142,8 +144,69 @@ const roleNames = {
 }
 
 .player-card.is-dead {
-  opacity: 0.4;
-  filter: grayscale(0.7);
+  background: rgba(80, 20, 20, 0.25);
+  border-color: rgba(180, 40, 40, 0.5);
+  opacity: 0.7;
+  position: relative;
+  overflow: hidden;
+}
+
+.player-card.is-dead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 6px,
+    rgba(180, 40, 40, 0.15) 6px,
+    rgba(180, 40, 40, 0.15) 12px
+  );
+  pointer-events: none;
+}
+
+.player-card.is-dead .player-avatar {
+  background: rgba(100, 30, 30, 0.5) !important;
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.player-card.is-dead .player-name {
+  text-decoration: line-through;
+  text-decoration-color: rgba(200, 60, 60, 0.8);
+  color: var(--text-tertiary);
+}
+
+.avatar-skull {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 0.7rem;
+  filter: drop-shadow(0 0 4px rgba(255, 100, 100, 0.8));
+  animation: skullPulse 2s ease-in-out infinite;
+}
+
+@keyframes skullPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.is-dead-name {
+  text-decoration: line-through;
+  text-decoration-color: rgba(200, 60, 60, 0.8);
+}
+
+.badge-dead {
+  background: rgba(180, 40, 40, 0.3);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  color: #ff8080;
+  font-weight: 600;
+  font-size: 0.68rem;
+  border: 1px solid rgba(200, 60, 60, 0.4);
 }
 
 .player-card.is-targetable {
@@ -187,6 +250,7 @@ const roleNames = {
   align-items: center;
   justify-content: center;
   font-size: 0.95rem;
+  position: relative;
 }
 
 .empty-avatar {
@@ -218,10 +282,6 @@ const roleNames = {
 
 .badge {
   font-size: 0.72rem;
-}
-
-.badge-dead {
-  opacity: 0.6;
 }
 
 .badge-role {

@@ -21,7 +21,12 @@
       </div>
 
       <div class="game-header-center">
-        <div class="my-role" v-if="gameStore.myRole">
+        <div
+          class="my-role"
+          v-if="gameStore.myRole"
+          @click="showRoleReveal = true"
+          title="点击查看角色详情"
+        >
           <span class="role-emoji">{{ roleIcon }}</span>
           <span class="role-name">{{ gameStore.myRoleName }}</span>
         </div>
@@ -49,7 +54,7 @@
             <div class="player-grid-wrapper">
               <PlayerList
                 :players="gameStore.players"
-                :myId="socket.id"
+                :myId="mySocketId"
                 :showRoles="gameStore.isEnd"
                 :roles="gameOverRoles"
                 :maxPlayers="roomStore.maxPlayers"
@@ -81,7 +86,7 @@
             :isAlive="gameStore.myPlayer?.isAlive"
             :currentSpeaker="gameStore.currentSpeaker"
             :speakerName="gameStore.speakerName"
-            :mySocketId="socket.id"
+            :mySocketId="mySocketId"
             @skip="gameStore.skipSpeaking()"
             @next="gameStore.nextSpeaker()"
             @skipDay="gameStore.skipDay()"
@@ -144,6 +149,9 @@ const userStore = useUserStore()
 const showRoleReveal = ref(false)
 const loading = ref(true)
 
+// C12: safe access to socket.id (may be undefined during reconnect)
+const mySocketId = computed(() => socket.id || '')
+
 const phaseLabel = computed(() => {
   const labels = { WAITING: '等待中', NIGHT: '夜晚', DAY: '白天', VOTE: '投票', END: '游戏结束' }
   return labels[gameStore.phase] || gameStore.phase
@@ -189,7 +197,7 @@ async function reconnectToRoom() {
   gameStore.bindEvents()
 
   if (userStore.user) {
-    await authenticate(userStore.user.id, userStore.user.username)
+    await authenticate() // W26: 统一无参签名
   }
 
   // Wait for socket connection
@@ -202,15 +210,13 @@ async function reconnectToRoom() {
     }
   })
 
-  // Join room and wait for room_joined event
-  roomStore.joinRoom(code)
-
-  // Wait for room_joined event with timeout
+  // FIX: set up listener BEFORE emitting join_room to avoid race condition
+  // where the backend response arrives before the listener is registered.
   await new Promise((resolve) => {
     const timeout = setTimeout(() => {
       socket.off('room_joined', onJoined)
       resolve()
-    }, 3000)
+    }, 5000)
 
     function onJoined(data) {
       clearTimeout(timeout)
@@ -218,6 +224,9 @@ async function reconnectToRoom() {
       resolve()
     }
     socket.once('room_joined', onJoined)
+
+    // Now safe to emit — listener is registered
+    roomStore.joinRoom(code)
   })
 
   if (roomStore.roomCode) {
@@ -260,3 +269,10 @@ function returnToRoom() {
   router.push(`/room/${roomStore.roomCode}`)
 }
 </script>
+
+<style scoped>
+/* C13: indicate the role badge is clickable to re-view role details */
+.my-role {
+  cursor: pointer;
+}
+</style>

@@ -42,13 +42,11 @@ function cleanUpOldSocketRoom(io, oldSocketId) {
 
   const player = room.players.find(p => p.socketId === oldSocketId);
   if (player) {
-    room.players = room.players.filter(p => p.socketId !== oldSocketId);
-
-    if (room.hostId === oldSocketId && room.players.length > 0) {
-      room.hostId = room.players[0].socketId;
-      room.hostUserId = room.players[0].userId;
-    }
-
+    // Don't remove the player — just mark as disconnected so reconnection works
+    // on the new socket. The actual removal is handled by handleDisconnect's
+    // timeout logic (60s for active game, 30s for waiting room).
+    player.socketId = null;
+    player.disconnectTime = Date.now();
     roomCache.set(code, room);
 
     const game = gameCache.get(code);
@@ -56,24 +54,18 @@ function cleanUpOldSocketRoom(io, oldSocketId) {
       const gamePlayer = game.players.find(p => p.socketId === oldSocketId);
       if (gamePlayer) {
         gamePlayer.socketId = null;
-        gamePlayer.disconnectTime = null;
+        gamePlayer.disconnectTime = Date.now();
       }
     }
 
-    io.to(code).emit('room_update', {
-      code,
-      players: room.players.map(p => ({
-        socketId: p.socketId,
-        username: p.username,
-        seatIndex: p.seatIndex,
-        isAlive: p.isAlive,
-        isReady: p.isReady,
-        isHost: p.socketId === room.hostId,
-      })),
-      hostId: room.hostId,
-    });
+    // Also clear the role mapping for the old socketId
+    if (game && game.roles && game.roles[oldSocketId]) {
+      delete game.roles[oldSocketId];
+    }
 
-    console.log(`[userSocketMap] Cleaned up old socket ${oldSocketId} from room ${code}`);
+    broadcastRoomUpdate(code);
+
+    console.log(`[userSocketMap] Marked old socket ${oldSocketId} as disconnected in room ${code}, player preserved for reconnection`);
   }
 
   socketCache.del(oldSocketId);

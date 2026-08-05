@@ -3,6 +3,34 @@ const router = express.Router();
 const aiAgentManager = require('../ai/AIAgentManager');
 const authMiddleware = require('../middleware/auth');
 
+// W14: validate agent payload shape
+function validateAgent(body, partial = false) {
+  const errors = [];
+  const { name, avatar, personality, speakingStyle } = body;
+
+  if (!partial || name !== undefined) {
+    if (typeof name !== 'string' || name.trim().length < 1 || name.length > 20) {
+      errors.push('名称长度应为1-20个字符');
+    }
+  }
+  if (!partial || avatar !== undefined) {
+    if (typeof avatar !== 'string' || avatar.trim().length === 0) {
+      errors.push('头像不能为空');
+    }
+  }
+  if (!partial || personality !== undefined) {
+    if (typeof personality !== 'string' || personality.trim().length < 2 || personality.length > 200) {
+      errors.push('性格描述长度应为2-200个字符');
+    }
+  }
+  if (!partial || speakingStyle !== undefined) {
+    if (typeof speakingStyle !== 'string' || speakingStyle.trim().length < 2 || speakingStyle.length > 200) {
+      errors.push('说话风格长度应为2-200个字符');
+    }
+  }
+  return errors;
+}
+
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
     res.json(await aiAgentManager.getAllAgents());
@@ -25,6 +53,10 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
 
 router.post('/', authMiddleware, async (req, res, next) => {
   try {
+    const errors = validateAgent(req.body, false);
+    if (errors.length > 0) {
+      return res.status(400).json({ message: errors.join('；') });
+    }
     const agent = await aiAgentManager.createAgent(req.body);
     res.status(201).json(agent);
   } catch (err) {
@@ -34,6 +66,10 @@ router.post('/', authMiddleware, async (req, res, next) => {
 
 router.put('/:id', authMiddleware, async (req, res, next) => {
   try {
+    const errors = validateAgent(req.body, true);
+    if (errors.length > 0) {
+      return res.status(400).json({ message: errors.join('；') });
+    }
     const agent = await aiAgentManager.updateAgent(req.params.id, req.body);
     if (!agent) {
       return res.status(404).json({ message: '智能体不存在' });

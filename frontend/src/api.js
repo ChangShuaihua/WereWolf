@@ -17,10 +17,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
+    // W23: 401 拦截排除登录/注册接口；并避免在 /login 页面重复跳转
     if (err.response?.status === 401) {
-      localStorage.removeItem('werewolf_token')
-      localStorage.removeItem('werewolf_user')
-      router.push('/login')
+      const url = err.config?.url || ''
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register')
+      const isOnLoginPage = router.currentRoute?.value?.path === '/login'
+      if (!isAuthEndpoint && !isOnLoginPage) {
+        localStorage.removeItem('werewolf_token')
+        localStorage.removeItem('werewolf_user')
+        router.push('/login')
+      }
     }
     return Promise.reject(err)
   }

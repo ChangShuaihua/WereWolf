@@ -2,26 +2,29 @@
   <div class="vote-panel">
     <p class="vote-title">🗳️ 请选择要放逐的玩家 ({{ votedCount }}/{{ totalVoters }})</p>
 
-    <div v-if="!hasVoted && candidates.length > 0" class="target-grid">
+    <div v-if="candidates.length > 0" class="target-grid">
       <button
         v-for="c in candidates"
         :key="c.id"
         class="btn btn-target btn-vote"
-        :class="{ selected: selectedCandidate === c.id }"
+        :class="{ selected: selectedCandidate === c.id, voted: hasVoted && votedTargetId === c.id }"
+        :disabled="hasVoted && votedTargetId === c.id"
         @click="selectCandidate(c.id)"
       >
         {{ c.username }}
       </button>
     </div>
 
-    <div v-if="selectedCandidate && !hasVoted" class="action-confirm">
-      <button class="btn btn-danger" @click="confirmVote">🗳️ 确认投票</button>
-      <button class="btn btn-secondary" @click="selectedCandidate = null">取消</button>
+    <div v-if="selectedCandidate" class="action-confirm">
+      <button class="btn btn-danger" @click="confirmVote">🗳️ {{ hasVoted ? '修改投票' : '确认投票' }}</button>
+      <button class="btn btn-secondary" @click="cancelSelect">取消</button>
     </div>
 
-    <div v-if="hasVoted" class="vote-done">
+    <div v-if="hasVoted && !selectedCandidate" class="vote-done">
       <p class="vote-message">✅ 你的投票已确认</p>
       <p class="vote-target">你投票给了 <strong>{{ votedTargetName }}</strong></p>
+      <!-- W20: 允许改投 -->
+      <button class="btn btn-secondary btn-change-vote" @click="changeVote">✏️ 修改投票</button>
     </div>
   </div>
 </template>
@@ -49,7 +52,8 @@ const votedTargetName = computed(() => {
 })
 
 function selectCandidate(id) {
-  if (hasVoted.value) return
+  // W20: 已投票情况下，仅当选不同目标时才允许重新选择
+  if (hasVoted.value && id === votedTargetId.value) return
   selectedCandidate.value = selectedCandidate.value === id ? null : id
 }
 
@@ -58,6 +62,15 @@ function confirmVote() {
   emit('vote', selectedCandidate.value)
   votedTargetId.value = selectedCandidate.value
   hasVoted.value = true
+  selectedCandidate.value = null
+}
+
+// W20: 切换至改投模式
+function changeVote() {
+  selectedCandidate.value = null
+}
+
+function cancelSelect() {
   selectedCandidate.value = null
 }
 </script>
@@ -107,6 +120,18 @@ function confirmVote() {
   background: #4ade80;
   color: #0f172a;
   font-weight: 600;
+}
+
+/* W20: 已投票目标高亮 */
+.btn-target.voted {
+  border-color: #f87171;
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.btn-change-vote {
+  margin-top: 14px;
+  padding: 8px 18px;
 }
 
 .action-confirm {

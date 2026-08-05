@@ -132,6 +132,8 @@ const nightTimerInterval = ref(null)
 
 // Handle reconnection: if prompt has alreadyDone, restore state
 watch(() => props.prompt, (newPrompt) => {
+  // W21: 任何 prompt 变化都先清理旧计时器，避免多 timer 并行
+  clearInterval(timerInterval.value)
   if (newPrompt?.alreadyDone) {
     // Reconnection: player already acted, restore confirmation state
     actionDone.value = true
@@ -146,7 +148,7 @@ watch(() => props.prompt, (newPrompt) => {
     timeLeft.value = newPrompt.timeout || 30
     startTimer()
   } else {
-    clearInterval(timerInterval.value)
+    // prompt 已清空，无动作
   }
 }, { immediate: true })
 

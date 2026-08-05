@@ -129,6 +129,8 @@ export const useGameStore = defineStore('game', () => {
   function _onVoteUpdate(data) {
     votedCount.value = data.votedCount
     totalVoters.value = data.totalCount
+    // C15: prefer explicit own-vote from backend
+    if (data.myVote) myVote.value = data.myVote
   }
 
   function _onVoteResult(data) {
@@ -138,12 +140,16 @@ export const useGameStore = defineStore('game', () => {
       if (p) p.isAlive = false
     }
     message.value = data.message
+    // C15: prefer explicit myVote field; fall back to message parsing only if absent
+    if (data.myVote) {
+      myVote.value = data.myVote
+    }
     // Only clear candidates when there's an actual elimination result (not reconnection confirmation)
     if (data.eliminated || (data.votes && data.votes.length > 0)) {
       candidates.value = []
-      myVote.value = ''
-    } else if (data.message && data.message.includes('你已投票给')) {
-      // Reconnection: extract vote target from confirmation message
+      if (!data.myVote) myVote.value = ''
+    } else if (data.message && data.message.includes('你已投票给') && !data.myVote) {
+      // Reconnection fallback: extract vote target from confirmation message
       const target = candidates.value.find(c => data.message.includes(c.username))
       if (target) myVote.value = target.id
     }
@@ -199,12 +205,17 @@ export const useGameStore = defineStore('game', () => {
     socket.off('game_started', _onGameStarted)
     socket.off('phase_change', _onPhaseChange)
     socket.off('night_action_prompt', _onNightActionPrompt)
+    socket.off('night_role_turn', _onNightRoleTurn)
+    socket.off('night_role_done', _onNightRoleDone)
     socket.off('seer_result', _onSeerResult)
     socket.off('night_result', _onNightResult)
+    socket.off('hunter_trigger', _onHunterTrigger)
+    socket.off('hunter_result', _onHunterResult)
     socket.off('vote_update', _onVoteUpdate)
     socket.off('vote_result', _onVoteResult)
     socket.off('game_over', _onGameOver)
     socket.off('player_disconnected', _onPlayerDisconnected)
+    socket.off('speaker_change', _onSpeakerChange)
   }
 
   function submitNightAction({ action, targetId }) {

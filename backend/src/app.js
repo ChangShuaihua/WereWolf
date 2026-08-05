@@ -13,7 +13,33 @@ const aiAgentManager = require('./ai/AIAgentManager');
 const authRoutes = require('./routes/auth');
 const aiAgentRoutes = require('./routes/aiAgentRoutes');
 const initSocket = require('./socket');
-const AppError = require('./utils/AppError');
+const { AppError } = require('./utils/AppError');
+
+/**
+ * Validate required environment variables at startup (C8/C9).
+ * Hard-fails the process if security-critical config is missing.
+ */
+function validateEnv() {
+  const errors = [];
+
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    errors.push('JWT_SECRET must be set and at least 32 characters long');
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.DB_USER) errors.push('DB_USER must be set in production');
+    if (!process.env.DB_PASSWORD) errors.push('DB_PASSWORD must be set in production');
+    if (!process.env.DB_HOST) errors.push('DB_HOST must be set in production');
+  }
+
+  if (errors.length > 0) {
+    console.error('[validateEnv] Environment validation failed:');
+    errors.forEach(e => console.error('  - ' + e));
+    process.exit(1);
+  }
+}
+
+validateEnv();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -147,20 +173,25 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('[Error]', err);
-  
+
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({ message: err.message });
   }
-  
+
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ message: '请求体过大' });
   }
-  
+
   if (err.message === 'CORS not allowed') {
     return res.status(403).json({ message: '跨域请求被拒绝' });
   }
-  
-  res.status(500).json({ message: '服务器内部错误' });
+
+  const payload = { message: '服务器内部错误' };
+  // Include stack trace only outside production (C10)
+  if (process.env.NODE_ENV !== 'production' && err.stack) {
+    payload.stack = err.stack;
+  }
+  res.status(500).json(payload);
 });
 
 // Initialize Socket.io
@@ -197,4 +228,13 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   await shutdownRedis();
   process.exit(0);
+});
+
+// C10: catch unhandled async errors so the process stays alive and logs them
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[unhandledRejection]', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
 });

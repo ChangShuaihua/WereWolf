@@ -5,13 +5,22 @@ const TTL = 7200;
 const SOCKET_TTL = 14400;
 const KEY_PREFIX = process.env.REDIS_KEY_PREFIX || 'werewolf';
 
-function runRedisTask(task) {
+function runRedisTask(task, retries = 2) {
   const redis = getRedisClient();
   if (!redis) return;
 
-  task(redis).catch((err) => {
-    console.warn('[cache] Redis sync failed:', err.message);
-  });
+  const attempt = (remaining) => {
+    task(redis).catch((err) => {
+      if (remaining > 0) {
+        // W2: retry transient Redis failures after a short delay
+        setTimeout(() => attempt(remaining - 1), 500);
+      } else {
+        console.warn('[cache] Redis sync failed:', err.message);
+      }
+    });
+  };
+
+  attempt(retries);
 }
 
 function defaultSerialize(value) {
@@ -54,7 +63,7 @@ function createTtlCache(name, defaultTTL, options = {}) {
         await redis.del(`${redisPrefix}${key}`);
       });
     },
-    keys() { return store.getKeys(); },
+    keys() { return store.keys(); },
     clear() {
       store.flushAll();
       runRedisTask(async (redis) => {

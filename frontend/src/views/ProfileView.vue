@@ -48,6 +48,7 @@
             v-model="form.password"
             type="password"
             placeholder="输入新密码（至少6位）"
+            minlength="6"
             class="form-input"
           />
           <span class="form-hint">密码长度至少6位</span>
@@ -59,6 +60,7 @@
             v-model="form.confirmPassword"
             type="password"
             placeholder="再次输入新密码"
+            minlength="6"
             class="form-input"
           />
         </div>

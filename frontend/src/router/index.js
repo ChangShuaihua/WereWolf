@@ -21,13 +21,46 @@ const router = createRouter({
   routes,
 })
 
+// W24: 通过解析 JWT payload 的 exp 字段判断 token 是否过期
+function isTokenExpired(token) {
+  if (!token) return true
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return true
+    // base64url -> base64
+    let payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    // 补齐 padding
+    while (payloadB64.length % 4) payloadB64 += '='
+    const payload = JSON.parse(atob(payloadB64))
+    if (!payload || typeof payload.exp !== 'number') return false
+    // 提前 30s 判定过期，避免边界请求失败
+    const nowSec = Math.floor(Date.now() / 1000)
+    return payload.exp < nowSec + 30
+  } catch (e) {
+    // 解析失败视为过期，强制重新登录
+    return true
+  }
+}
+
 // Auth guard
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('werewolf_token')
-  if (to.meta.requiresAuth && !token) {
+  const expired = isTokenExpired(token)
+  // W24: token 过期视为未登录
+  if (to.meta.requiresAuth && (!token || expired)) {
+    if (expired && token) {
+      localStorage.removeItem('werewolf_token')
+      localStorage.removeItem('werewolf_user')
+    }
     next('/login')
-  } else if (to.path === '/login' && token) {
-    next('/lobby')
+  } else if (to.path === '/login' && token && !expired) {
+    // Check for saved room code to auto-rejoin after refresh
+    const savedRoomCode = localStorage.getItem('werewolf_room_code')
+    if (savedRoomCode) {
+      next(`/room/${savedRoomCode}`)
+    } else {
+      next('/lobby')
+    }
   } else {
     next()
   }

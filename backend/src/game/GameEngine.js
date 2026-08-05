@@ -5,6 +5,8 @@ const { getRolesForGame, getRoleName } = require('./RoleConfig');
 class GameEngine extends EventEmitter {
   constructor(roomCode, players, emit, maxPlayers = 6) {
     super();
+    // W4: allow more listeners (AI + timers + night_action listeners)
+    this.setMaxListeners(20);
     this.roomCode = roomCode;
     this.emit = emit;                    // callback to emit socket events
     this.players = players;              // [{ id, username, socketId, isAlive, isReady }]
@@ -26,10 +28,13 @@ class GameEngine extends EventEmitter {
     // Vote state
     this.votes = {};                     // { voterSocketId: targetSocketId }
     this.nightCount = 0;
+    this.pkRound = 0;                    // C3: PK (tie-break) vote round counter
+    this.pkCandidates = [];              // C3: candidates restricted during PK
     
     // Hunter state
     this.hunterDied = false;             // Whether hunter died this phase
     this.hunterKilledByPoison = false;   // Whether hunter was killed by poison
+    this.pendingHunterId = null;         // socketId of hunter currently pending shoot (C7 guard)
     
     // Speaking state (turn-based)
     this.speakingOrder = [];             // Array of socketIds in speaking order
@@ -114,7 +119,9 @@ class GameEngine extends EventEmitter {
     // Assign roles
     const roleList = getRolesForGame(readyPlayers.length);
     readyPlayers.forEach((p, i) => {
-      this.roles[p.socketId] = roleList[i];
+      const role = roleList[i];
+      this.roles[p.socketId] = role;
+      p.role = role; // Persist role on player object for reliable reconnect recovery
     });
 
     // Mark all ready players as alive
@@ -186,6 +193,29 @@ class GameEngine extends EventEmitter {
   }
 
   async runNightSequence() {
+    // W3: total night budget of 150s; force-resolve if exceeded
+    const nightBudgetMs = 150000;
+    let timeoutHandle;
+    const timeoutPromise = new Promise((resolve) => {
+      timeoutHandle = setTimeout(() => {
+        console.warn(`[GameEngine] Night sequence timed out after ${nightBudgetMs}ms, forcing resolveNight`);
+        resolve('timeout');
+      }, nightBudgetMs);
+    });
+
+    const result = await Promise.race([
+      this._runNightSequenceInner(),
+      timeoutPromise,
+    ]);
+
+    clearTimeout(timeoutHandle);
+
+    if (result === 'timeout' && this.phase === PHASE.NIGHT) {
+      this.resolveNight();
+    }
+  }
+
+  async _runNightSequenceInner() {
     const alive = this.alivePlayers;
 
     // Wait for AI players to submit their night actions first
@@ -254,17 +284,21 @@ class GameEngine extends EventEmitter {
       message: '🐺 狼人行动结束',
     });
 
-    // Resolve werewolf vote - all werewolves must agree on the same target
+    // Resolve werewolf vote by majority (C2: no longer force-override each wolf's choice)
+    // Individual werewolf votes are preserved; the kill target is the majority winner.
+    // If tied, resolveNight will pick the first top target (and could randomize later).
     const werewolfActions = werewolves.filter(w => this.nightActions[w.socketId]?.action === 'kill');
     if (werewolfActions.length > 0) {
-      const firstAction = this.nightActions[werewolfActions[0].socketId];
-      const chosenTarget = firstAction.targetId;
-      
-      for (const w of werewolfActions) {
-        this.nightActions[w.socketId].targetId = chosenTarget;
+      const tally = {};
+      werewolfActions.forEach(w => {
+        const t = this.nightActions[w.socketId].targetId;
+        if (t) tally[t] = (tally[t] || 0) + 1;
+      });
+      const maxVotes = Math.max(...Object.values(tally));
+      const topTargets = Object.entries(tally).filter(([, v]) => v === maxVotes);
+      if (topTargets.length > 0) {
+        this.killedByWerewolves = topTargets[0][0];
       }
-      
-      this.killedByWerewolves = chosenTarget;
     }
 
     // 3. Seer checks (30 seconds)
@@ -411,8 +445,21 @@ class GameEngine extends EventEmitter {
     const player = this.getPlayer(socketId);
     if (!player || !player.isAlive) return;
 
+    const role = this.roles[socketId];
     const target = this.getPlayer(targetId);
-    
+
+    // C1: role-based validation (defense-in-depth; AI calls this directly)
+    if (action === 'save' && this.witchSaveUsed) return;            // witch save already used
+    if (action === 'poison' && this.witchPoisonUsed) return;        // witch poison already used
+    if (action === 'guard' && targetId && targetId === this.guardLastProtected) {
+      // Guard cannot protect the same player on consecutive nights
+      return;
+    }
+    if (action === 'kill' && target && this.roles[target.socketId] === ROLE.WEREWOLF) {
+      // Werewolves cannot target a teammate
+      return;
+    }
+
     // Store action (preserve first action for witch who can do both save+poison)
     if (!this.nightActions[socketId] || (action !== 'save' && action !== 'poison')) {
       this.nightActions[socketId] = { action, targetId };
@@ -577,20 +624,30 @@ class GameEngine extends EventEmitter {
     if (hunterDeath && !hunterKilledByPoison) {
       const aliveAfterNight = this.alivePlayers;
       if (aliveAfterNight.length > 0) {
+        // Mark pending hunter so only this socket may shoot (C7)
+        this.pendingHunterId = hunterDeath.id;
         // Send hunter trigger
         this.sendTo(hunterDeath.id, 'hunter_trigger', {
           message: '你已被杀，请选择带走一名玩家',
           targets: aliveAfterNight.map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) })),
         });
-        
+
         // Wait for hunter action or auto-shoot after timeout
         this.clearTimer();
         this.phaseTimer = setTimeout(() => {
           this._executeHunterShoot(hunterDeath.id);
         }, 10000);
-        
+
         return; // Wait for hunter action
       }
+    } else if (hunterDeath && hunterKilledByPoison) {
+      // C4: hunter was poisoned — cannot shoot, only broadcast a notice
+      this.broadcast('chat_message', {
+        username: '系统',
+        message: `☠️ ${hunterDeath.username} 被毒杀，无法开枪`,
+        timestamp: Date.now(),
+        isSystem: true,
+      });
     }
 
     // Check win condition
@@ -605,7 +662,10 @@ class GameEngine extends EventEmitter {
   _executeHunterShoot(hunterId) {
     const hunter = this.getPlayer(hunterId);
     const aliveAfterNight = this.alivePlayers;
-    
+
+    // Clear pending state regardless of outcome (C7)
+    this.pendingHunterId = null;
+
     if (!hunter || aliveAfterNight.length === 0) {
       this._continueAfterHunter();
       return;
@@ -636,9 +696,11 @@ class GameEngine extends EventEmitter {
   }
   
   _continueAfterHunter() {
+    // Clear pending hunter state (covers socket-driven shoot path, C7)
+    this.pendingHunterId = null;
     // Check win condition after hunter shooting
     if (this.checkWinCondition()) return;
-    
+
     // Transition to day
     setTimeout(() => this.startDay(), 2000);
   }
@@ -797,8 +859,12 @@ class GameEngine extends EventEmitter {
     
     const roleExtensions = extensions[role] || extensions[ROLE.VILLAGER];
     let result = trimmed;
-    
-    while (result.length < 30) {
+
+    // W12: bound iterations to avoid infinite loops if extensions can't extend the message
+    let iterations = 0;
+    const maxIterations = 5;
+    while (result.length < 30 && iterations < maxIterations) {
+      iterations++;
       const extension = roleExtensions[Math.floor(Math.random() * roleExtensions.length)];
       if (!result.endsWith(extension.replace(/。$/, ''))) {
         if (!result.endsWith('。') && !result.endsWith('，')) {
@@ -954,7 +1020,10 @@ class GameEngine extends EventEmitter {
     if (this.phase !== PHASE.VOTE) return;
     const voter = this.getPlayer(socketId);
     if (!voter || !voter.isAlive) return;
-    
+
+    // C3: during PK, votes must target one of the PK candidates
+    if (this.pkCandidates.length > 0 && !this.pkCandidates.includes(targetId)) return;
+
     const target = this.getPlayer(targetId);
 
     this.votes[socketId] = targetId;
@@ -987,29 +1056,35 @@ class GameEngine extends EventEmitter {
       }
     }
 
-    // Find max votes
+    // Find max votes and all targets sharing the max (C3: PK on tie)
     let maxVotes = 0;
-    let eliminated = null;
+    for (const count of Object.values(tally)) {
+      if (count > maxVotes) maxVotes = count;
+    }
+    const topTargets = Object.entries(tally)
+      .filter(([, count]) => count === maxVotes)
+      .map(([id]) => id);
     const voteDetails = Object.entries(tally).map(([id, count]) => {
       return { id, username: this.getSeatNum(id), votes: count };
     });
 
-    for (const [id, count] of Object.entries(tally)) {
-      if (count > maxVotes) {
-        maxVotes = count;
-        eliminated = id;
-      } else if (count === maxVotes) {
-        eliminated = null; // tie
-      }
+    // C3: tie-break via PK vote (only one PK round, then skip to night)
+    if (topTargets.length > 1 && maxVotes > 0) {
+      this._startPKVote(topTargets);
+      return;
     }
 
     let eliminatedPlayer = null;
-    if (eliminated && maxVotes > 0) {
-      eliminatedPlayer = this.getPlayer(eliminated);
+    if (topTargets.length === 1 && maxVotes > 0) {
+      eliminatedPlayer = this.getPlayer(topTargets[0]);
       if (eliminatedPlayer) {
         eliminatedPlayer.isAlive = false;
       }
     }
+
+    // Reset PK state after a resolved vote round
+    this.pkRound = 0;
+    this.pkCandidates = [];
 
     const result = {
       eliminated: eliminatedPlayer
@@ -1035,6 +1110,57 @@ class GameEngine extends EventEmitter {
 
     // Back to night
     setTimeout(() => this.startNight(), 3000);
+  }
+
+  /**
+   * C3: Start a PK (tie-break) vote round between the given candidates.
+   * Only one PK round is allowed; a second tie skips to night without elimination.
+   */
+  _startPKVote(pkCandidates) {
+    this.pkRound = (this.pkRound || 0) + 1;
+
+    // Second consecutive tie: no elimination, go to night
+    if (this.pkRound > 1) {
+      this.broadcast('vote_result', {
+        eliminated: null,
+        votes: [],
+        message: 'PK 平票，没有人被放逐',
+      });
+      this.broadcast('chat_message', {
+        username: '系统',
+        message: '🗳️ PK 平票，没有人被放逐',
+        timestamp: Date.now(),
+        isSystem: true,
+      });
+      this.pkRound = 0;
+      this.pkCandidates = [];
+      if (this.checkWinCondition()) return;
+      setTimeout(() => this.startNight(), 3000);
+      return;
+    }
+
+    // Reset votes and restrict candidates for the PK round
+    this.votes = {};
+    this.pkCandidates = pkCandidates;
+    this.candidates = pkCandidates;
+    this.lastPhaseMessage = `${pkCandidates.map(id => this.getSeatNum(id)).join('、')} 进入PK，请再次投票`;
+
+    this.broadcast('phase_change', {
+      phase: PHASE.VOTE,
+      isPK: true,
+      candidates: pkCandidates,
+      timeout: 30,
+      message: this.lastPhaseMessage,
+    });
+    this.broadcast('chat_message', {
+      username: '系统',
+      message: `🗳️ ${this.lastPhaseMessage}`,
+      timestamp: Date.now(),
+      isSystem: true,
+    });
+
+    this.clearTimer();
+    this.phaseTimer = setTimeout(() => this.resolveVote(), 30000);
   }
 
   // ==================== Win Condition ====================

@@ -5,7 +5,8 @@
         <span class="empty-icon">💬</span>
         <p>暂无消息，开始聊天吧</p>
       </div>
-      <div v-for="(msg, i) in messages" :key="i" class="chat-msg" :class="{ 'ai-msg': msg.isAI, 'system-msg': msg.isSystem }">
+      <!-- W18: 使用 timestamp+username+index 组合 key，避免列表变动时复用错位 -->
+      <div v-for="(msg, i) in messages" :key="(msg.timestamp || '') + '_' + (msg.username || '') + '_' + i" class="chat-msg" :class="{ 'ai-msg': msg.isAI, 'system-msg': msg.isSystem }">
         <span v-if="msg.isSystem" class="chat-system">{{ msg.message }}</span>
         <template v-else>
           <span class="chat-user">{{ msg.isAI ? '🤖 ' : '' }}{{ msg.username }}:</span>

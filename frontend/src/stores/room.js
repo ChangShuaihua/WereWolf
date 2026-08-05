@@ -5,7 +5,9 @@ import { useUserStore } from './user'
 import { useGameStore } from './game'
 
 export const useRoomStore = defineStore('room', () => {
-  const roomCode = ref('')
+  const ROOM_CODE_KEY = 'werewolf_room_code'
+
+  const roomCode = ref(localStorage.getItem(ROOM_CODE_KEY) || '')
   const players = ref([])
   const seats = ref([])
   const hostId = ref('')
@@ -24,6 +26,7 @@ export const useRoomStore = defineStore('room', () => {
   function _onRoomJoined(data) {
     console.log('[roomStore] room_joined', data)
     roomCode.value = data.code
+    localStorage.setItem(ROOM_CODE_KEY, data.code)
     players.value = data.players
     const mp = Number(data.maxPlayers) || 6
     seats.value = data.seats || buildDefaultSeats(mp)
@@ -75,6 +78,11 @@ export const useRoomStore = defineStore('room', () => {
     socket.off('room_update', _onRoomUpdate)
     socket.off('chat_message', _onChatMessage)
     socket.off('room_reset', _onRoomReset)
+    // W25: 清理待处理的 addAIPlayer onConnect 监听
+    if (_pendingAddAIHandler) {
+      socket.off('connect', _pendingAddAIHandler)
+      _pendingAddAIHandler = null
+    }
   }
 
   // ---- actions ----
@@ -102,6 +110,7 @@ export const useRoomStore = defineStore('room', () => {
   function leaveRoom() {
     socket.emit('leave_room', { roomCode: roomCode.value })
     roomCode.value = ''
+    localStorage.removeItem(ROOM_CODE_KEY)
     players.value = []
     seats.value = []
     hostId.value = ''
@@ -122,26 +131,31 @@ export const useRoomStore = defineStore('room', () => {
     socket.emit('chat', { message, roomCode: roomCode.value })
   }
 
+  // W25: 命名的 onConnectAddAI 处理器，确保可通过 socket.off 清理，避免重复触发
+  function onConnectAddAI(agentId) {
+    return function _onConnectAddAI() {
+      socket.off('connect', _onConnectAddAI)
+      socket.emit('add_ai_player', { roomCode: roomCode.value, agentId })
+    }
+  }
+
   function addAIPlayer(agentId = '') {
-    console.log('[roomStore] addAIPlayer called')
-    console.log('[roomStore] roomCode.value:', roomCode.value)
-    console.log('[roomStore] socket.connected:', socket.connected)
-    console.log('[roomStore] socket.id:', socket.id)
-    console.log('[roomStore] agentId:', agentId)
+    console.log('[roomStore] addAIPlayer called, roomCode=', roomCode.value, 'agentId=', agentId, 'connected=', socket.connected)
 
     if (!socket.connected) {
       console.warn('[roomStore] Socket not connected, connecting...')
+      // W25: 先清理可能存在的同名监听，避免重复绑定
+      socket.off('connect', _pendingAddAIHandler)
+      _pendingAddAIHandler = onConnectAddAI(agentId)
+      socket.on('connect', _pendingAddAIHandler)
       socket.connect()
-      socket.once('connect', () => {
-        console.log('[roomStore] Socket connected, now sending add_ai_player')
-        socket.emit('add_ai_player', { roomCode: roomCode.value, agentId })
-      })
     } else {
-      console.log('[roomStore] Sending add_ai_player event with roomCode:', roomCode.value)
       socket.emit('add_ai_player', { roomCode: roomCode.value, agentId })
-      console.log('[roomStore] add_ai_player event sent')
     }
   }
+
+  // W25: 持有当前待处理的 onConnect 句柄，便于在 unbindEvents 时清理
+  let _pendingAddAIHandler = null
 
   function removeAIPlayer(aiSocketId) {
     console.log('[roomStore] removeAIPlayer called, aiSocketId:', aiSocketId)
@@ -175,5 +189,7 @@ export const useRoomStore = defineStore('room', () => {
     bindEvents, unbindEvents,
     createRoom, joinRoom, leaveRoom,
     toggleReady, startGame, sendChat, addAIPlayer, removeAIPlayer, isHost, allReady,
+    clearRoomCode: () => { roomCode.value = ''; localStorage.removeItem(ROOM_CODE_KEY) },
+    getSavedRoomCode: () => localStorage.getItem(ROOM_CODE_KEY),
   }
 })

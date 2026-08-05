@@ -3,6 +3,22 @@ const { gameCache } = require('../utils/cache');
 const { GAME_MODES } = require('../game/constants');
 const aiGameHandler = require('../game/AIGameHandler');
 
+// W9: per-socket chat rate limiting (3 messages/sec)
+const chatRateMap = new Map(); // socketId -> timestamps[]
+const CHAT_RATE_WINDOW_MS = 1000;
+const CHAT_RATE_MAX = 3;
+function isChatRateLimited(socketId) {
+  const now = Date.now();
+  const arr = (chatRateMap.get(socketId) || []).filter(t => now - t < CHAT_RATE_WINDOW_MS);
+  if (arr.length >= CHAT_RATE_MAX) {
+    chatRateMap.set(socketId, arr);
+    return true;
+  }
+  arr.push(now);
+  chatRateMap.set(socketId, arr);
+  return false;
+}
+
 /**
  * Generate a 6-character room code
  */
@@ -69,11 +85,15 @@ function createRoom(socket, username, userId, maxPlayers = 6) {
 
   let code = generateRoomCode();
 
-  // Prevent duplicates
+  // Prevent duplicates (W11: raise cap to 50; fall back to timestamp suffix in extreme cases)
   let attempts = 0;
-  while (roomCache.has(code) && attempts < 10) {
+  while (roomCache.has(code) && attempts < 50) {
     code = generateRoomCode();
     attempts++;
+  }
+  if (roomCache.has(code)) {
+    // Extremely unlikely: append a short timestamp suffix to guarantee uniqueness
+    code = generateRoomCode() + Date.now().toString(36).slice(-4).toUpperCase();
   }
 
   const room = {
@@ -150,7 +170,7 @@ async function addAIPlayer(socket, code, agentId = null) {
     timestamp: Date.now(),
   };
   room.chat.push(welcomeMsg);
-  if (room.chat.length > 100) room.chat.shift();
+  if (room.chat.length > 100) room.chat = room.chat.slice(-100);
 
   const io = require('../app').getIO();
   io.to(code).emit('chat_message', welcomeMsg);
@@ -196,7 +216,7 @@ function removeAIPlayer(socket, code, aiSocketId) {
     timestamp: Date.now(),
   };
   room.chat.push(leaveMsg);
-  if (room.chat.length > 100) room.chat.shift();
+  if (room.chat.length > 100) room.chat = room.chat.slice(-100);
 
   const io = require('../app').getIO();
   io.to(code).emit('chat_message', leaveMsg);
@@ -253,20 +273,15 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
         gamePlayer.disconnectTime = null;
         
         // Restore role socket mapping
-        if (gamePlayer.isAlive && game.roles && oldSocketId !== null) {
-          if (game.roles[oldSocketId]) {
+        if (gamePlayer.isAlive && game.roles) {
+          if (oldSocketId !== null && game.roles[oldSocketId]) {
+            // Reconnect from a still-open socket: migrate mapping directly
             game.roles[socket.id] = game.roles[oldSocketId];
             delete game.roles[oldSocketId];
-          }
-        } else if (gamePlayer.isAlive && game.roles) {
-          // oldSocketId is null (disconnected), find role by process of elimination
-          for (const [oldKey, role] of Object.entries(game.roles)) {
-            const playerWithRole = game.players.find(p => p.socketId === oldKey);
-            if (!playerWithRole) {
-              game.roles[socket.id] = role;
-              delete game.roles[oldKey];
-              break;
-            }
+          } else if (gamePlayer.role) {
+            // Reconnect after disconnect: read role directly from player object (C6)
+            // Avoids fragile "process of elimination" recovery that could assign wrong role
+            game.roles[socket.id] = gamePlayer.role;
           }
         }
 
@@ -392,6 +407,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
               eliminated: null,
               votes: [],
               message: `你已投票给 ${votedTarget ? game.getSeatNum(game.votes[socket.id]) : '未知'}`,
+              myVote: game.votes[socket.id], // C15: explicit own-vote for reliable reconnect
             });
           }
         }
@@ -482,7 +498,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     timestamp: Date.now(),
   };
   room.chat.push(welcomeMsg);
-  if (room.chat.length > 100) room.chat.shift();
+  if (room.chat.length > 100) room.chat = room.chat.slice(-100);
 
   roomCache.set(code, room);
 
@@ -516,7 +532,18 @@ function shouldDestroyRoom(room, leavingUserId) {
 function destroyRoom(code) {
   const aiGameHandler = require('../game/AIGameHandler');
   aiGameHandler.cleanup(code);
-  
+
+  // W6: clear any pending disconnect timers so they don't fire after room is gone
+  const room = roomCache.get(code);
+  if (room && room.players) {
+    for (const p of room.players) {
+      if (p.disconnectTimer) {
+        clearTimeout(p.disconnectTimer);
+        p.disconnectTimer = null;
+      }
+    }
+  }
+
   roomCache.del(code);
   gameCache.del(code);
   
@@ -540,14 +567,15 @@ function leaveRoom(socket, code, isDisconnect = false) {
     player.socketId = null;
     roomCache.set(code, room);
     broadcastRoomUpdate(code);
-    
-    setTimeout(() => {
+
+    // W7: track the disconnect timer so destroyRoom can clean it up
+    player.disconnectTimer = setTimeout(() => {
       const roomCheck = roomCache.get(code);
       if (roomCheck) {
         const playerCheck = roomCheck.players.find(p => p.userId === leavingUserId);
         if (playerCheck && playerCheck.socketId === null) {
           roomCheck.players = roomCheck.players.filter(p => p.userId !== leavingUserId);
-          
+
           if (roomCheck.players.length === 0) {
             destroyRoom(code);
           } else if (shouldDestroyRoom(roomCheck, leavingUserId)) {
@@ -624,6 +652,12 @@ function addChat(socket, code, message) {
   const player = room.players.find(p => p.socketId === socket.id);
   if (!player) { console.log('[roomHandler] addChat: player not found, socketId=', socket.id); return; }
 
+  // W9: rate-limit chat (max 3 messages per second per socket)
+  if (isChatRateLimited(socket.id)) {
+    socket.emit('error', { message: '发言过快，请稍后再试' });
+    return;
+  }
+
   // Use seat number if game is in progress
   const game = gameCache.get(code);
   let displayName;
@@ -643,7 +677,7 @@ function addChat(socket, code, message) {
   };
 
   room.chat.push(chatMsg);
-  if (room.chat.length > 100) room.chat.shift();
+  if (room.chat.length > 100) room.chat = room.chat.slice(-100);
 
   roomCache.set(code, room);
 
@@ -716,8 +750,8 @@ function handleDisconnect(socket) {
 
         console.log(`[roomHandler] Player ${userId} disconnected during game in room ${code}, waiting for reconnection (60s)`);
 
-        // Set timeout to mark as dead if not reconnected
-        setTimeout(() => {
+        // Set timeout to mark as dead if not reconnected (W6: track timer for cleanup)
+        player.disconnectTimer = setTimeout(() => {
           const gameCheck = gameCache.get(code);
           if (gameCheck) {
             const gamePlayerCheck = gameCheck.players.find(p => p.userId === userId);

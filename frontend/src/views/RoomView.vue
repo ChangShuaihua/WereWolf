@@ -13,11 +13,6 @@
             <span class="room-mode-badge">{{ roomStore.maxPlayers }}人局</span>
             <span class="room-divider">·</span>
             <span class="room-player-count">{{ roomStore.players.length }}/{{ roomStore.maxPlayers }}</span>
-            <span class="room-divider">·</span>
-            <button class="btn-copy" :class="{ copied: codeCopied }" @click="copyCode">
-              <span class="copy-icon">{{ codeCopied ? '✓' : '📋' }}</span>
-              <span>{{ codeCopied ? '已复制' : '复制房间号' }}</span>
-            </button>
           </div>
         </div>
 
@@ -152,7 +147,6 @@ const userStore = useUserStore()
 const loading = ref(true)
 const aiAgents = ref([])
 const selectedAgentId = ref('')
-const codeCopied = ref(false)
 
 const myIsReady = computed(() => {
   const me = roomStore.players.find(p => p.socketId === socket.id)
@@ -193,6 +187,7 @@ async function fetchRoomInfo() {
   try {
     const { data } = await api.get(`/room/${code}`)
     roomStore.roomCode = data.code
+    localStorage.setItem('werewolf_room_code', data.code)
     roomStore.hostId = data.hostId
     roomStore.players = data.players
     roomStore.seats = data.seats || []
@@ -224,13 +219,26 @@ onMounted(async () => {
   socket.on('game_started', _onGameStarted)
 
   if (userStore.user) {
-    await authenticate(userStore.user.id, userStore.user.username)
+    await authenticate() // W26: 统一无参签名
   }
 
   await fetchRoomInfo()
   await fetchAIAgents()
 
-  roomStore.joinRoom(roomStore.roomCode)
+  // FIX: set up listener BEFORE emitting join_room
+  await new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      socket.off('room_joined', onJoined)
+      resolve()
+    }, 5000)
+    function onJoined(data) {
+      clearTimeout(timeout)
+      socket.off('room_joined', onJoined)
+      resolve()
+    }
+    socket.once('room_joined', onJoined)
+    roomStore.joinRoom(roomStore.roomCode)
+  })
 })
 
 onUnmounted(() => {
@@ -240,12 +248,6 @@ onUnmounted(() => {
 function handleLeave() {
   roomStore.leaveRoom()
   router.push('/lobby')
-}
-
-function copyCode() {
-  navigator.clipboard.writeText(roomStore.roomCode).catch(() => {})
-  codeCopied.value = true
-  setTimeout(() => { codeCopied.value = false }, 2000)
 }
 </script>
 
@@ -372,38 +374,6 @@ function copyCode() {
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-weight: 600;
-}
-
-.btn-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  background: var(--bg-secondary);
-  border: var(--border-thin);
-  border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
-  font-size: 0.78rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: var(--font-sans);
-}
-
-.btn-copy:hover {
-  background: rgba(20, 184, 166, 0.1);
-  border-color: rgba(20, 184, 166, 0.3);
-  color: var(--ai-secondary);
-}
-
-.btn-copy.copied {
-  background: rgba(54, 211, 153, 0.1);
-  border-color: rgba(54, 211, 153, 0.25);
-  color: var(--status-success);
-}
-
-.btn-copy .copy-icon {
-  font-size: 0.85rem;
 }
 
 .room-header-right {

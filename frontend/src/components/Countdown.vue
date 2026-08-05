@@ -27,10 +27,11 @@ const urgencyClass = computed(() => {
   return 'safe'
 })
 
+// W17: immediate:true 确保组件挂载后立即启动倒计时，避免初始空白
 watch([() => props.timeout, () => props.phase], ([newTimeout]) => {
   remaining.value = newTimeout
   startCountdown()
-})
+}, { immediate: true })
 
 function startCountdown() {
   clearInterval(timer)

@@ -6,19 +6,35 @@ require('dotenv').config();
 
 const router = express.Router();
 
+// W15: username allows letters, digits, underscore, and CJK; 2-20 chars
+const USERNAME_REGEX = /^[a-zA-Z0-9_\u4e00-\u9fa5]{2,20}$/;
+
+function validateUsername(username) {
+  if (!username || typeof username !== 'string') return '用户名不能为空';
+  if (!USERNAME_REGEX.test(username)) {
+    return '用户名只能包含字母、数字、下划线或中文，长度2-20个字符';
+  }
+  return null;
+}
+
+// W16: password must be at least 6 chars and contain both letters and numbers
+function validatePassword(password) {
+  if (!password || typeof password !== 'string') return '密码不能为空';
+  if (password.length < 6) return '密码长度不能少于6位';
+  if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+    return '密码必须包含字母和数字';
+  }
+  return null;
+}
+
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ message: '用户名和密码不能为空' });
-    }
-    if (username.length < 2 || username.length > 20) {
-      return res.status(400).json({ message: '用户名长度应为2-20个字符' });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ message: '密码长度不能少于6位' });
-    }
+    const usernameErr = validateUsername(username);
+    if (usernameErr) return res.status(400).json({ message: usernameErr });
+    const passwordErr = validatePassword(password);
+    if (passwordErr) return res.status(400).json({ message: passwordErr });
 
     const existing = await User.findByUsername(username);
     if (existing) {
@@ -101,9 +117,8 @@ router.put('/me', authMiddleware, async (req, res) => {
     }
 
     if (username) {
-      if (username.length < 2 || username.length > 20) {
-        return res.status(400).json({ message: '用户名长度应为2-20个字符' });
-      }
+      const usernameErr = validateUsername(username);
+      if (usernameErr) return res.status(400).json({ message: usernameErr });
       const existing = await User.findByUsername(username);
       if (existing && existing.id !== req.user.id) {
         return res.status(400).json({ message: '用户名已存在' });
@@ -111,9 +126,8 @@ router.put('/me', authMiddleware, async (req, res) => {
     }
 
     if (password) {
-      if (password.length < 6) {
-        return res.status(400).json({ message: '密码长度不能少于6位' });
-      }
+      const passwordErr = validatePassword(password);
+      if (passwordErr) return res.status(400).json({ message: passwordErr });
       const user = await User.findById(req.user.id);
       if (!user) {
         return res.status(404).json({ message: '用户不存在' });

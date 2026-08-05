@@ -6,6 +6,25 @@ const { PHASE, ROLE, TEAM } = require('./constants');
 const { getRoleName } = require('./RoleConfig');
 const aiAgentManager = require('../ai/AIAgentManager');
 
+// W13: simple concurrency limiter for parallel AI LLM calls
+function pLimit(concurrency) {
+  let active = 0;
+  const queue = [];
+  const next = () => {
+    if (active >= concurrency || queue.length === 0) return;
+    active++;
+    const { fn, resolve, reject } = queue.shift();
+    Promise.resolve().then(fn).then(resolve, reject).finally(() => {
+      active--;
+      next();
+    });
+  };
+  return (fn) => new Promise((resolve, reject) => {
+    queue.push({ fn, resolve, reject });
+    next();
+  });
+}
+
 class AIGameHandler {
   constructor() {
     this.aiNames = ['小狼', '预言', '女巫', '守卫', '猎人', '村民', '智者', '勇者'];
@@ -49,7 +68,7 @@ class AIGameHandler {
     
     return {
       socketId: `ai_${roomCode}_${this.aiIdCounter}`,
-      userId: 0,
+      userId: null,
       username: agent ? `${agent.avatar} ${agent.name}` : `🤖 人机${aiNumber}`,
       isReady: true,
       isAlive: true,
@@ -80,9 +99,11 @@ class AIGameHandler {
   }
 
   async _handleNightPhase(game, aiPlayers) {
-    for (const aiPlayer of aiPlayers) {
+    // W13: bound concurrency to 5 parallel AI decisions
+    const limit = pLimit(5);
+    await Promise.all(aiPlayers.map((aiPlayer) => limit(async () => {
       const role = game.getRole(aiPlayer.socketId);
-      if (!role) continue;
+      if (!role) return;
 
       try {
         const action = await this._decideNightAction(game, aiPlayer, role);
@@ -96,7 +117,7 @@ class AIGameHandler {
           game.submitNightAction(aiPlayer.socketId, fallbackAction.action, fallbackAction.targetId);
         }
       }
-    }
+    })));
   }
 
   async _decideNightAction(game, aiPlayer, role) {
@@ -254,7 +275,9 @@ class AIGameHandler {
   }
 
   async _handleVotePhase(game, aiPlayers) {
-    for (const aiPlayer of aiPlayers) {
+    // W13: bound concurrency to 5 parallel AI vote decisions
+    const limit = pLimit(5);
+    await Promise.all(aiPlayers.map((aiPlayer) => limit(async () => {
       try {
         const voteTarget = await this._decideVote(game, aiPlayer);
         if (voteTarget) {
@@ -267,7 +290,7 @@ class AIGameHandler {
           game.submitVote(aiPlayer.socketId, fallbackTarget);
         }
       }
-    }
+    })));
   }
 
   async _decideVote(game, aiPlayer) {
@@ -730,7 +753,7 @@ class AIGameHandler {
     };
 
     room.chat.push(chatMsg);
-    if (room.chat.length > 100) room.chat.shift();
+    if (room.chat.length > 100) room.chat = room.chat.slice(-100);
     roomCache.set(roomCode, room);
 
     const io = require('../app').getIO();

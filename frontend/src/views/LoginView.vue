@@ -1,5 +1,10 @@
 <template>
   <div class="login-container">
+    <button class="login-theme-toggle" @click="themeStore.toggleTheme()" :title="themeStore.isDark ? '切换到亮色模式' : '切换到暗色模式'">
+      <span v-if="themeStore.isDark" class="login-theme-icon">☀️</span>
+      <span v-else class="login-theme-icon">🌙</span>
+    </button>
+
     <div class="login-bg">
       <div class="stars"></div>
       <div class="moon"></div>
@@ -72,10 +77,12 @@
                 <input 
                   v-model="password" 
                   type="password" 
-                  placeholder="请输入密码" 
+                  :placeholder="isLogin ? '请输入密码' : '请输入密码（至少6位）'" 
+                  minlength="6"
                   required 
                 />
               </div>
+              <span v-if="!isLogin" class="input-hint">密码长度至少6位，建议包含字母和数字</span>
             </div>
 
             <div v-if="!isLogin" class="input-group">
@@ -86,6 +93,7 @@
                   v-model="confirmPassword" 
                   type="password" 
                   placeholder="请再次输入密码" 
+                  minlength="6"
                   required 
                 />
               </div>
@@ -126,10 +134,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
+import { useThemeStore } from '../stores/theme'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+const themeStore = useThemeStore()
 
 const isLogin = ref(true)
 const username = ref('')
@@ -171,6 +181,11 @@ async function handleSubmit() {
   loading.value = true
   try {
     if (!isLogin.value) {
+      if (password.value.length < 6) {
+        error.value = '密码长度至少6位'
+        loading.value = false
+        return
+      }
       if (password.value !== confirmPassword.value) {
         error.value = '两次输入的密码不一致'
         loading.value = false
@@ -567,6 +582,12 @@ async function handleSubmit() {
   color: var(--text-tertiary);
 }
 
+.input-hint {
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
 .error-message {
   display: flex;
   align-items: center;
@@ -716,5 +737,45 @@ async function handleSubmit() {
     top: 8%;
     right: 10%;
   }
+}
+
+.login-theme-toggle {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: var(--border-thin);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
+  box-shadow: var(--shadow-md);
+}
+
+.login-theme-toggle:hover {
+  background: var(--bg-tertiary);
+  transform: scale(1.1);
+  box-shadow: var(--shadow-lg);
+}
+
+.login-theme-toggle:active {
+  transform: scale(0.95);
+}
+
+.login-theme-icon {
+  font-size: 1.3rem;
+  transition: transform 0.3s ease;
+}
+
+.login-theme-toggle:hover .login-theme-icon {
+  transform: rotate(20deg);
 }
 </style>

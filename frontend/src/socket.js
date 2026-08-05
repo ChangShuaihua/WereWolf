@@ -2,10 +2,15 @@
 import { io } from 'socket.io-client'
 
 // 创建socket实例
+// W22: 显式配置重连参数，避免默认值不适用生产环境
 const socket = io('/', {
   autoConnect: false,// 禁止自动连接，在socket实例上添加了connect方法，用于手动连接
   transports: ['websocket', 'polling'], // 优先使用websocket
   path: '/socket.io', // socket.io服务器地址
+  reconnection: true, // W22: 启用断线重连
+  reconnectionAttempts: 10, // W22: 最多重连 10 次
+  reconnectionDelay: 1000, // W22: 首次重连延迟 1s
+  reconnectionDelayMax: 10000, // W22: 重连延迟上限 10s
 })
 
 // 添加自定义的connect方法
@@ -43,7 +48,7 @@ socket.on('force_logout', (data) => {
   window.location.href = `/login?${params.toString()}`
 })
 
-// 认证
+// W26: 认证 - 统一无参签名、增加超时与错误处理
 function authenticate() {
   return new Promise((resolve, reject) => {
     if (socket.connected) {
@@ -51,7 +56,45 @@ function authenticate() {
       return
     }
 
-    socket.once('authenticated', resolve)
+    let settled = false
+    let timeoutId = null
+
+    const onAuthenticated = (payload) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(payload || { socketId: socket.id })
+    }
+
+    const onConnectError = (err) => {
+      if (settled) return
+      // 仅在认证失败场景下 reject（其它 connect_error 由重连机制处理）
+      if (err && (err.message === 'AUTH_REQUIRED' || err.message === 'AUTH_FAILED')) {
+        settled = true
+        cleanup()
+        reject(err)
+      }
+    }
+
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+      socket.off('authenticated', onAuthenticated)
+      socket.off('connect_error', onConnectError)
+    }
+
+    // W26: 15s 超时兜底，避免 promise 永久挂起
+    timeoutId = setTimeout(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error('AUTH_TIMEOUT'))
+    }, 15000)
+
+    socket.on('authenticated', onAuthenticated)
+    socket.on('connect_error', onConnectError)
     socket.connect()
   })
 }

@@ -83,15 +83,41 @@
           <p class="section-desc">点击房间加入游戏</p>
         </div>
 
+        <div class="room-search-bar">
+          <div class="search-input-wrapper">
+            <span class="search-icon">🔍</span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              class="search-input"
+              placeholder="输入房间号或房主名称搜索..."
+              maxlength="10"
+              @keyup.enter="handleSearchJoin"
+            />
+            <button
+              v-if="searchQuery"
+              class="search-clear-btn"
+              @click="searchQuery = ''"
+            >✕</button>
+          </div>
+          <button
+            v-if="searchQuery"
+            class="btn btn-primary btn-join-by-code"
+            @click="handleSearchJoin"
+          >
+            直接加入
+          </button>
+        </div>
+
         <div class="rooms-grid">
-          <div v-if="rooms.length === 0" class="rooms-empty">
-            <div class="empty-icon">🎮</div>
-            <h3>暂无房间</h3>
-            <p>创建一个房间开始你的第一场游戏吧</p>
+          <div v-if="filteredRooms.length === 0" class="rooms-empty">
+            <div class="empty-icon">{{ searchQuery ? '🔍' : '🎮' }}</div>
+            <h3>{{ searchQuery ? '未找到匹配的房间' : '暂无房间' }}</h3>
+            <p>{{ searchQuery ? '试试其他房间号，或输入完整房间号后按回车加入' : '创建一个房间开始你的第一场游戏吧' }}</p>
           </div>
 
           <div
-            v-for="room in rooms"
+            v-for="room in filteredRooms"
             :key="room.code"
             class="room-card"
             @click="handleJoinRoom(room.code)"
@@ -179,6 +205,16 @@ const userStore = useUserStore()
 const rooms = ref([])
 const creating = ref(0)
 const hoveredMode = ref(null)
+const searchQuery = ref('')
+
+const filteredRooms = computed(() => {
+  if (!searchQuery.value.trim()) return rooms.value
+  const query = searchQuery.value.trim().toLowerCase()
+  return rooms.value.filter(room => 
+    room.code.toLowerCase().includes(query) ||
+    (room.hostUsername && room.hostUsername.toLowerCase().includes(query))
+  )
+})
 
 const gameModes = [
   { players: 6, icon: '👥', name: '六人局', description: '快节奏入门体验', roles: ['2狼人', '预言家', '女巫', '猎人', '村民'] },
@@ -204,7 +240,7 @@ function _onRoomDeleted(data) { rooms.value = rooms.value.filter(r => r.code !==
 
 onMounted(async () => {
   if (userStore.user) {
-    const authPromise = authenticate(userStore.user.id, userStore.user.username)
+    const authPromise = authenticate() // W26: 统一无参签名
     if (!socket.connected) socket.connect()
     await authPromise
   } else {
@@ -243,6 +279,13 @@ async function handleCreateRoom(mode) {
 function handleJoinRoom(code) {
   if (!code) return
   roomStore.joinRoom(code)
+}
+
+function handleSearchJoin() {
+  const code = searchQuery.value.trim().toUpperCase()
+  if (code) {
+    handleJoinRoom(code)
+  }
 }
 </script>
 
@@ -542,6 +585,82 @@ function handleJoinRoom(code) {
 }
 
 /* Rooms Section */
+.room-search-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  align-items: center;
+}
+
+.search-input-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: 0 16px;
+  transition: all 0.2s ease;
+}
+
+.search-input-wrapper:focus-within {
+  border-color: rgba(155, 109, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(155, 109, 255, 0.1);
+}
+
+.search-icon {
+  font-size: 1.1rem;
+  margin-right: 10px;
+  opacity: 0.7;
+}
+
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 12px 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+.search-input::placeholder {
+  color: var(--text-tertiary);
+  font-family: inherit;
+  letter-spacing: normal;
+}
+
+.search-clear-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--bg-tertiary);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.search-clear-btn:hover {
+  background: var(--status-dead);
+  color: white;
+}
+
+.btn-join-by-code {
+  white-space: nowrap;
+  padding: 12px 24px;
+}
+
 .rooms-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -860,6 +979,15 @@ function handleJoinRoom(code) {
   .stat-card {
     flex: 1;
     min-width: 0;
+  }
+
+  .room-search-bar {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn-join-by-code {
+    width: 100%;
   }
   
   .workshop-card {

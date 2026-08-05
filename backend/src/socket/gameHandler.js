@@ -2,6 +2,7 @@ const { gameCache, roomCache } = require('../utils/cache');
 const GameEngine = require('../game/GameEngine');
 const GameRecord = require('../models/GameRecord');
 const aiGameHandler = require('../game/AIGameHandler');
+const { PHASE } = require('../game/constants');
 
 /**
  * Start the game
@@ -45,7 +46,7 @@ function startGame(io, socket, code) {
           timestamp: Date.now(),
         };
         room.chat.push(replayMsg);
-        if (room.chat.length > 100) room.chat.shift();
+        if (room.chat.length > 100) room.chat = room.chat.slice(-100);
         roomCache.set(data.roomCode, room);
         io.to(data.roomCode).emit('chat_message', replayMsg);
       }
@@ -60,7 +61,7 @@ function startGame(io, socket, code) {
           isSystem: data.isSystem || false,
         };
         room.chat.push(chatMsg);
-        if (room.chat.length > 100) room.chat.shift();
+        if (room.chat.length > 100) room.chat = room.chat.slice(-100);
         roomCache.set(code, room);
       }
       io.to(code).emit(event, data);
@@ -96,8 +97,10 @@ function handleNightAction(socket, code, { action, targetId }) {
   const game = gameCache.get(code);
   if (!game) return;
 
+  // C7: validate player belongs to this game, is alive, and phase is NIGHT
+  if (game.phase !== PHASE.NIGHT) return;
   const player = game.getPlayer(socket.id);
-  if (!player) return;
+  if (!player || !player.isAlive) return;
 
   const role = game.getRole(socket.id);
 
@@ -135,6 +138,10 @@ function handleHunterShoot(socket, code, { targetId }) {
 
   const role = game.getRole(socket.id);
   if (role !== 'hunter') return;
+
+  // C7: only the hunter currently pending a shoot may act (hunter is dead at this point,
+  // so isAlive cannot be used; pendingHunterId gates the one-shot trigger)
+  if (game.pendingHunterId !== socket.id) return;
 
   const target = game.getPlayer(targetId);
   if (!target || !target.isAlive) return;
@@ -175,6 +182,11 @@ function handleVote(socket, code, { targetId }) {
   const game = gameCache.get(code);
   if (!game) return;
 
+  // C7: validate player belongs to this game, is alive, and phase is VOTE
+  if (game.phase !== PHASE.VOTE) return;
+  const voter = game.getPlayer(socket.id);
+  if (!voter || !voter.isAlive) return;
+
   game.submitVote(socket.id, targetId);
 }
 
@@ -192,26 +204,45 @@ function skipDay(code) {
  * Persist game result
  */
 async function handleGameResult(data) {
-  try {
-    const gameId = await GameRecord.create(
-      data.roomCode,
-      data.winner,
-      data.playerCount,
-      data.duration
-    );
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const gameId = await GameRecord.create(
+        data.roomCode,
+        data.winner,
+        data.playerCount,
+        data.duration
+      );
 
-    // Record each player
-    for (const p of data.players) {
-      const room = roomCache.get(data.roomCode);
-      const roomPlayer = room?.players.find(rp => rp.socketId === p.id);
-      if (roomPlayer?.userId) {
-        await GameRecord.addPlayer(gameId, roomPlayer.userId, p.role, p.isWinner);
+      // Record each player
+      for (const p of data.players) {
+        const room = roomCache.get(data.roomCode);
+        const roomPlayer = room?.players.find(rp => rp.socketId === p.id);
+        if (roomPlayer?.userId) {
+          await GameRecord.addPlayer(gameId, roomPlayer.userId, p.role, p.isWinner);
+        }
+      }
+
+      console.log(`Game ${data.roomCode} ended. Winner: ${data.winner}, Duration: ${data.duration}s`);
+      return;
+    } catch (err) {
+      console.error(`[handleGameResult] attempt ${attempt}/${maxAttempts} failed:`, err.message);
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 500 * attempt));
       }
     }
+  }
 
-    console.log(`Game ${data.roomCode} ended. Winner: ${data.winner}, Duration: ${data.duration}s`);
-  } catch (err) {
-    console.error('Failed to save game result:', err);
+  // W8: all retries failed — persist to Redis recovery queue for later reconciliation
+  try {
+    const { getRedisClient } = require('../config/redis');
+    const redis = getRedisClient();
+    if (redis) {
+      await redis.lPush('werewolf:failed_games', JSON.stringify({ ...data, failedAt: Date.now() }));
+      console.warn(`[handleGameResult] Saved failed game ${data.roomCode} to Redis recovery queue`);
+    }
+  } catch (e) {
+    console.error('[handleGameResult] Failed to persist to Redis recovery queue:', e.message);
   }
 }
 
