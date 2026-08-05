@@ -65,7 +65,7 @@ function confirmAction() {
 <style scoped>
 .hunter-panel {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-  padding: 24px;
+  padding: 14px;
   border-radius: 16px;
   color: #fff;
   border: 1px solid rgba(239, 68, 68, 0.2);
@@ -78,31 +78,31 @@ function confirmAction() {
 
 .hunter-waiting {
   text-align: center;
-  padding: 24px;
+  padding: 14px;
   color: #cbd5e1;
 }
 
 .action-done {
   text-align: center;
-  padding: 24px;
+  padding: 14px;
 }
 
 .action-done .action-message {
-  font-size: 18px;
-  margin-bottom: 16px;
+  font-size: 16px;
+  margin-bottom: 12px;
   color: #4ade80;
 }
 
 .confirmed-info {
   background: rgba(74, 222, 128, 0.1);
   border: 1px solid rgba(74, 222, 128, 0.3);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 10px;
+  padding: 12px;
 }
 
 .confirmed-info p {
-  margin: 6px 0;
-  font-size: 15px;
+  margin: 4px 0;
+  font-size: 14px;
 }
 
 .confirmed-info strong {
@@ -110,8 +110,8 @@ function confirmAction() {
 }
 
 .action-message {
-  font-size: 15px;
-  margin-bottom: 16px;
+  font-size: 14px;
+  margin-bottom: 12px;
   text-align: center;
   color: #e2e8f0;
 }
@@ -119,19 +119,19 @@ function confirmAction() {
 .target-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   justify-content: center;
 }
 
 .btn-target {
-  padding: 10px 18px;
+  padding: 6px 14px;
   border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(51, 65, 85, 0.5);
   color: #e2e8f0;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .btn-target:hover:not(:disabled) {
@@ -153,9 +153,9 @@ function confirmAction() {
 
 .action-confirm {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
-  margin-top: 20px;
+  margin-top: 12px;
   width: 100%;
 }
 
@@ -163,7 +163,7 @@ function confirmAction() {
   background: linear-gradient(135deg, #ef4444, #dc2626);
   color: #fff;
   border: none;
-  padding: 10px 24px;
+  padding: 8px 20px;
   border-radius: 10px;
   cursor: pointer;
   font-size: 13px;
@@ -180,7 +180,7 @@ function confirmAction() {
   background: rgba(100, 116, 139, 0.5);
   color: #e2e8f0;
   border: 1px solid rgba(148, 163, 184, 0.3);
-  padding: 10px 24px;
+  padding: 8px 20px;
   border-radius: 10px;
   cursor: pointer;
   font-size: 13px;

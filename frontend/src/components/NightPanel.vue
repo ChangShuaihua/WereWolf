@@ -272,7 +272,7 @@ function confirmSkip() {
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  padding: 24px;
+  padding: 14px;
   border-radius: 16px;
   color: var(--text-primary);
   border: var(--border-medium);
@@ -285,7 +285,7 @@ function confirmSkip() {
 
 .night-waiting {
   text-align: center;
-  padding: 24px;
+  padding: 14px;
 }
 
 .night-waiting p:first-child {
@@ -315,25 +315,25 @@ function confirmSkip() {
 
 .action-done {
   text-align: center;
-  padding: 24px;
+  padding: 14px;
 }
 
 .action-done .action-message {
-  font-size: 18px;
-  margin-bottom: 16px;
+  font-size: 16px;
+  margin-bottom: 12px;
   color: var(--status-success);
 }
 
 .confirmed-info {
   background: rgba(52, 211, 153, 0.1);
   border: 1px solid rgba(52, 211, 153, 0.3);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 10px;
+  padding: 12px;
 }
 
 .confirmed-info p {
-  margin: 6px 0;
-  font-size: 15px;
+  margin: 4px 0;
+  font-size: 14px;
 }
 
 .confirmed-info strong {
@@ -343,15 +343,15 @@ function confirmSkip() {
 .seer-result {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 12px;
-  padding: 16px;
-  margin-top: 16px;
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 12px;
   text-align: center;
 }
 
 .seer-result p {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--villager-primary);
 }

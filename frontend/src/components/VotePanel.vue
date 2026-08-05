@@ -78,7 +78,7 @@ function cancelSelect() {
 <style scoped>
 .vote-panel {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-  padding: 24px;
+  padding: 14px;
   border-radius: 16px;
   border: 1px solid rgba(239, 68, 68, 0.2);
   box-shadow: 0 4px 20px rgba(239, 68, 68, 0.1);
@@ -89,29 +89,29 @@ function cancelSelect() {
 }
 
 .vote-title {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   font-weight: 600;
   color: #e2e8f0;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .target-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   justify-content: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .btn-target {
-  padding: 10px 18px;
+  padding: 6px 14px;
   border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(51, 65, 85, 0.5);
   color: #e2e8f0;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .btn-target:hover:not(:disabled) {

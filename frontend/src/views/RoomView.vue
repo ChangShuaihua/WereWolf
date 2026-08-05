@@ -253,8 +253,7 @@ function handleLeave() {
 
 <style scoped>
 .room-page {
-  height: calc(100vh - 76px);
-  max-height: calc(100vh - 76px);
+  height: 100%;
   background: var(--bg-primary);
   display: grid;
   grid-template-columns: 1fr 1fr;

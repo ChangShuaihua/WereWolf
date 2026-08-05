@@ -17,7 +17,7 @@
     <div v-if="!canSpeak" class="chat-disabled-hint">
       {{ disabledHint }}
     </div>
-    <form class="chat-input" @submit.prevent="sendMsg" :class="{ 'is-disabled': !canSpeak }">
+    <form class="chat-input-wrapper" @submit.prevent="sendMsg" :class="{ 'is-disabled': !canSpeak }">
       <input 
         v-model="text" 
         :placeholder="canSpeak ? '输入消息...' : disabledHint"
@@ -130,29 +130,6 @@ watch(() => props.messages.length, async () => {
 </script>
 
 <style scoped>
-.chat-box {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  max-height: 100%;
-  gap: 12px;
-  padding: 16px;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-right: 6px;
-  min-height: 0;
-  max-height: 100%;
-}
-
 .chat-empty {
   display: flex;
   flex-direction: column;
@@ -189,8 +166,8 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-msg.ai-msg {
-  background: rgba(155, 109, 255, 0.08);
-  border-color: rgba(155, 109, 255, 0.2);
+  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(20, 184, 166, 0.2);
 }
 
 .chat-user {
@@ -216,14 +193,10 @@ watch(() => props.messages.length, async () => {
   font-weight: 500;
 }
 
-.chat-input {
+.chat-input-wrapper {
   display: flex;
   gap: 10px;
-  padding-top: 8px;
   border-top: var(--border-thin);
-  flex-shrink: 0;
-  position: sticky;
-  bottom: 0;
   background: var(--bg-primary, var(--glass-bg));
   z-index: 1;
 }
@@ -310,31 +283,31 @@ watch(() => props.messages.length, async () => {
 }
 
 /* Chat input disabled state */
-.chat-input.is-disabled {
+.chat-input-wrapper.is-disabled {
   opacity: 0.6;
 }
 
-.chat-input.is-disabled .chat-input-field {
+.chat-input-wrapper.is-disabled .chat-input-field {
   background: var(--bg-secondary);
   cursor: not-allowed;
 }
 
-.chat-input.is-disabled .chat-input-field:disabled {
+.chat-input-wrapper.is-disabled .chat-input-field:disabled {
   background: var(--bg-secondary);
   color: var(--text-tertiary);
   cursor: not-allowed;
 }
 
-.chat-input.is-disabled .chat-input-field:disabled::placeholder {
+.chat-input-wrapper.is-disabled .chat-input-field:disabled::placeholder {
   color: var(--text-tertiary);
 }
 
-.chat-input.is-disabled .chat-send-btn {
+.chat-input-wrapper.is-disabled .chat-send-btn {
   background: var(--bg-tertiary);
   cursor: not-allowed;
 }
 
-.chat-input.is-disabled .chat-send-btn:disabled {
+.chat-input-wrapper.is-disabled .chat-send-btn:disabled {
   opacity: 0.5;
 }
 </style>

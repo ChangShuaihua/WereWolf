@@ -26,7 +26,7 @@
         </router-link>
       </div>
     </header>
-    <main class="app-main">
+    <main class="app-main" :class="{ 'page-scroll': isScrollablePage }">
       <router-view />
     </main>
     <ConfirmDialog
@@ -44,14 +44,23 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { useThemeStore } from './stores/theme'
 import { useConfirmDialog } from './composables/useConfirm'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 
+const route = useRoute()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
 const { visible: dialogVisible, state: dialogState, onConfirm: onDialogConfirm, onCancel: onDialogCancel } = useConfirmDialog()
+
+// 游戏页面和房间页面不需要外部滚动
+const isScrollablePage = computed(() => {
+  const path = route.path
+  return !path.startsWith('/game') && !path.startsWith('/room')
+})
 </script>
 
 <style scoped>

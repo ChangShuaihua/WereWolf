@@ -42,7 +42,7 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  padding: 24px;
+  padding: 14px;
   border-radius: 16px;
   border: var(--border-medium);
   box-shadow: var(--shadow-md);
@@ -54,13 +54,13 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 
 .day-message {
   text-align: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-thin);
 }
 
 .day-message p {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--status-warning);
   letter-spacing: 0.5px;
@@ -68,40 +68,40 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 
 .speaker-info {
   text-align: center;
-  padding: 10px 10px;
+  padding: 8px;
   background: rgba(251, 191, 36, 0.1);
-  border-radius: 12px;
-  margin-bottom: 20px;
+  border-radius: 10px;
+  margin-bottom: 12px;
   border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
 .speaker-label {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--status-warning);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   opacity: 0.8;
 }
 
 .speaker-name {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--status-warning);
-  margin-bottom: 8px;
-  text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+  margin-bottom: 4px;
+  text-shadow: 0 0 16px rgba(251, 191, 36, 0.3);
 }
 
 .my-turn {
-  font-size: 15px;
+  font-size: 13px;
   color: var(--status-success);
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 4px 10px;
   background: rgba(52, 211, 153, 0.15);
-  border-radius: 20px;
+  border-radius: 16px;
   display: inline-block;
 }
 
 .wait-hint {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--text-tertiary);
   margin: 0;
 }
@@ -109,33 +109,35 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
 .day-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 }
 
 .day-actions .btn {
   width: 100%;
-  max-width: 200px;
+  max-width: 180px;
+  height: 38px;
+  font-size: 13px;
 }
 
 .day-dead {
   text-align: center;
-  padding: 16px;
+  padding: 12px;
 }
 
 .day-dead p {
   color: var(--status-error);
-  font-size: 14px;
+  font-size: 13px;
   font-style: italic;
   opacity: 0.8;
 }
 
 .btn {
-  padding: 12px 24px;
+  padding: 8px 20px;
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   transition: all 0.2s;
 }
