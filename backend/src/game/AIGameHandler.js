@@ -504,16 +504,16 @@ class AIGameHandler {
     let personalityDesc = '';
     let speakingStyleDesc = '';
     let languageDesc = '';
+    let emotionDesc = '';
     
     if (agentConfig) {
       const p = agentConfig.personality;
-      if (p.aggressiveness > 70) personalityDesc += '你是一个激进的玩家，敢于主动出击，不怕被怀疑，喜欢直接质疑别人。';
-      if (p.aggressiveness < 30) personalityDesc += '你是一个温和的玩家，不喜欢主动攻击别人，倾向于被动防御。';
+      if (p.aggressiveness > 70) personalityDesc += '你性格激进，敢于主动出击，不怕被怀疑，喜欢直接质疑别人。';
+      if (p.aggressiveness < 30) personalityDesc += '你性格温和，不喜欢主动攻击别人，倾向于被动防御。';
       if (p.caution > 70) personalityDesc += '你非常谨慎，从不轻易暴露自己，发言保守，不会说太多。';
       if (p.caution < 30) personalityDesc += '你比较大胆，敢于说出自己的想法，不怕暴露信息。';
       if (p.cunning > 70) personalityDesc += '你很狡猾，善于伪装，说谎时面不改色，会编造合理的谎言。';
       if (p.cunning < 30) personalityDesc += '你比较老实，不擅长说谎，更喜欢说实话。';
-      // 根据阵营调整诚实度描述
       if (p.honesty < 30) {
         if (isWerewolf) {
           personalityDesc += '你喜欢说谎，可以编造查验结果和夜间信息来误导好人。';
@@ -542,18 +542,48 @@ class AIGameHandler {
 
       const lang = agentConfig.language;
       if (lang.prefixes && lang.prefixes.length > 0) {
-        languageDesc += `【必须使用】发言开头请使用以下词组之一：${lang.prefixes.join('、')}`;
+        languageDesc += `【可选使用】发言开头可以使用以下词组之一：${lang.prefixes.join('、')}`;
       }
       if (lang.suffixes && lang.suffixes.length > 0) {
-        languageDesc += `；【必须使用】发言结尾请使用以下词组之一：${lang.suffixes.join('、')}`;
+        languageDesc += `；【可选使用】发言结尾可以使用以下词组之一：${lang.suffixes.join('、')}`;
       }
       if (lang.favoriteWords && lang.favoriteWords.length > 0) {
-        languageDesc +=`；【必须使用】发言中请融入以下词汇：${lang.favoriteWords.join('、')}`;
+        languageDesc +=`；【可选使用】发言中可以融入以下词汇：${lang.favoriteWords.join('、')}`;
       }
     } else {
       personalityDesc = '你是一个普通的玩家，发言比较均衡。';
       speakingStyleDesc = '你的发言风格正常，比较随和。';
       languageDesc = '';
+    }
+
+    // Emotion injection based on game state
+    const lastEvent = game.gameHistory.length > 0 ? game.gameHistory[game.gameHistory.length - 1] : null;
+    if (lastEvent) {
+      const deaths = lastEvent.deaths || [];
+      if (deaths.length > 0) {
+        const selfDied = deaths.some(d => d.socketId === aiPlayer.socketId);
+        if (selfDied) {
+          emotionDesc = '你刚刚死亡，心情可能愤怒、不甘或释然，发言中可能带有情绪。';
+        } else {
+          const teammateDied = deaths.some(d => {
+            const dRole = game.getRole(d.socketId);
+            return dRole && TEAM[dRole] === team;
+          });
+          if (teammateDied && isWerewolf) {
+            emotionDesc = '你的队友刚刚被淘汰，你可能感到压力或愤怒，发言中可能带有攻击性或掩饰。';
+          } else if (!teammateDied && !isWerewolf) {
+            emotionDesc = '好人阵营刚刚有人被淘汰，你可能感到紧迫或焦虑，发言中可能带有急切感。';
+          }
+        }
+      }
+      if (lastEvent.action === 'hunter_shoot') {
+        emotionDesc += (emotionDesc ? ' ' : '') + '猎人刚刚开枪带走了一个人，局势紧张。';
+      }
+    }
+
+    // Check if this player was mentioned in recent chat
+    if (this._wasMentioned(room?.chat, aiPlayer.username)) {
+      emotionDesc += (emotionDesc ? ' ' : '') + '你刚刚被其他玩家提到，需要回应他们的质疑或观点。';
     }
 
     const outputParser = StructuredOutputParser.fromNamesAndDescriptions({
@@ -575,13 +605,16 @@ class AIGameHandler {
 - 存活玩家：{alivePlayers}
 - 已死亡玩家：{deadPlayers}
 
+=== 你的情绪状态 ===
+{emotionDesc}
+
 === 你的性格特征 ===
 {personalityDesc}
 
 === 你的发言风格 ===
 {speakingStyleDesc}
 
-=== 语言习惯（必须遵守） ===
+=== 语言习惯（可选参考） ===
 {languageDesc}
 
 === 最近聊天记录 ===
@@ -598,30 +631,47 @@ class AIGameHandler {
 - 猎人：可以强势发言，威慑狼人，被怀疑时可以亮身份
 - 平民：表达困惑，请求信息，跟随好人，分析其他人的发言漏洞
 
+=== 口语化要求（最重要）===
+1. 用口语说话，就像跟朋友聊天一样，不要用书面语
+2. 禁止使用："我认为"、"首先...其次...最后"、"综上所述"、"毫无疑问"、"值得注意的是"等演讲式表达
+3. 可以使用语气词："啊"、"嘛"、"呢"、"呗"、"啦"、"哈"
+4. 可以使用口语化表达："我觉着"、"所以说"、"还有就是"、"你们看啊"、"八成"、"说不定"
+5. 允许句子不完整，用"..."表示犹豫，用"！"表示情绪
+6. 真人发言不是完美的，可以有跳跃和不连贯
+
+=== 示例（真人发言风格，参考这个调调）===
+- 口语化正确示例：
+  "3号刚才说的不对吧，他没说为啥怀疑5号啊"
+  "我觉着昨晚平安夜挺奇怪的，守卫不会守到自己人了吧"
+  "等等，刚才1号跳预言家了？他验了谁啊"
+  "6号你别装了，你刚才投票犹豫了好久"
+  "我没啥线索，听听大家怎么说呗"
+  "2号你刚才说的有道理，我也觉得4号有问题"
+- AI味错误示例（不要这样说）：
+  "我认为我们应该仔细分析局势"
+  "首先，根据游戏逻辑，其次，基于投票结果"
+  "综上所述，我怀疑XX是狼人"
+  "大家注意，这轮投票至关重要"
+  "我作为平民，没有任何特殊能力"
+
 === 必须遵守的规则 ===
-1. **发言要有上下文**：你的发言必须与前面的对话有关联，不能凭空说一段话
-2. **要有逻辑**：你的发言要有明确的观点或推理过程，不能胡言乱语
-3. **针对具体情况**：如果有人提到你，必须回应；如果有可疑行为，要指出具体是谁
-4. **不要重复**：不要重复别人已经说过的话，要有自己的见解
-5. **不要说废话**：不要说无意义的填充内容，每句话都要有目的
-6. **字数控制**：发言字数控制在30-50字之间，不要太长也不要太短
-7. **如果没有信息**：如果你确实没有有用的信息，就直接说"我目前没有什么线索"
-8. **符合性格**：你的发言必须符合上面描述的性格特征和发言风格
-9. **使用语言习惯**：你的发言必须使用上面标注的【必须使用】的词汇和句式
-
-=== 错误示例（不要这样说） ===
-- "我是平民，完全没有头绪，只能跟着大家的节奏走，希望好人能赢。"（没有针对任何人或任何情况）
-- "大家注意一下，这轮很关键，请大家仔细听我说。"（没有实际内容）
-- 重复别人说过的话
-
-=== 正确示例（可以这样说） ===
-- 如果有人跳预言家："XX说自己是预言家，但他的查验结果和我的信息不符，我怀疑他是假的"
-- 如果昨晚平安夜："昨晚是平安夜，可能是守卫守对了人，大家继续分析"
-- 如果没有线索："我目前没有什么线索，希望预言家能出来给点信息"
+1. 发言要有上下文，必须和前面的对话有关联
+2. 针对具体玩家，提到名字时用座位号或名字
+3. 如果有人提到你，必须回应
+4. 不要重复别人说过的话
+5. 口语化，像真人说话，不要像AI汇报
+6. 字数：短则5-15字，长则30-60字，根据你的性格和情绪决定
+7. 符合你的性格特征和发言风格
+8. 语言习惯中的词汇可以选择性使用，不必每次都用
 
 {formatInstructions}`,
-      inputVariables: ['aiName', 'roleName', 'teamName', 'alivePlayers', 'deadPlayers', 'nightCount', 'chatHistory', 'gameEvents', 'personalityDesc', 'speakingStyleDesc', 'languageDesc', 'formatInstructions'],
+      inputVariables: ['aiName', 'roleName', 'teamName', 'alivePlayers', 'deadPlayers', 'nightCount', 'chatHistory', 'gameEvents', 'personalityDesc', 'speakingStyleDesc', 'languageDesc', 'emotionDesc', 'formatInstructions'],
     });
+
+    const personalityTemp = this._getTemperatureForPersonality(agentConfig);
+    if (this.model) {
+      this.model.temperature = personalityTemp;
+    }
 
     const chain = prompt.pipe(this.model).pipe(outputParser);
 
@@ -638,9 +688,12 @@ class AIGameHandler {
         personalityDesc,
         speakingStyleDesc,
         languageDesc,
+        emotionDesc,
         formatInstructions 
       });
-      return result.message;
+      let message = result.message;
+      message = this._postProcessMessage(message, aiPlayer);
+      return message;
     } catch (error) {
       console.error('[AIGameHandler] Chat generation error:', error);
       return this._getFallbackChatMessage(game, aiPlayer);
@@ -830,6 +883,102 @@ class AIGameHandler {
 
     const io = require('../app').getIO();
     io.to(roomCode).emit('chat_message', chatMsg);
+  }
+
+  _postProcessMessage(message, aiPlayer) {
+    if (!message) return '';
+    let result = message.trim();
+
+    const agentConfig = aiPlayer.agentConfig || {};
+    const lang = agentConfig.language || {};
+
+    const colloquialMap = [
+      ['我认为', '我觉得'],
+      ['我觉得', '我觉着'],
+      ['因此', '所以嘛'],
+      ['所以', '所以说'],
+      ['并且', '还有'],
+      ['此外', '再说了'],
+      ['综上所述', '总的来说'],
+      ['首先', '第一'],
+      ['其次', '然后'],
+      ['最后', '还有'],
+      ['总之', '反正'],
+      ['毫无疑问', '肯定'],
+      ['可能', '说不定'],
+      ['应该', '八成'],
+      ['一定', '绝对'],
+      ['大家注意', '你们看啊'],
+      ['我是', '我就是'],
+      ['请大家', '大伙'],
+      ['希望', '但愿'],
+      ['建议', '我觉得可以'],
+      ['怀疑', '觉得'],
+      ['分析', '琢磨'],
+      ['判断', '猜'],
+    ];
+    for (const [formal, casual] of colloquialMap) {
+      if (Math.random() < 0.5) {
+        result = result.split(formal).join(casual);
+      }
+    }
+
+    result = result.replace(/。+$/g, () => {
+      const punctuations = ['啊', '嘛', '呢', '呗', '啦', '咯', '哈'];
+      return '！' + punctuations[Math.floor(Math.random() * punctuations.length)];
+    });
+    result = result.replace(/^。/, '');
+    result = result.replace(/,/g, () => Math.random() < 0.3 ? '，' : '');
+
+    if (lang.prefixes && lang.prefixes.length > 0 && Math.random() < 0.4) {
+      const prefix = lang.prefixes[Math.floor(Math.random() * lang.prefixes.length)];
+      result = prefix + '，' + result;
+    }
+
+    if (lang.suffixes && lang.suffixes.length > 0 && Math.random() < 0.4) {
+      const suffix = lang.suffixes[Math.floor(Math.random() * lang.suffixes.length)];
+      result = result + suffix;
+    }
+
+    if (lang.favoriteWords && lang.favoriteWords.length > 0 && Math.random() < 0.6) {
+      const word = lang.favoriteWords[Math.floor(Math.random() * lang.favoriteWords.length)];
+      if (!result.includes(word)) {
+        result = result.replace(/[，,！!呀啊嘛呢呗啦咯哈。]$/, `，${word}$&`);
+        if (!result.includes(word)) {
+          result += `，${word}！`;
+        }
+      }
+    }
+
+    if (result.length > 80) {
+      result = result.substring(0, 75).replace(/[，,！!呀啊嘛呢呗啦咯哈。]$/, '') + '...';
+    }
+
+    return result;
+  }
+
+  _wasMentioned(chat, username) {
+    if (!chat || !username) return false;
+    const nameLower = username.toLowerCase();
+    const recentMessages = chat.slice(-10);
+    return recentMessages.some(msg => {
+      if (msg.isSystem) return false;
+      const msgText = (msg.message || '').toLowerCase();
+      return msgText.includes(nameLower) || msgText.includes(username);
+    });
+  }
+
+  _getTemperatureForPersonality(agentConfig) {
+    if (!agentConfig?.personality) return 0.7;
+    const p = agentConfig.personality;
+    let temp = 0.7;
+    if (p.caution > 70) temp -= 0.2;
+    if (p.caution < 30) temp += 0.15;
+    if (p.talkativeness > 70) temp += 0.1;
+    if (p.talkativeness < 30) temp -= 0.15;
+    if (p.aggressiveness > 70) temp += 0.1;
+    if (p.cunning > 70) temp += 0.1;
+    return Math.max(0.3, Math.min(1.0, temp));
   }
 
   cleanup(roomCode) {

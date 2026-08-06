@@ -770,7 +770,7 @@ class GameEngine extends EventEmitter {
           }
 
           // Check if player is still alive
-          if (!aiPlayer.alive) {
+          if (!aiPlayer.isAlive) {
             console.log(`[GameEngine] AI ${aiPlayer.username} is dead, skipping`);
             resolve();
             return;
@@ -803,7 +803,7 @@ class GameEngine extends EventEmitter {
           await new Promise(r => setTimeout(r, secondDelay));
 
           // Check if still in discussion phase and alive
-          if (this.phase !== PHASE.DISCUSSION || !aiPlayer.alive) {
+          if (this.phase !== PHASE.DISCUSSION || !aiPlayer.isAlive) {
             resolve();
             return;
           }
@@ -851,6 +851,43 @@ class GameEngine extends EventEmitter {
     // Run all AI players in parallel
     Promise.all(aiPromises).then(() => {
       console.log('[GameEngine] All AI free discussion promises resolved');
+    });
+
+    // Interrupt mechanism: 30% chance each AI sends a short reaction during discussion
+    // This simulates real players interrupting each other with quick reactions
+    aiPlayers.forEach((aiPlayer) => {
+      if (Math.random() < 0.3) {
+        const reactionDelay = 8000 + Math.random() * 20000;
+        setTimeout(async () => {
+          if (this.phase !== PHASE.DISCUSSION || !aiPlayer.isAlive) return;
+          
+          const seatNum = this.getSeatNum(aiPlayer.socketId);
+          const reactions = [
+            '对！',
+            '胡说！',
+            '我不同意',
+            '等一下',
+            '有道理',
+            '不一定吧',
+            '嗯嗯',
+            '我觉得不是',
+            '他说的不对',
+            '哈哈',
+            '这也行？',
+            '我不信',
+            '有可能',
+            '别装了',
+            '你确定？',
+          ];
+          const reaction = reactions[Math.floor(Math.random() * reactions.length)];
+          
+          this.broadcast('chat_message', {
+            username: seatNum,
+            message: reaction,
+            timestamp: Date.now(),
+          });
+        }, reactionDelay);
+      }
     });
   }
 
@@ -1068,82 +1105,102 @@ class GameEngine extends EventEmitter {
     if (!message) message = '';
     
     const trimmed = message.trim();
-    
-    if (trimmed.length >= 30 && trimmed.length <= 50) {
+    if (trimmed.length === 0) return '...';
+
+    const agentConfig = player.agentConfig || null;
+    const talkativeness = agentConfig?.personality?.talkativeness ?? 50;
+
+    // Determine target length range based on talkativeness
+    let minLen, maxLen;
+    if (talkativeness > 70) {
+      minLen = 40; maxLen = 70;
+    } else if (talkativeness < 30) {
+      minLen = 5; maxLen = 20;
+    } else {
+      minLen = 15; maxLen = 55;
+    }
+
+    // Add some randomness to the range
+    minLen = Math.max(3, minLen + Math.floor(Math.random() * 10) - 5);
+    maxLen = minLen + 15 + Math.floor(Math.random() * 15);
+
+    if (trimmed.length >= minLen && trimmed.length <= maxLen) {
       return trimmed;
     }
     
-    if (trimmed.length > 50) {
-      return trimmed.substring(0, 50).replace(/，$/, '').replace(/。$/, '') + '。';
+    if (trimmed.length > maxLen) {
+      let truncated = trimmed.substring(0, maxLen);
+      truncated = truncated.replace(/[，,！!呀啊嘛呢呗啦咯哈。…]+$/g, '');
+      if (trimmed.endsWith('...')) truncated += '...';
+      else truncated += '。';
+      return truncated;
     }
     
     const role = this.getRole(player.socketId);
-    const roleName = getRoleName(role);
     
     const extensions = {
       [ROLE.WEREWOLF]: [
-        ' 大家仔细分析一下局势。',
-        ' 我觉得我们需要谨慎投票。',
-        ' 希望好人能做出正确的判断。',
-        ' 狼人肯定会伪装成好人。',
-        ' 大家不要被表面现象迷惑。',
+        ' 大家仔细分析一下局势',
+        ' 我觉着得谨慎点投票',
+        ' 希望好人做出正确判断',
+        ' 狼人肯定会伪装',
+        ' 别被表面迷惑',
       ],
       [ROLE.SEER]: [
-        ' 请大家相信我的查验结果。',
-        ' 今晚我会继续查验其他人。',
-        ' 好人阵营需要我的信息。',
-        ' 狼人一定会质疑我，大家别上当。',
-        ' 希望大家能跟我一起投票。',
+        ' 相信我的查验结果',
+        ' 今晚继续验人',
+        ' 好人需要我的信息',
+        ' 狼人会质疑我，别上当',
+        ' 大家跟我一起投票',
       ],
       [ROLE.WITCH]: [
-        ' 我手里还有一瓶毒药。',
-        ' 大家小心狼人乱跳身份。',
-        ' 我会根据情况使用毒药。',
-        ' 希望好人能保护好自己。',
-        ' 今晚我会谨慎使用技能。',
+        ' 我手里还有毒药',
+        ' 小心狼人乱跳',
+        ' 我会谨慎用药',
+        ' 好人保护好自己',
+        ' 今晚看情况',
       ],
       [ROLE.GUARD]: [
-        ' 今晚我会守护关键人物。',
-        ' 大家放心，我会保护好人。',
-        ' 狼人别想轻易得手。',
-        ' 我会根据局势决定守护谁。',
-        ' 好人阵营需要我的守护。',
+        ' 今晚守关键人物',
+        ' 大家放心',
+        ' 狼人别想得手',
+        ' 看局势决定守护',
+        ' 好人需要我',
       ],
       [ROLE.HUNTER]: [
-        ' 有枪在手，狼人小心点。',
-        ' 谁敢出我，我就带走谁。',
-        ' 我的身份很硬，大家别乱投。',
-        ' 狼人别想轻易把我弄出去。',
-        ' 我会根据情况开枪。',
+        ' 有枪在手',
+        ' 谁敢出我就带走谁',
+        ' 身份硬得很',
+        ' 狼人别想轻易投我',
+        ' 看情况开枪',
       ],
       [ROLE.VILLAGER]: [
-        ' 希望预言家能给点信息。',
-        ' 我只能跟着大家的节奏走。',
-        ' 请好人带领我们找出狼人。',
-        ' 我完全相信好人阵营。',
-        ' 大家一起加油找出狼人。',
+        ' 希望预言家给信息',
+        ' 跟着大家走',
+        ' 好人带领我们',
+        ' 相信好人阵营',
+        ' 一起加油',
       ],
     };
     
     const roleExtensions = extensions[role] || extensions[ROLE.VILLAGER];
     let result = trimmed;
 
-    // W12: bound iterations to avoid infinite loops if extensions can't extend the message
     let iterations = 0;
     const maxIterations = 5;
-    while (result.length < 30 && iterations < maxIterations) {
+    while (result.length < minLen && iterations < maxIterations) {
       iterations++;
       const extension = roleExtensions[Math.floor(Math.random() * roleExtensions.length)];
-      if (!result.endsWith(extension.replace(/。$/, ''))) {
+      if (!result.endsWith(extension)) {
         if (!result.endsWith('。') && !result.endsWith('，')) {
           result += '，';
         }
-        result += extension.replace(/^ /, '');
+        result += extension;
       }
     }
     
-    if (result.length > 50) {
-      result = result.substring(0, 50).replace(/，$/, '').replace(/。$/, '') + '。';
+    if (result.length > maxLen) {
+      result = result.substring(0, maxLen).replace(/[，,！!呀啊嘛呢呗啦咯哈。]+$/g, '') + '。';
     }
     
     return result;
