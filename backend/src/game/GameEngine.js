@@ -16,7 +16,7 @@ class GameEngine extends EventEmitter {
     this.phaseTimer = null;
     this.startTime = null;
 
-    // Night action state
+    // 夜晚、投票、发言等状态都集中在这里，便于统一推进。
     this.nightActions = {};              // { socketId: { action, targetId } }
     this.guardLastProtected = null;      // socketId of last protected player
     this.witchSaveUsed = false;
@@ -25,28 +25,28 @@ class GameEngine extends EventEmitter {
     this.killedByWerewolves = null;      // socketId of werewolf kill target
     this.killedByWitch = null;           // socketId of witch poison target
 
-    // Vote state
+    // 投票阶段的 PK 变量，用来处理平票后的加赛。
     this.votes = {};                     // { voterSocketId: targetSocketId }
     this.nightCount = 0;
     this.pkRound = 0;                    // C3: PK (tie-break) vote round counter
     this.pkCandidates = [];              // C3: candidates restricted during PK
     
-    // Hunter state
+    // 猎人死亡后的开枪控制状态。
     this.hunterDied = false;             // Whether hunter died this phase
     this.hunterKilledByPoison = false;   // Whether hunter was killed by poison
     this.pendingHunterId = null;         // socketId of hunter currently pending shoot (C7 guard)
     
-    // Speaking state (turn-based)
+    // 白天轮流发言阶段使用的顺序和游标。
     this.speakingOrder = [];             // Array of socketIds in speaking order
     this.currentSpeakerIndex = -1;       // Index of current speaker in speakingOrder
     this.currentSpeaker = null;          // socketId of current speaker (for reconnection)
     this.hasSpoken = new Set();          // Set of socketIds that have spoken this round
 
-    // Vote state for reconnection
+    // 这些字段主要用于重连恢复，不驱动主流程。
     this.candidates = [];                // Candidates array for vote phase
     this.lastPhaseMessage = '';          // Last phase message (for reconnection)
     
-    // Game history for replay
+    // 对局回放数据，记录每轮关键事件。
     this.gameHistory = [];               // [{ night, action, actor, target, detail }]
   }
 
@@ -116,7 +116,7 @@ class GameEngine extends EventEmitter {
     const readyPlayers = this.players.filter(p => p.isReady);
     if (readyPlayers.length < this.maxPlayers) return;
 
-    // Assign roles
+    // 开局前先确认房间人数和准备状态，再分配角色。
     const roleList = getRolesForGame(readyPlayers.length);
     readyPlayers.forEach((p, i) => {
       const role = roleList[i];
@@ -124,7 +124,7 @@ class GameEngine extends EventEmitter {
       p.role = role; // Persist role on player object for reliable reconnect recovery
     });
 
-    // Mark all ready players as alive
+    // 把角色写到玩家对象上，便于重连恢复。
     this.players.forEach(p => {
       p.isAlive = p.isReady;
     });
@@ -132,7 +132,7 @@ class GameEngine extends EventEmitter {
     this.nightCount = 0;
     this.startTime = Date.now();
 
-    // Tell each player their role and seat number
+    // 所有已准备玩家统一标记为存活。
     this.players.forEach(p => {
       if (p.isAlive) {
         const mySeatNum = this.getSeatNum(p.socketId);
@@ -152,7 +152,7 @@ class GameEngine extends EventEmitter {
       }
     });
 
-    // Announce game start
+    // 单独通知每个玩家自己的身份和座位号。
     const playerList = this.alivePlayers.map(p => this.getSeatNum(p.socketId)).join('、');
     this.broadcast('chat_message', {
       username: '系统',
@@ -161,13 +161,14 @@ class GameEngine extends EventEmitter {
       isSystem: true,
     });
 
-    // Start first night after a short delay
+    // 广播开局公告，让全房间都知道游戏开始。
     setTimeout(() => this.startNight(), 3000);
   }
 
   // ==================== Phase Transitions ====================
 
   startNight() {
+    // 稍作延迟后进入首夜，给客户端留出展示时间。
     this.nightCount++;
     this.phase = PHASE.NIGHT;
     this.nightActions = {};
@@ -188,7 +189,7 @@ class GameEngine extends EventEmitter {
       message: this.lastPhaseMessage,
     });
 
-    // Night sub-phases handled sequentially
+    // 夜晚阶段不是一个动作，而是按角色顺序串行推进。
     this.runNightSequence();
   }
 
@@ -218,13 +219,13 @@ class GameEngine extends EventEmitter {
   async _runNightSequenceInner() {
     const alive = this.alivePlayers;
 
-    // Wait for AI players to submit their night actions first
+    // AI 先提交夜间动作，避免真人等待时 AI 仍未就绪。
     const aiPlayers = alive.filter(p => p.isAI);
     if (aiPlayers.length > 0) {
       await this._waitForAINightActions(aiPlayers);
     }
 
-    // 1. Guard protects (30 seconds)
+    // 1. 守卫先行动。
     const guards = alive.filter(p => this.roles[p.socketId] === ROLE.GUARD);
     if (guards.length > 0) {
       this.broadcast('night_role_turn', {
@@ -252,7 +253,7 @@ class GameEngine extends EventEmitter {
       });
     }
 
-    // 2. Werewolves kill (30 seconds)
+    // 2. 狼人按多数票刀人。
     const werewolves = alive.filter(p => this.roles[p.socketId] === ROLE.WEREWOLF);
     const targets = alive.filter(p => this.roles[p.socketId] !== ROLE.WEREWOLF)
       .map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) }));
@@ -301,7 +302,7 @@ class GameEngine extends EventEmitter {
       }
     }
 
-    // 3. Seer checks (30 seconds)
+    // 3. 预言家查验身份。
     const seers = alive.filter(p => this.roles[p.socketId] === ROLE.SEER);
     if (seers.length > 0) {
       this.broadcast('night_role_turn', {
@@ -329,7 +330,7 @@ class GameEngine extends EventEmitter {
       });
     }
 
-    // 4. Witch action (30 seconds)
+    // 4. 女巫决定救人或独人。
     const witches = alive.filter(p => this.roles[p.socketId] === ROLE.WITCH);
     if (witches.length > 0) {
       this.broadcast('night_role_turn', {
@@ -363,11 +364,12 @@ class GameEngine extends EventEmitter {
       });
     }
 
-    // Resolve night
+    // 夜晚的所有子阶段结束后，统一进入结算。
     this.resolveNight();
   }
 
   _waitForRoleActions(players, actionType) {
+    // 等待这一类角色提交完动作，或者超时自动继续。
     return new Promise((resolve) => {
       const humanPlayers = players.filter(p => !p.isAI);
       
@@ -441,6 +443,7 @@ class GameEngine extends EventEmitter {
   // ==================== Night Actions ====================
 
   submitNightAction(socketId, action, targetId) {
+    // 夜间动作入口，所有动作都先在这里做合法性校验。
     if (this.phase !== PHASE.NIGHT) return;
     const player = this.getPlayer(socketId);
     if (!player || !player.isAlive) return;
@@ -460,7 +463,7 @@ class GameEngine extends EventEmitter {
       return;
     }
 
-    // Store action (preserve first action for witch who can do both save+poison)
+    // 女巫可能同时救人和独人，所以 save / poison 要特殊处理。
     if (!this.nightActions[socketId] || (action !== 'save' && action !== 'poison')) {
       this.nightActions[socketId] = { action, targetId };
     }
@@ -614,7 +617,7 @@ class GameEngine extends EventEmitter {
       detail: nightDetail,
     });
 
-    // Check for hunter death trigger
+    // 猎人死亡后，进入开枪分支。
     let hunterDeath = null;
     let hunterKilledByPoison = false;
     
@@ -626,7 +629,7 @@ class GameEngine extends EventEmitter {
       }
     }
 
-    // Hunter shooting: can only shoot if not killed by poison
+    // 猎人被刀但没被毒时，可以开枪；被毒死则不能开枪。
     if (hunterDeath && !hunterKilledByPoison) {
       const aliveAfterNight = this.alivePlayers;
       if (aliveAfterNight.length > 0) {
@@ -656,10 +659,10 @@ class GameEngine extends EventEmitter {
       });
     }
 
-    // Check win condition
+    // 夜晚结算完成后，先判胜负。
     if (this.checkWinCondition()) return;
 
-    // Transition to day
+    // 没有结束则进入白天。
     setTimeout(() => this.startDay(), 2000);
   }
 
@@ -702,18 +705,20 @@ class GameEngine extends EventEmitter {
   }
   
   _continueAfterHunter() {
-    // Clear pending hunter state (covers socket-driven shoot path, C7)
+    // 猎人分支结束，清理 pending 状态，避免重复触发。
+    // ????????? pending ??????????
     this.pendingHunterId = null;
-    // Check win condition after hunter shooting
+    // 猎人开枪可能改变胜负关系，所以要再次检查。
     if (this.checkWinCondition()) return;
 
-    // Transition to day
+    // 猎人流程走完后再转白天。
     setTimeout(() => this.startDay(), 2000);
   }
 
   // ==================== Discussion Phase ====================
 
   startFreeDiscussion() {
+    // 自由讨论阶段，所有存活玩家都可以发言。
     this.phase = PHASE.DISCUSSION;
     this.lastPhaseMessage = '自由讨论阶段，所有人可以发言';
 
@@ -730,7 +735,7 @@ class GameEngine extends EventEmitter {
       isSystem: true,
     });
 
-    // Trigger AI players to speak during free discussion
+    // AI 会在自由讨论阶段自动插话，模拟真实聊天。
     const allAlive = this.alivePlayers;
     const aiPlayers = allAlive.filter(p => p.isAI);
     console.log(`[GameEngine] Free discussion: ${allAlive.length} alive players, ${aiPlayers.length} AI players`);
@@ -853,7 +858,7 @@ class GameEngine extends EventEmitter {
       console.log('[GameEngine] All AI free discussion promises resolved');
     });
 
-    // Interrupt mechanism: 30% chance each AI sends a short reaction during discussion
+    // 随机插话机制，让自由讨论更像真实房间。
     // This simulates real players interrupting each other with quick reactions
     aiPlayers.forEach((aiPlayer) => {
       if (Math.random() < 0.3) {
@@ -892,6 +897,7 @@ class GameEngine extends EventEmitter {
   }
 
   startOrderedSpeaking() {
+    // 按顺序发言阶段：把存活玩家排成固定顺序逐个发言。
     this.phase = PHASE.DAY;
 
     const alive = this.alivePlayers;
@@ -900,6 +906,7 @@ class GameEngine extends EventEmitter {
     this.hasSpoken = new Set();
     this.candidates = [];
 
+    // 过滤掉中途死亡的玩家，避免轮到死人发言。
     this._skipDeadSpeakers();
 
     this.currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
@@ -930,7 +937,7 @@ class GameEngine extends EventEmitter {
       }
     }
 
-    // Set timer for current speaker
+    // 当前发言人超时后自动进入下一位。
     this.phaseTimer = setTimeout(() => {
       this.nextSpeaker();
     }, TIMERS.DAY * 1000);
@@ -939,7 +946,12 @@ class GameEngine extends EventEmitter {
   // ==================== Day Phase ====================
 
   startDay() {
-    // Check for players who died during the night and need to leave last words
+    // 白天入口分两种：夜里有人死则先遗言，没人死则直接自由讨论。
+    // 夜里有人死亡时，先进入死亡遗言。
+    // 夜里无人死亡时，直接进入自由讨论。
+    // 
+    // 
+    // 
     const lastWillPlayers = this.lastWillDeadPlayers || [];
     this.lastWillDeadPlayers = null;
 
@@ -955,6 +967,7 @@ class GameEngine extends EventEmitter {
   // ==================== Last Will Phase ====================
 
   startLastWill(deadPlayers) {
+    // 遗言阶段按死亡顺序逐个发言。
     this.phase = PHASE.LAST_WILL;
     this.lastWillQueue = [...deadPlayers];
     this.lastWillIndex = 0;
@@ -976,13 +989,14 @@ class GameEngine extends EventEmitter {
       isSystem: true,
     });
 
-    // Start first dead player's last will
+    // 所有遗言说完后，进入自由讨论。
     this._startLastWillSpeaker();
   }
 
   _startLastWillSpeaker() {
+    // AI 死者会自动生成遗言内容。
     if (!this.lastWillQueue || this.lastWillIndex >= this.lastWillQueue.length) {
-      // All last wills done, move to free discussion
+    // 遗言有时间限制，超时后自动切到下一个。
       this.startFreeDiscussion();
       return;
     }
@@ -1001,12 +1015,12 @@ class GameEngine extends EventEmitter {
 
     const player = this.getPlayer(deadPlayer.socketId);
     
-    // If AI player, generate last will message
+    // 白天发言顺序里可能混入死人，这里统一剔除。
     if (player && player.isAI) {
       setTimeout(() => this._generateAILastWill(deadPlayer.socketId), 1000);
     }
 
-    // Auto-advance after timer
+    // AI 在按顺序发言时会自动生成一段发言。
     this.clearTimer();
     this.phaseTimer = setTimeout(() => {
       this._nextLastWillSpeaker();
@@ -1046,6 +1060,7 @@ class GameEngine extends EventEmitter {
   // ==================== Discussion Phase ====================
 
   _skipDeadSpeakers() {
+    // 白天讨论可以手动跳过，直接进入投票。
     const aliveSpeakers = this.speakingOrder.filter(socketId => {
       const player = this.getPlayer(socketId);
       return player && player.isAlive !== false;
@@ -1061,6 +1076,7 @@ class GameEngine extends EventEmitter {
   }
 
   async _triggerAISpeaking(socketId) {
+    // 切到下一位发言人。
     const aiGameHandler = require('./AIGameHandler');
     const player = this.getPlayer(socketId);
     if (!player || !player.isAI) return;
@@ -1207,12 +1223,14 @@ class GameEngine extends EventEmitter {
   }
 
   skipToVote() {
+    // 当前发言人主动跳过，等价于把这一位标记为已发言。
     if (this.phase !== PHASE.DAY) return;
     this.clearTimer();
     this.startVote();
   }
 
   nextSpeaker() {
+    // 当前发言人主动跳过，等价于把这一位标记为已发言。
     if (this.phase !== PHASE.DAY) return;
 
     this.hasSpoken.add(this.speakingOrder[this.currentSpeakerIndex]);
@@ -1252,7 +1270,7 @@ class GameEngine extends EventEmitter {
       }
     }
 
-    // Set timer for current speaker
+    // 投票阶段开始时先清空上一轮状态。
     this.clearTimer();
     this.phaseTimer = setTimeout(() => {
       this.nextSpeaker();
@@ -1260,6 +1278,7 @@ class GameEngine extends EventEmitter {
   }
 
   skipSpeaking() {
+    // AI 会先完成投票，前端看到的是实时进度。
     if (this.phase !== PHASE.DAY) return;
 
     const currentSpeaker = this.speakingOrder[this.currentSpeakerIndex];
@@ -1297,6 +1316,7 @@ class GameEngine extends EventEmitter {
   // ==================== Vote Phase ====================
 
   async startVote() {
+    // 投票入口，只允许存活玩家在投票阶段使用。
     this.phase = PHASE.VOTE;
     this.votes = {};
     this.currentSpeaker = null;
@@ -1304,7 +1324,7 @@ class GameEngine extends EventEmitter {
     const alive = this.alivePlayers;
     this.candidates = alive.map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) }));
 
-    // Wait for AI players to submit their votes first
+    // 只广播已投票人数，不公开具体投票关系。
     const aiPlayers = alive.filter(p => p.isAI);
     if (aiPlayers.length > 0) {
       await this._waitForAIVotes(aiPlayers);
@@ -1355,6 +1375,7 @@ class GameEngine extends EventEmitter {
   }
 
   submitVote(socketId, targetId) {
+    // 投票时间到后统一结算。
     if (this.phase !== PHASE.VOTE) return;
     const voter = this.getPlayer(socketId);
     if (!voter || !voter.isAlive) return;
@@ -1374,7 +1395,7 @@ class GameEngine extends EventEmitter {
       detail: `${this.getSeatNum(socketId)}投票给了${target ? this.getSeatNum(targetId) : '未知'}`,
     });
 
-    // Notify all of vote progress (without revealing who voted for whom)
+    // 找出最高票和并列最高票，为 PK 做准备。
     this.broadcast('vote_update', {
       votedCount: Object.keys(this.votes).length,
       totalCount: this.alivePlayers.length,
@@ -1382,6 +1403,7 @@ class GameEngine extends EventEmitter {
   }
 
   resolveVote() {
+    // 平票进入 PK 加赛；如果 PK 后还是平票，就直接回夜晚。
     this.clearTimer();
     if (this.phase !== PHASE.VOTE) return;
 
@@ -1394,7 +1416,7 @@ class GameEngine extends EventEmitter {
       }
     }
 
-    // Find max votes and all targets sharing the max (C3: PK on tie)
+    // 本轮投票结算完毕后，清掉 PK 状态。
     let maxVotes = 0;
     for (const count of Object.values(tally)) {
       if (count > maxVotes) maxVotes = count;
@@ -1406,7 +1428,7 @@ class GameEngine extends EventEmitter {
       return { id, username: this.getSeatNum(id), votes: count };
     });
 
-    // C3: tie-break via PK vote (only one PK round, then skip to night)
+    // 平票时进入 PK 加赛，只允许候选人再次投票。
     if (topTargets.length > 1 && maxVotes > 0) {
       this._startPKVote(topTargets);
       return;
@@ -1420,7 +1442,7 @@ class GameEngine extends EventEmitter {
       }
     }
 
-    // Reset PK state after a resolved vote round
+    // 第二次 PK 还是平票，就认为本轮无人出局。
     this.pkRound = 0;
     this.pkCandidates = [];
 
@@ -1443,10 +1465,10 @@ class GameEngine extends EventEmitter {
       isSystem: true,
     });
 
-    // Check win condition
+    // 清空上一轮票数，并限制 PK 候选人。
     if (this.checkWinCondition()) return;
 
-    // Back to night
+    // 前端只需要候选人的展示信息。
     setTimeout(() => this.startNight(), 3000);
   }
 
@@ -1455,9 +1477,10 @@ class GameEngine extends EventEmitter {
    * Only one PK round is allowed; a second tie skips to night without elimination.
    */
   _startPKVote(pkCandidates) {
+    // 胜负判断规则：狼人死光民众胜，狼人数量不少于其他阵营则狼人胜。
     this.pkRound = (this.pkRound || 0) + 1;
 
-    // Second consecutive tie: no elimination, go to night
+    // ???????????????????????????????
     if (this.pkRound > 1) {
       this.broadcast('vote_result', {
         eliminated: null,
@@ -1477,13 +1500,13 @@ class GameEngine extends EventEmitter {
       return;
     }
 
-    // Reset votes and restrict candidates for the PK round
+    // ????? PK ??????????????
     this.votes = {};
     this.pkCandidates = pkCandidates;
     this.candidates = pkCandidates;
     this.lastPhaseMessage = `${pkCandidates.map(id => this.getSeatNum(id)).join('、')} 进入PK，请再次投票`;
 
-    // Convert socketId array to {id, username} format for frontend
+    // 胜负条件未满足，继续下一夜。
     const candidatesForFrontend = pkCandidates.map(id => ({
       id,
       username: this.getSeatNum(id),
@@ -1510,6 +1533,9 @@ class GameEngine extends EventEmitter {
   // ==================== Win Condition ====================
 
   checkWinCondition() {
+    // 对局结束时统一收尾：清定时器、切 END、广播结果。
+    // 1. ???? -> ???
+    // ???????
     const aliveWerewolves = this.alivePlayers.filter(
       p => this.roles[p.socketId] === ROLE.WEREWOLF
     ).length;
@@ -1534,6 +1560,7 @@ class GameEngine extends EventEmitter {
   // ==================== Game End ====================
 
   endGame(winner, message) {
+    // 把结果交给外部持久化层，GameEngine 本身不直接写数据库。
     this.clearTimer();
     this.phase = PHASE.END;
 
@@ -1556,7 +1583,7 @@ class GameEngine extends EventEmitter {
       players: result,
     });
 
-    // Return game result for persistence
+    // 生成一份复盘消息，供前端和聊天区展示。
     this.emit(this.roomCode, '__game_result', {
       roomCode: this.roomCode,
       winner,
@@ -1566,7 +1593,7 @@ class GameEngine extends EventEmitter {
       history: this.gameHistory,
     });
     
-    // Generate replay message
+    // 清理所有阶段推进相关状态，防止下局串状态。
     const replayMsg = this.generateReplayMessage(result, winner, message);
     this.emit(this.roomCode, '__game_replay', {
       roomCode: this.roomCode,
@@ -1649,6 +1676,7 @@ class GameEngine extends EventEmitter {
   // ==================== Cleanup ====================
 
   clearTimer() {
+    // 清理旧定时器是避免重复跳阶段的关键。
     if (this.phaseTimer) {
       clearTimeout(this.phaseTimer);
       this.phaseTimer = null;
