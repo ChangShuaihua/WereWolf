@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer } = require('./roomHandler');
+const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA } = require('./roomHandler');
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
 const { kickOldSocket, removeUserSocket, getUserBySocket } = require('../utils/userSocketMap');
@@ -170,6 +170,13 @@ function initSocket(io) {
           }
         }
         addChat(socket, roomCode, message);
+      }
+    });
+
+    // Rule QA (独立通道，不进入聊天记录)
+    socket.on('rule_qa', ({ question } = {}) => {
+      if (question) {
+        ruleQA(socket, question);
       }
     });
 

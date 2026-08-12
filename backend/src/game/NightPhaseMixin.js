@@ -317,6 +317,8 @@ const NightPhaseMixin = {
         break;
 
       case 'kill': {
+        // 广播狼人击杀投票状态给所有狼人队友
+        this._broadcastWerewolfVoteState();
         break;
       }
 
@@ -524,6 +526,36 @@ const NightPhaseMixin = {
     if (this.checkWinCondition()) return;
 
     setTimeout(() => this.startDay(), 2000);
+  },
+
+  // 广播狼人击杀投票状态给所有存活狼人
+  _broadcastWerewolfVoteState() {
+    const werewolves = this.alivePlayers.filter(p => this.roles[p.socketId] === ROLE.WEREWOLF);
+    if (werewolves.length === 0) return;
+
+    const choices = werewolves.map(w => {
+      const action = this.nightActions[w.socketId];
+      const targetId = action?.action === 'kill' ? action.targetId : null;
+      return {
+        playerId: w.socketId,
+        playerName: this.getSeatNum(w.socketId),
+        targetId,
+        targetName: targetId ? this.getSeatNum(targetId) : null,
+      };
+    });
+
+    const targetCounts = {};
+    choices.forEach(c => {
+      if (c.targetId) targetCounts[c.targetId] = (targetCounts[c.targetId] || 0) + 1;
+    });
+    const maxCount = Math.max(...Object.values(targetCounts), 0);
+    const isUnanimous = maxCount === werewolves.length && werewolves.length > 1;
+
+    const voteState = { choices, isUnanimous };
+
+    for (const w of werewolves) {
+      this.sendTo(w.socketId, 'werewolf_vote_update', voteState);
+    }
   },
 };
 

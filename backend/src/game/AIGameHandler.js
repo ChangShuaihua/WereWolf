@@ -172,9 +172,24 @@ class AIGameHandler {
     const alivePlayersStr = gameState.alivePlayers.map(p => p.username).join(', ');
     const teammatesStr = gameState.teammates.map(p => p.username).join(', ');
     const suspiciousStr = gameState.suspiciousPlayers.map(p => p.username).join(', ');
-    
+
     const roleName = getRoleName(role);
     const roleAbility = this._getRoleAbility(role);
+
+    // 狼人：查看队友已选择的击杀目标
+    let teammateChoiceStr = '暂无';
+    if (role === ROLE.WEREWOLF && gameState.teammates.length > 0) {
+      const teammateChoices = gameState.teammates
+        .map(t => {
+          const action = game.nightActions[t.socketId];
+          if (action?.action === 'kill' && action.targetId) {
+            return `${t.username} 选择了 ${game.getSeatNum(action.targetId)}`;
+          }
+          return `${t.username} 尚未选择`;
+        })
+        .join('；');
+      teammateChoiceStr = teammateChoices;
+    }
     
     // 构建策略描述
     let strategyDesc = '';
@@ -198,23 +213,26 @@ class AIGameHandler {
 - 角色能力：{roleAbility}
 - 当前存活玩家：{alivePlayers}
 - 你的队友：{teammates}
+- 队友击杀选择：{teammateChoice}
 - 可疑玩家：{suspiciousPlayers}
 {strategyDesc}
 {ragStrategy}
 请根据你的角色和游戏状态做出决策。参考策略中的多条建议，结合当前局势自主选择最合适的一条执行，不要生搬硬套。
+如果你是狼人，尽量和队友统一击杀目标。
 
 {formatInstructions}`,
-      inputVariables: ['roleName', 'roleAbility', 'alivePlayers', 'teammates', 'suspiciousPlayers', 'strategyDesc', 'ragStrategy', 'formatInstructions'],
+      inputVariables: ['roleName', 'roleAbility', 'alivePlayers', 'teammates', 'teammateChoice', 'suspiciousPlayers', 'strategyDesc', 'ragStrategy', 'formatInstructions'],
     });
 
     const chain = prompt.pipe(this.model).pipe(outputParser);
 
     try {
-      const result = await chain.invoke({ 
-        roleName, 
-        roleAbility, 
-        alivePlayers: alivePlayersStr, 
-        teammates: teammatesStr, 
+      const result = await chain.invoke({
+        roleName,
+        roleAbility,
+        alivePlayers: alivePlayersStr,
+        teammates: teammatesStr,
+        teammateChoice: teammateChoiceStr,
         suspiciousPlayers: suspiciousStr,
         strategyDesc,
         ragStrategy: ragStrategyText,
@@ -413,21 +431,21 @@ class AIGameHandler {
   _getFallbackVote(game, aiPlayer) {
     const role = game.getRole(aiPlayer.socketId);
     const team = TEAM[role];
-    
+
     let candidates = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
-    
+
+    // 狼人避免投队友（合法信息：狼人互相知道身份）
     if (team === 'werewolf') {
       candidates = candidates.filter(p => game.getRole(p.socketId) !== ROLE.WEREWOLF);
-    } else {
-      candidates = candidates.filter(p => game.getRole(p.socketId) === ROLE.WEREWOLF);
     }
-    
+
+    // 好人不能通过读取角色来作弊，改为随机投票
     if (candidates.length === 0) {
       candidates = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
     }
-    
+
     if (candidates.length === 0) return null;
-    
+
     return candidates[Math.floor(Math.random() * candidates.length)].socketId;
   }
 
@@ -534,9 +552,28 @@ class AIGameHandler {
       recentEvents.forEach(h => {
         const actorName = h.actor?.username || (h.actor?.id ? game.getSeatNum(h.actor.id) : '未知');
         const targetName = h.target?.username || (h.target?.id ? game.getSeatNum(h.target.id) : '未知');
-        if (h.action === 'kill' || h.action === 'guard' || h.action === 'check' || h.action === 'save' || h.action === 'poison') {
-          const actorRole = getRoleName(h.actor?.role);
-          gameEvents.push(`第${h.night}夜: ${actorRole}${actorName}对${targetName}使用了${h.action}`);
+        const isSelfAction = h.actor?.id === aiPlayer.socketId;
+
+        if (h.action === 'kill') {
+          if (isSelfAction || isWerewolf) {
+            gameEvents.push(`第${h.night}夜: 你参与击杀了${targetName}`);
+          }
+        } else if (h.action === 'check') {
+          if (isSelfAction) {
+            gameEvents.push(`第${h.night}夜: 你查验了${targetName}，结果是${h.result === 'werewolf' ? '狼人' : '好人'}`);
+          }
+        } else if (h.action === 'guard') {
+          if (isSelfAction) {
+            gameEvents.push(`第${h.night}夜: 你守护了${targetName}`);
+          }
+        } else if (h.action === 'save') {
+          if (isSelfAction) {
+            gameEvents.push(`第${h.night}夜: 你用解药救了${targetName}`);
+          }
+        } else if (h.action === 'poison') {
+          if (isSelfAction) {
+            gameEvents.push(`第${h.night}夜: 你用毒药毒了${targetName}`);
+          }
         } else if (h.action === 'vote') {
           gameEvents.push(`${actorName}投票给了${targetName}`);
         } else if (h.action === 'night_end') {
@@ -848,11 +885,19 @@ class AIGameHandler {
 
     const messages = templates[role] || templates[ROLE.VILLAGER];
     let message = messages[Math.floor(Math.random() * messages.length)];
-    
+
     const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
     if (aliveOthers.length > 0 && message.includes('XX')) {
-      const randomPlayer = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
-      message = message.replace(/XX/g, game.getSeatNum(randomPlayer.socketId));
+      // 每个 XX 替换为不同的玩家，避免出现"11号帮11号说话"这类逻辑错误
+      const usedIds = new Set();
+      while (message.includes('XX') && aliveOthers.length > usedIds.size) {
+        let candidate;
+        do {
+          candidate = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+        } while (usedIds.has(candidate.socketId) && usedIds.size < aliveOthers.length);
+        usedIds.add(candidate.socketId);
+        message = message.replace('XX', game.getSeatNum(candidate.socketId));
+      }
     }
 
     return message;
@@ -920,13 +965,19 @@ class AIGameHandler {
 
     const messages = templates[role] || templates[ROLE.VILLAGER];
     let message = messages[Math.floor(Math.random() * messages.length)];
-    
+
     const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
     if (aliveOthers.length > 0 && message.includes('XX')) {
-      const randomPlayer = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
-      message = message.replace(/XX/g, game.getSeatNum(randomPlayer.socketId));
+      const usedIds = new Set();
+      while (message.includes('XX') && aliveOthers.length > usedIds.size) {
+        let candidate;
+        do {
+          candidate = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+        } while (usedIds.has(candidate.socketId) && usedIds.size < aliveOthers.length);
+        usedIds.add(candidate.socketId);
+        message = message.replace('XX', game.getSeatNum(candidate.socketId));
+      }
     }
-
     return message;
   }
 

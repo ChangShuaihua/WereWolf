@@ -713,26 +713,26 @@ function addChat(socket, code, message) {
 
   const io = require('../app').getIO();
   io.to(code).emit('chat_message', chatMsg);
+}
 
-  // 规则问答：如果消息是规则问题，异步返回答案
-  if (ruleQAService.isRuleQuestion(message)) {
-    ruleQAService.answerQuestion(message).then(answer => {
-      const qaMsg = {
-        username: '📖 规则助手',
-        message: answer,
-        timestamp: Date.now(),
-        isSystem: true,
-        isRuleQA: true,
-      };
-      const currentRoom = roomCache.get(code);
-      if (currentRoom) {
-        currentRoom.chat.push(qaMsg);
-        if (currentRoom.chat.length > 100) currentRoom.chat = currentRoom.chat.slice(-100);
-        roomCache.set(code, currentRoom);
-      }
-      io.to(code).emit('chat_message', qaMsg);
-    }).catch(err => {
-      console.error('[roomHandler] Rule QA error:', err.message);
+/**
+ * 规则问答（不进入聊天记录，仅返回给提问者）
+ */
+async function ruleQA(socket, question) {
+  try {
+    const answer = await ruleQAService.answerQuestion(question);
+    socket.emit('rule_qa_answer', {
+      question,
+      answer,
+      timestamp: Date.now(),
+    });
+  } catch (err) {
+    console.error('[roomHandler] ruleQA error:', err.message);
+    socket.emit('rule_qa_answer', {
+      question,
+      answer: '抱歉，回答问题时出错了，请稍后再试。',
+      timestamp: Date.now(),
+      error: true,
     });
   }
 }
@@ -842,4 +842,4 @@ function handleDisconnect(socket) {
   }
 }
 
-module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer, buildSeats };
+module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer, buildSeats, ruleQA };
