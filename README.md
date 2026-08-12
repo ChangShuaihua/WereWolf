@@ -54,9 +54,17 @@ Newwerewolf/
 │   │   │   └── AIAgentManager.js     # AI 智能体管理
 │   │   ├── game/
 │   │   │   ├── GameEngine.js         # 游戏引擎核心
-│   │   │   ├── AIGameHandler.js      # AI 游戏处理
+│   │   │   ├── AIGameHandler.js      # AI 游戏处理（决策、发言、遗言、夜间行动）
+│   │   │   ├── NightPhaseMixin.js    # 夜晚阶段逻辑（含狼人投票广播）
 │   │   │   ├── RoleConfig.js         # 角色配置
 │   │   │   └── constants.js          # 常量定义
+│   │   ├── knowledge/                # 规则知识库（用于 RAG 和 AI 策略）
+│   │   │   ├── basic-rules.md        # 基础规则
+│   │   │   ├── roles.md              # 角色说明
+│   │   │   ├── standard-flow.md      # 标准流程
+│   │   │   └── strategies/
+│   │   │       ├── role-guide.md     # 角色玩法指南
+│   │   │       └── special-situations.md # 特殊情境应对
 │   │   ├── middleware/
 │   │   │   └── auth.js               # 认证中间件
 │   │   ├── models/
@@ -65,9 +73,12 @@ Newwerewolf/
 │   │   ├── routes/
 │   │   │   ├── auth.js               # 认证路由
 │   │   │   └── aiAgentRoutes.js      # AI 智能体路由
+│   │   ├── services/
+│   │   │   ├── GameRetriever.js      # RAG 知识检索
+│   │   │   └── RuleQAService.js      # 规则问答服务
 │   │   ├── socket/
 │   │   │   ├── index.js              # Socket.IO 入口
-│   │   │   ├── roomHandler.js        # 房间管理
+│   │   │   ├── roomHandler.js        # 房间管理（含规则问答）
 │   │   │   └── gameHandler.js        # 游戏事件处理
 │   │   └── utils/
 │   │       ├── AppError.js           # 自定义错误类
@@ -86,7 +97,7 @@ Newwerewolf/
 │   │   │   ├── ConfirmDialog.vue    # 全局确认对话框
 │   │   │   ├── Countdown.vue         # 倒计时组件
 │   │   │   ├── DayPanel.vue          # 白天发言面板
-│   │   │   ├── NightPanel.vue        # 夜晚行动面板
+│   │   │   ├── NightPanel.vue        # 夜晚行动面板（含狼人投票实时显示）
 │   │   │   ├── VotePanel.vue         # 投票面板
 │   │   │   ├── HunterPanel.vue       # 猎人开枪面板
 │   │   │   ├── PlayerList.vue        # 玩家列表
@@ -94,17 +105,19 @@ Newwerewolf/
 │   │   │   └── GameResult.vue        # 游戏结果
 │   │   ├── composables/
 │   │   │   └── useConfirm.js         # 确认对话框逻辑
+│   │   ├── utils/
+│   │   │   └── markdown.js           # Markdown 渲染（规则问答用）
 │   │   ├── views/
 │   │   │   ├── LoginView.vue         # 登录页
-│   │   │   ├── LobbyView.vue         # 大厅页
-│   │   │   ├── RoomView.vue          # 房间页
-│   │   │   ├── GameView.vue          # 游戏页
+│   │   │   ├── LobbyView.vue         # 大厅页（含排行榜）
+│   │   │   ├── RoomView.vue          # 房间页（含规则问答按钮）
+│   │   │   ├── GameView.vue          # 游戏页（含规则问答按钮）
 │   │   │   ├── ProfileView.vue       # 个人中心
 │   │   │   └── AIAgentWorkshop.vue   # AI 工坊
 │   │   ├── stores/
 │   │   │   ├── user.js               # 用户状态
 │   │   │   ├── room.js               # 房间状态
-│   │   │   ├── game.js               # 游戏状态
+│   │   │   ├── game.js               # 游戏状态（含狼人投票状态）
 │   │   │   └── theme.js              # 主题状态（暗色/亮色切换）
 │   │   ├── router/
 │   │   │   └── index.js              # 路由配置
@@ -222,7 +235,14 @@ JWT_EXPIRES_IN=7d
 PORT=3000
 
 # AI API 配置（可选，不配置则使用 fallback 逻辑）
-DEEPSEEK_API_KEY=your_api_key
+DEEPSEEK_API_KEY=your_deepseek_api_key
+DEEPSEEK_API_URL=https://api.deepseek.com
+MODEL_NAME=deepseek-chat
+
+# 或使用 小米 Mimo API（二选一）
+XIAOMI_API_KEY=your_xiaomi_api_key
+XIAOMI_API_URL=https://api.xiaomimimo.com
+XIAOMI_MODEL_NAME=mimo-v2-flash
 
 # CORS 允许的源（逗号分隔）
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
@@ -254,6 +274,13 @@ npm run dev
 - 🗳️ **投票阶段**（30秒）：放逐投票，平票时进入 PK 加赛
 - 🔫 **猎人机制**：猎人死亡时可开枪带走一名玩家（被毒杀时不可开枪，10秒决策窗口）
 
+### 规则问答系统
+- 📖 **游戏规则问答卡片**：房间和游戏内都有「游戏规则」按钮，点击弹出独立问答面板
+- ❓ 快捷问题按钮：预置 5 个常见规则问题，一键提问
+- 🤖 RAG 智能检索：基于游戏规则知识库（角色说明、标准流程、特殊情境、战术手册）生成精准回答
+- 🔒 **问答不进入聊天框**：通过独立的 `rule_qa` Socket 事件通道，问答历史仅提问者可见，不污染公共聊天
+- 📝 Markdown 格式渲染：回答以标题、加粗、列表等格式美观展示
+
 ### 房间系统
 - 🆔 创建/加入房间（6位房间码）
 - ✅ 准备/取消准备
@@ -261,6 +288,12 @@ npm run dev
 - 📊 玩家状态同步
 - 🎮 开始游戏 / 返回房间
 - 🔄 断线自动重连（60秒宽限期）
+- 🏆 实时排行榜：按积分和胜场排序，展示 Top 50 玩家
+
+### 狼人协作
+- 🐺 **狼人实时队友击杀投票**：夜晚狼人阶段，所有存活狼人能实时看到每位队友选择的击杀目标
+- ✅ 统一目标提示：当所有狼人选择相同时，显示「狼人已统一目标」
+- ✏️ 可修改击杀选择：提交后可点击「修改击杀目标」重新选择
 
 ### AI 智能体
 - 🤖 AI 工坊：创建、编辑、删除 AI 智能体
@@ -270,6 +303,14 @@ npm run dev
 - 🧠 自定义策略（夜间策略、白天策略、身份暴露时机）
 - 👥 AI 玩家可加入房间参与游戏
 - 💡 AI 自动发言和决策（支持 LLM 或 fallback 模板）
+
+**LLM 配置与 fallback 机制：**
+- 配置 `.env` 中的 `XIAOMI_API_KEY` 或 `DEEPSEEK_API_KEY` 启用大模型推理
+- 不配置 API Key 时自动降级为模板引擎（fallback），不影响游戏运行
+- LLM 超时保护：聊天 12s / 夜晚行动 15s / 遗言 10s，超时自动回退模板
+- AI 信息隔离：只暴露自己角色 + 狼人队友身份，其他人均为 unknown，保证公平性
+- AI 决策基于公开信息：预言家查验结果被跟随，被多人怀疑的玩家更可能被投
+- 可通过 `docker-compose logs -f backend | grep AIGameHandler` 观察 LLM 调用情况
 
 ### 特色功能
 - 🌓 **暗色/亮色主题切换**：一键切换界面主题，偏好自动保存
@@ -327,6 +368,8 @@ npm run dev
 | `room_deleted`     | 服务器→客户端 | 房间删除通知   |
 | `chat`             | 客户端→服务器 | 发送聊天消息   |
 | `chat_message`     | 服务器→客户端 | 收到聊天消息   |
+| `rule_qa`          | 客户端→服务器 | 提交规则问题   |
+| `rule_qa_answer`   | 服务器→客户端 | 收到规则回答（单播给提问者） |
 
 ### 游戏事件
 | 事件名                | 方向          | 说明                     |
@@ -338,6 +381,7 @@ npm run dev
 | `night_action_prompt` | 服务器→客户端 | 夜晚行动提示             |
 | `night_role_turn`     | 服务器→客户端 | 当前夜晚角色行动阶段     |
 | `night_role_done`     | 服务器→客户端 | 当前夜晚角色行动结束     |
+| `werewolf_vote_update`| 服务器→客户端 | 狼人队友击杀投票更新（只发给狼人） |
 | `seer_result`         | 服务器→客户端 | 预言家查验结果           |
 | `night_result`        | 服务器→客户端 | 夜晚结果（死亡信息）     |
 | `hunter_shoot`        | 客户端→服务器 | 猎人开枪                 |
