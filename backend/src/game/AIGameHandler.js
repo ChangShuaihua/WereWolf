@@ -5,6 +5,7 @@ const { roomCache, gameCache } = require('../utils/cache');
 const { PHASE, ROLE, TEAM } = require('./constants');
 const { getRoleName } = require('./RoleConfig');
 const aiAgentManager = require('../ai/AIAgentManager');
+const gameRetriever = require('../services/GameRetriever');
 
 // W13: simple concurrency limiter for parallel AI LLM calls
 function pLimit(concurrency) {
@@ -126,6 +127,9 @@ class AIGameHandler {
     }
 
     const gameState = this._buildGameState(game, aiPlayer);
+    // RAG: Retrieve relevant strategies
+    const ragStrategyText = await gameRetriever.getStrategyForGame(game, aiPlayer.socketId);
+
     const agentConfig = aiPlayer.agentConfig || await aiAgentManager.getAgentById(aiPlayer.agentId);
     
     const outputParser = StructuredOutputParser.fromNamesAndDescriptions({
@@ -167,11 +171,11 @@ class AIGameHandler {
 - 你的队友：{teammates}
 - 可疑玩家：{suspiciousPlayers}
 {strategyDesc}
-
+{ragStrategy}
 请根据你的角色和游戏状态做出决策。
 
 {formatInstructions}`,
-      inputVariables: ['roleName', 'roleAbility', 'alivePlayers', 'teammates', 'suspiciousPlayers', 'strategyDesc', 'formatInstructions'],
+      inputVariables: ['roleName', 'roleAbility', 'alivePlayers', 'teammates', 'suspiciousPlayers', 'strategyDesc', 'ragStrategy', 'formatInstructions'],
     });
 
     const chain = prompt.pipe(this.model).pipe(outputParser);
@@ -184,7 +188,8 @@ class AIGameHandler {
         teammates: teammatesStr, 
         suspiciousPlayers: suspiciousStr,
         strategyDesc,
-        formatInstructions 
+        ragStrategy: ragStrategyText,
+        formatInstructions
       });
       
       if (result.action === 'skip') {
@@ -257,7 +262,7 @@ class AIGameHandler {
       const isTeammate = pTeam === team && !isSelf;
       return {
         socketId: p.socketId,
-        username: p.username,
+        username: game.getSeatNum(p.socketId),
         role: isSelf ? role : (isTeammate ? pRole : 'unknown'),
         isSelf,
         isTeammate,
@@ -305,7 +310,7 @@ class AIGameHandler {
 
     if (aliveOthers.length === 0) return null;
 
-    const aliveOthersStr = aliveOthers.map(p => p.username).join(', ');
+    const aliveOthersStr = aliveOthers.map(p => game.getSeatNum(p.socketId)).join(', ');
     const teamName = team === 'werewolf' ? '狼人' : '村民';
     const goal = team === 'werewolf' ? '投票放逐好人' : '投票放逐狼人';
     
@@ -318,6 +323,9 @@ class AIGameHandler {
 
     const roleName = getRoleName(role);
     
+    // RAG: Retrieve relevant strategies for voting
+    const ragStrategyText = await gameRetriever.getStrategyForGame(game, aiPlayer.socketId);
+
     // 构建策略描述
     let strategyDesc = '';
     if (agentConfig?.strategy) {
@@ -347,17 +355,17 @@ class AIGameHandler {
 - 当前存活玩家：{aliveOthers}
 - 你的目标：{goal}
 {strategyDesc}
-
+{ragStrategy}
 请根据游戏状态决定投票给谁。
 
 {formatInstructions}`,
-      inputVariables: ['roleName', 'teamName', 'aliveOthers', 'goal', 'strategyDesc', 'formatInstructions'],
+      inputVariables: ['roleName', 'teamName', 'aliveOthers', 'goal', 'strategyDesc', 'ragStrategy', 'formatInstructions'],
     });
 
     const chain = prompt.pipe(this.model).pipe(outputParser);
 
     try {
-      const result = await chain.invoke({ roleName, teamName, aliveOthers: aliveOthersStr, goal, strategyDesc, formatInstructions });
+      const result = await chain.invoke({ roleName, teamName, aliveOthers: aliveOthersStr, goal, strategyDesc, ragStrategy: ragStrategyText, formatInstructions });
       if (this._validateTarget(game, aiPlayer, 'vote', result.targetId)) {
         return result.targetId;
       }
@@ -454,17 +462,34 @@ class AIGameHandler {
     const team = TEAM[role];
     const alivePlayers = game.alivePlayers;
     const teamName = team === 'werewolf' ? '狼人' : '村民';
-    const alivePlayersStr = alivePlayers.map(p => p.username).join(', ');
+    const alivePlayersStr = alivePlayers.map(p => game.getSeatNum(p.socketId)).join(', ');
+
+    // Build username to seat number mapping for sanitizing context
+    const nameToSeat = {};
+    game.players.forEach(p => {
+      if (p.username) nameToSeat[p.username] = game.getSeatNum(p.socketId);
+    });
+    const sortedNames = Object.keys(nameToSeat).sort((a, b) => b.length - a.length);
+    const replaceNames = (text) => {
+      let result = text;
+      for (const name of sortedNames) {
+        if (name && name.length > 0) {
+          result = result.split(name).join(nameToSeat[name]);
+        }
+      }
+      return result;
+    };
 
     const room = roomCache.get(game.roomCode);
     const recentChat = room?.chat || [];
     const chatHistory = recentChat.slice(-15).map(msg => {
-      if (msg.isSystem) return `[系统] ${msg.message}`;
+      if (msg.isSystem) return `[系统] ${replaceNames(msg.message)}`;
       const aiMarker = msg.isAI ? '🤖' : '';
-      return `${aiMarker}${msg.username}: ${msg.message}`;
+      const displayName = nameToSeat[msg.username] || msg.username;
+      return `${aiMarker}${displayName}: ${replaceNames(msg.message)}`;
     }).join('\n');
 
-    const deadPlayers = game.players.filter(p => !p.isAlive).map(p => p.username);
+    const deadPlayers = game.players.filter(p => !p.isAlive).map(p => game.getSeatNum(p.socketId));
     const deadPlayersStr = deadPlayers.length > 0 ? deadPlayers.join(', ') : '无';
 
     const nightCount = game.nightCount;
@@ -473,30 +498,29 @@ class AIGameHandler {
     if (game.gameHistory.length > 0) {
       const recentEvents = game.gameHistory.slice(-20);
       recentEvents.forEach(h => {
+        const actorName = h.actor?.username || (h.actor?.id ? game.getSeatNum(h.actor.id) : '未知');
+        const targetName = h.target?.username || (h.target?.id ? game.getSeatNum(h.target.id) : '未知');
         if (h.action === 'kill' || h.action === 'guard' || h.action === 'check' || h.action === 'save' || h.action === 'poison') {
           const actorRole = getRoleName(h.actor?.role);
-          const actorName = h.actor?.username || '未知';
-          const targetName = h.target?.username || '未知';
           gameEvents.push(`第${h.night}夜: ${actorRole}${actorName}对${targetName}使用了${h.action}`);
         } else if (h.action === 'vote') {
-          const voterName = h.actor?.username || '未知';
-          const targetName = h.target?.username || '未知';
-          gameEvents.push(`${voterName}投票给了${targetName}`);
+          gameEvents.push(`${actorName}投票给了${targetName}`);
         } else if (h.action === 'night_end') {
           if (h.deaths && h.deaths.length > 0) {
-            const deathNames = h.deaths.map(d => d.username).join(', ');
+            const deathNames = h.deaths.map(d => d.username || (d.id ? game.getSeatNum(d.id) : '未知')).join(', ');
             gameEvents.push(`第${h.night}夜结束: ${deathNames}死亡`);
           } else {
             gameEvents.push(`第${h.night}夜结束: 平安夜`);
           }
         } else if (h.action === 'hunter_shoot') {
-          const hunterName = h.actor?.username || '未知';
-          const targetName = h.target?.username || '未知';
-          gameEvents.push(`${hunterName}开枪带走了${targetName}`);
+          gameEvents.push(`${actorName}开枪带走了${targetName}`);
         }
       });
     }
     const gameEventsStr = gameEvents.length > 0 ? gameEvents.join('\n') : '暂无';
+
+    // RAG: Retrieve relevant strategies for chat
+    const ragStrategyText = await gameRetriever.getStrategyForGame(game, aiPlayer.socketId);
 
     const agentConfig = aiPlayer.agentConfig || await aiAgentManager.getAgentById(aiPlayer.agentId);
     const isWerewolf = team === 'werewolf';
@@ -582,7 +606,7 @@ class AIGameHandler {
     }
 
     // Check if this player was mentioned in recent chat
-    if (this._wasMentioned(room?.chat, aiPlayer.username)) {
+    if (this._wasMentioned(room?.chat, game.getSeatNum(aiPlayer.socketId))) {
       emotionDesc += (emotionDesc ? ' ' : '') + '你刚刚被其他玩家提到，需要回应他们的质疑或观点。';
     }
 
@@ -622,7 +646,7 @@ class AIGameHandler {
 
 === 游戏事件记录 ===
 {gameEvents}
-
+{ragStrategy}
 === 角色发言规则 ===
 - 狼人：伪装成好人，分析局势，引导舆论，保护队友，根据聊天记录找机会嫁祸好人
 - 预言家：报告查验结果（如果你验过的人），引导投票，对可疑的人提出质疑
@@ -665,7 +689,7 @@ class AIGameHandler {
 8. 语言习惯中的词汇可以选择性使用，不必每次都用
 
 {formatInstructions}`,
-      inputVariables: ['aiName', 'roleName', 'teamName', 'alivePlayers', 'deadPlayers', 'nightCount', 'chatHistory', 'gameEvents', 'personalityDesc', 'speakingStyleDesc', 'languageDesc', 'emotionDesc', 'formatInstructions'],
+      inputVariables: ['aiName', 'roleName', 'teamName', 'alivePlayers', 'deadPlayers', 'nightCount', 'chatHistory', 'gameEvents', 'ragStrategy', 'personalityDesc', 'speakingStyleDesc', 'languageDesc', 'emotionDesc', 'formatInstructions'],
     });
 
     const personalityTemp = this._getTemperatureForPersonality(agentConfig);
@@ -677,7 +701,7 @@ class AIGameHandler {
 
     try {
       const result = await chain.invoke({ 
-        aiName: aiPlayer.username,
+        aiName: game.getSeatNum(aiPlayer.socketId),
         roleName, 
         teamName, 
         alivePlayers: alivePlayersStr, 
@@ -685,6 +709,7 @@ class AIGameHandler {
         nightCount,
         chatHistory,
         gameEvents: gameEventsStr,
+        ragStrategy: ragStrategyText,
         personalityDesc,
         speakingStyleDesc,
         languageDesc,
@@ -693,6 +718,7 @@ class AIGameHandler {
       });
       let message = result.message;
       message = this._postProcessMessage(message, aiPlayer);
+      message = replaceNames(message);
       return message;
     } catch (error) {
       console.error('[AIGameHandler] Chat generation error:', error);
@@ -788,7 +814,7 @@ class AIGameHandler {
     const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
     if (aliveOthers.length > 0 && message.includes('XX')) {
       const randomPlayer = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
-      message = message.replace(/XX/g, randomPlayer.username);
+      message = message.replace(/XX/g, game.getSeatNum(randomPlayer.socketId));
     }
 
     return message;
@@ -866,12 +892,19 @@ class AIGameHandler {
     return message;
   }
 
+  _detectSituation(game) {
+    return gameRetriever._detectSituation(game);
+  }
+
   _sendChatMessage(roomCode, aiPlayer, message) {
     const room = roomCache.get(roomCode);
     if (!room) return;
 
+    const game = gameCache.get(roomCode);
+    const displayName = game ? game.getSeatNum(aiPlayer.socketId) : aiPlayer.username;
+
     const chatMsg = {
-      username: aiPlayer.username,
+      username: displayName,
       message,
       timestamp: Date.now(),
       isAI: true,

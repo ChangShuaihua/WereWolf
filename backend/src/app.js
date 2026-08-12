@@ -7,11 +7,14 @@ require('dotenv').config();
 
 const { initDB } = require('./config/db');
 const { initRedis, getRedisStatus, shutdownRedis } = require('./config/redis');
+const { syncAllUsersToRedis } = require('./services/statsService');
 const { roomCache } = require('./utils/cache');
 const { getUserCount } = require('./utils/userSocketMap');
 const aiAgentManager = require('./ai/AIAgentManager');
 const authRoutes = require('./routes/auth');
 const aiAgentRoutes = require('./routes/aiAgentRoutes');
+const replayRoutes = require('./routes/replayRoutes');
+const statsRoutes = require('./routes/stats');
 const initSocket = require('./socket');
 const { AppError } = require('./utils/AppError');
 
@@ -106,6 +109,8 @@ app.use((req, res, next) => {
 // REST Routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/ai-agents', aiAgentRoutes);
+app.use('/api/replays', replayRoutes);
+app.use('/api/stats', statsRoutes);
 
 // GET /api/lobby-stats - lobby stats (online users + AI agent count)
 app.get('/api/lobby-stats', async (req, res, next) => {
@@ -205,6 +210,8 @@ async function start() {
     await initDB();
     await aiAgentManager.init();
     await initRedis();
+    // 同步用户积分数据到 Redis
+    await syncAllUsersToRedis();
     // Rooms are ephemeral; start each process with a fresh lobby view.
     roomCache.clear();
     server.listen(PORT, '0.0.0.0', () => {

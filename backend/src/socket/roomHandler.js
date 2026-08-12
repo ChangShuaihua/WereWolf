@@ -2,6 +2,7 @@ const { roomCache, socketCache } = require('../utils/cache');
 const { gameCache } = require('../utils/cache');
 const { GAME_MODES } = require('../game/constants');
 const aiGameHandler = require('../game/AIGameHandler');
+const ruleQAService = require('../services/RuleQAService');
 
 // W9: per-socket chat rate limiting (3 messages/sec)
 const chatRateMap = new Map(); // socketId -> timestamps[]
@@ -712,6 +713,28 @@ function addChat(socket, code, message) {
 
   const io = require('../app').getIO();
   io.to(code).emit('chat_message', chatMsg);
+
+  // 规则问答：如果消息是规则问题，异步返回答案
+  if (ruleQAService.isRuleQuestion(message)) {
+    ruleQAService.answerQuestion(message).then(answer => {
+      const qaMsg = {
+        username: '📖 规则助手',
+        message: answer,
+        timestamp: Date.now(),
+        isSystem: true,
+        isRuleQA: true,
+      };
+      const currentRoom = roomCache.get(code);
+      if (currentRoom) {
+        currentRoom.chat.push(qaMsg);
+        if (currentRoom.chat.length > 100) currentRoom.chat = currentRoom.chat.slice(-100);
+        roomCache.set(code, currentRoom);
+      }
+      io.to(code).emit('chat_message', qaMsg);
+    }).catch(err => {
+      console.error('[roomHandler] Rule QA error:', err.message);
+    });
+  }
 }
 
 /**

@@ -71,6 +71,7 @@
             :prompt="gameStore.nightActionPrompt"
             :seerResult="gameStore.seerResult"
             :currentNightRole="gameStore.currentNightRole"
+            :werewolf-vote-state="gameStore.werewolfVoteState"
             @action="gameStore.submitNightAction"
           />
 
@@ -124,7 +125,14 @@
     </div>
 
     <!-- Game Over -->
-    <GameResult v-if="gameStore.isEnd" :result="gameStore.gameOver" @back="goToLobby" @returnRoom="returnToRoom" />
+    <GameResult
+      v-if="gameStore.isEnd"
+      :result="gameStore.gameOver"
+      :replay-game-id="gameStore.replayGameId"
+      @back="goToLobby"
+      @returnRoom="returnToRoom"
+      @viewReplay="viewReplay"
+    />
     </template>
   </div>
 </template>
@@ -182,6 +190,14 @@ const roleIcons = {
 const roleIcon = computed(() => roleIcons[gameStore.myRole] || '❓')
 
 const aliveCount = computed(() => gameStore.players.filter(p => p.isAlive).length)
+
+function viewReplay(gameId) {
+  router.push({
+    name: 'Replay',
+    params: { id: gameId },
+    query: { room: route.params.code },
+  })
+}
 
 const gameOverRoles = computed(() => {
   if (!gameStore.gameOver) return {}

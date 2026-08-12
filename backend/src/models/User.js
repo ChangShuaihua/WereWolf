@@ -21,10 +21,47 @@ const User = {
 
   async findById(id) {
     const [rows] = await pool.query(
-      'SELECT id, username, created_at FROM users WHERE id = ?',
+      'SELECT id, username, score, total_games, total_wins, total_losses, created_at FROM users WHERE id = ?',
       [id]
     );
     return rows[0] || null;
+  },
+
+  // 更新用户积分和战绩（相对增量方式，注意和重算并存时不要双重计数）
+  async updateScore(userId, scoreChange, isWin) {
+    const sql = isWin
+      ? 'UPDATE users SET score = GREATEST(0, score + ?), total_games = total_games + 1, total_wins = total_wins + 1 WHERE id = ?'
+      : 'UPDATE users SET score = GREATEST(0, score + ?), total_games = total_games + 1, total_losses = total_losses + 1 WHERE id = ?';
+    await pool.query(sql, [scoreChange, userId]);
+  },
+
+  // 用真实 game_players 记录覆盖重算用户 score/total_*，返回重算后的值
+  async recalcStatsFromGamePlayers(userId, realStats) {
+    const { totalGames, totalWins, totalLosses, score } = realStats;
+    await pool.query(
+      `UPDATE users
+         SET score = ?, total_games = ?, total_wins = ?, total_losses = ?
+       WHERE id = ?`,
+      [score, totalGames, totalWins, totalLosses, userId]
+    );
+    return this.findById(userId);
+  },
+
+  // 获取所有有积分的用户（用于 Redis 同步）
+  async findAllWithScore() {
+    const [rows] = await pool.query(
+      'SELECT id, username, score, total_games, total_wins, total_losses FROM users'
+    );
+    return rows;
+  },
+
+  // 获取排行榜
+  async getLeaderboard(limit = 50) {
+    const [rows] = await pool.query(
+      'SELECT id, username, score, total_games, total_wins, total_losses FROM users WHERE total_games > 0 ORDER BY score DESC, total_wins DESC LIMIT ?',
+      [limit]
+    );
+    return rows;
   },
 
   async verifyPassword(inputPassword, hashedPassword) {

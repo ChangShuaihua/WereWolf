@@ -3,6 +3,9 @@ const GameEngine = require('../game/GameEngine');
 const GameRecord = require('../models/GameRecord');
 const aiGameHandler = require('../game/AIGameHandler');
 const { PHASE } = require('../game/constants');
+const { analyzeReplay } = require('../game/ReplayAnalyzer');
+const statsService = require('../services/statsService');
+const gameRetriever = require('../services/GameRetriever');
 
 /**
  * Start the game
@@ -36,7 +39,9 @@ function startGame(io, socket, code) {
   // Create emit callback
   const emit = (target, event, data) => {
     if (event === '__game_result') {
-      handleGameResult(data);
+      handleGameResult(data).then(gameId => {
+        if (gameId) io.to(code).emit('game_replay_ready', { gameId });
+      });
     } else if (event === '__game_replay') {
       const room = roomCache.get(data.roomCode);
       if (room) {
@@ -151,7 +156,7 @@ function handleHunterShoot(socket, code, { targetId }) {
 
   // Kill the target
   target.isAlive = false;
-  
+
   game.gameHistory.push({
     night: game.nightCount,
     action: 'hunter_shoot',
@@ -159,14 +164,14 @@ function handleHunterShoot(socket, code, { targetId }) {
     target: { id: targetId, username: target.username },
     detail: `${hunter.username}开枪带走了${target.username}`,
   });
-  
+
   // Notify everyone
   game.broadcast('hunter_result', {
     shooter: { id: socket.id, username: hunter.username },
     target: { id: targetId, username: target.username },
     message: `${hunter.username}开枪带走了${target.username}`,
   });
-  
+
   game.broadcast('chat_message', {
     username: '系统',
     message: `🔫 ${hunter.username}开枪带走了${target.username}`,
@@ -214,20 +219,35 @@ async function handleGameResult(data) {
         data.roomCode,
         data.winner,
         data.playerCount,
-        data.duration
+        data.duration,
+        { players: data.players, history: data.history },
+        await analyzeReplay(data, aiGameHandler.model)
       );
 
       // Record each player
       for (const p of data.players) {
-        const room = roomCache.get(data.roomCode);
-        const roomPlayer = room?.players.find(rp => rp.socketId === p.id);
-        if (roomPlayer?.userId) {
-          await GameRecord.addPlayer(gameId, roomPlayer.userId, p.role, p.isWinner);
+        // 直接使用游戏结果中的 userId（来自 GameEngine 玩家对象的 id 字段）
+        if (p.userId) {
+          await GameRecord.addPlayer(gameId, p.userId, p.role, p.isWinner);
+          // 更新积分（Redis + MySQL 双写）
+          const scoreChange = p.isWinner ? 1 : -1;
+          await statsService.updateUserScore(
+            p.userId,
+            p.username || '玩家',
+            scoreChange,
+            p.isWinner
+          );
         }
       }
 
       console.log(`Game ${data.roomCode} ended. Winner: ${data.winner}, Duration: ${data.duration}s`);
-      return;
+
+      // 将对局存入RAG知识库，供后续AI检索学习
+      gameRetriever.addGameReplay(data).catch(err => {
+        console.error('[handleGameResult] Failed to save replay to knowledge base:', err.message);
+      });
+
+      return gameId;
     } catch (err) {
       console.error(`[handleGameResult] attempt ${attempt}/${maxAttempts} failed:`, err.message);
       if (attempt < maxAttempts) {
@@ -235,7 +255,6 @@ async function handleGameResult(data) {
       }
     }
   }
-
   // W8: all retries failed — persist to Redis recovery queue for later reconciliation
   try {
     const { getRedisClient } = require('../config/redis');
@@ -247,6 +266,7 @@ async function handleGameResult(data) {
   } catch (e) {
     console.error('[handleGameResult] Failed to persist to Redis recovery queue:', e.message);
   }
+  return null;
 }
 
 /**

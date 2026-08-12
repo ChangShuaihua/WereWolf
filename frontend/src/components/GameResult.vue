@@ -18,6 +18,10 @@
       </div>
 
       <div class="result-actions">
+        <button v-if="props.replayGameId" class="btn btn-replay" @click="$emit('viewReplay', props.replayGameId)">
+          <span class="btn-icon">◎</span>
+          <span>查看对局复盘</span>
+        </button>
         <button class="btn btn-return" @click="$emit('returnRoom')">
           <span class="btn-icon">🏠</span>
           <span>返回房间</span>
@@ -36,9 +40,10 @@ import { computed } from 'vue'
 
 const props = defineProps({
   result: { type: Object, default: null },
+  replayGameId: { type: Number, default: null },
 })
 
-defineEmits(['back', 'returnRoom'])
+defineEmits(['back', 'returnRoom', 'viewReplay'])
 
 const isVictory = computed(() => {
   return props.result?.winner === 'werewolf' || props.result?.winner === 'villager'
@@ -231,7 +236,20 @@ function formatDuration(seconds) {
 
 .result-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.btn-replay {
+  flex-basis: 100%;
+  background: var(--ai-primary);
+  color: white;
+  box-shadow: 0 4px 16px var(--ai-glow);
+}
+
+.btn-replay:hover {
+  background: var(--ai-secondary);
+  transform: translateY(-2px);
 }
 
 .btn {

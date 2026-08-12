@@ -59,6 +59,9 @@
           </div>
         </div>
         
+        <span v-else-if="msg.isSystem && msg.isRuleQA" class="chat-rule-qa">
+          <span class="rule-qa-text">{{ msg.message }}</span>
+        </span>
         <span v-else-if="msg.isSystem" class="chat-system">{{ msg.message }}</span>
         <template v-else>
           <span class="chat-user">{{ msg.isAI ? '🤖 ' : '' }}{{ msg.username }}:</span>
@@ -72,7 +75,7 @@
     <form class="chat-input-wrapper" @submit.prevent="sendMsg" :class="{ 'is-disabled': !canSpeak }">
       <input 
         v-model="text" 
-        :placeholder="canSpeak ? '输入消息...' : disabledHint"
+        :placeholder="canSpeak ? '输入消息... (问号开头可提问规则，如：?女巫能自救吗)' : disabledHint"
         maxlength="200"
         class="chat-input-field"
         :disabled="!canSpeak"
@@ -122,13 +125,13 @@ const canSpeak = computed(() => {
   // Night, vote, end phases: no one can speak
   if (phase === 'NIGHT' || phase === 'VOTE' || phase === 'END') return false
   
-  // Dead player cannot speak (even during last will)
-  if (!props.isAlive) return false
-  
   // Last will phase: only current dead speaker can speak
   if (phase === 'LAST_WILL') {
-    return props.currentSpeaker === mySocketId
+    return !props.isAlive && props.currentSpeaker === mySocketId
   }
+
+  // Dead players cannot participate in ordinary discussion or ordered speaking.
+  if (!props.isAlive) return false
   
   // Discussion phase: everyone can speak
   if (phase === 'DISCUSSION') return true
@@ -243,6 +246,22 @@ watch(() => props.messages.length, async () => {
   font-size: 0.82rem;
   color: #60a5fa;
   font-weight: 500;
+}
+
+.chat-rule-qa {
+  display: block;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(20, 184, 166, 0.08));
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.chat-rule-qa .rule-qa-text {
+  color: #86efac;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .chat-input-wrapper {

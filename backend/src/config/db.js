@@ -36,9 +36,29 @@ async function initDB() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
+        score INT DEFAULT 0,
+        total_games INT DEFAULT 0,
+        total_wins INT DEFAULT 0,
+        total_losses INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+
+    // 兼容已有数据库：添加积分字段（如不存在）
+    const [userColumns] = await conn.query('SHOW COLUMNS FROM users');
+    const userColumnNames = new Set(userColumns.map(c => c.Field));
+    if (!userColumnNames.has('score')) {
+      await conn.query('ALTER TABLE users ADD COLUMN score INT DEFAULT 0 AFTER password');
+    }
+    if (!userColumnNames.has('total_games')) {
+      await conn.query('ALTER TABLE users ADD COLUMN total_games INT DEFAULT 0 AFTER score');
+    }
+    if (!userColumnNames.has('total_wins')) {
+      await conn.query('ALTER TABLE users ADD COLUMN total_wins INT DEFAULT 0 AFTER total_games');
+    }
+    if (!userColumnNames.has('total_losses')) {
+      await conn.query('ALTER TABLE users ADD COLUMN total_losses INT DEFAULT 0 AFTER total_wins');
+    }
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS game_records (
@@ -47,9 +67,21 @@ async function initDB() {
         winner ENUM('werewolf', 'villager') NOT NULL,
         player_count INT NOT NULL,
         duration INT NOT NULL,
+        replay_data JSON NULL,
+        analysis JSON NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+
+    // Keep existing installations compatible with the richer replay format.
+    const [gameRecordColumns] = await conn.query('SHOW COLUMNS FROM game_records');
+    const gameRecordColumnNames = new Set(gameRecordColumns.map(column => column.Field));
+    if (!gameRecordColumnNames.has('replay_data')) {
+      await conn.query('ALTER TABLE game_records ADD COLUMN replay_data JSON NULL AFTER duration');
+    }
+    if (!gameRecordColumnNames.has('analysis')) {
+      await conn.query('ALTER TABLE game_records ADD COLUMN analysis JSON NULL AFTER replay_data');
+    }
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS game_players (

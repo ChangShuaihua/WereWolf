@@ -16,12 +16,14 @@ export const useGameStore = defineStore('game', () => {
   const votedCount = ref(0)
   const totalVoters = ref(0)
   const gameOver = ref(null)
+  const replayGameId = ref(null)
   const seerResult = ref(null)
   const nightActionPrompt = ref(null)
   const hunterPrompt = ref(null)
   const currentSpeaker = ref(null)
   const speakerName = ref('')
   const currentNightRole = ref(null)
+  const werewolfVoteState = ref(null)
   const roleRevealed = ref(sessionStorage.getItem('werewolf_role_revealed') === 'true')
 
   const isNight = computed(() => phase.value === 'NIGHT')
@@ -45,6 +47,7 @@ export const useGameStore = defineStore('game', () => {
     players.value = data.players
     phase.value = data.phase || 'NIGHT'
     gameOver.value = null
+    replayGameId.value = null
     myVote.value = ''
   }
 
@@ -72,6 +75,7 @@ export const useGameStore = defineStore('game', () => {
     nightActionPrompt.value = null
     currentSpeaker.value = data.currentSpeaker || null
     speakerName.value = data.speakerName || ''
+    if (data.phase === 'NIGHT') werewolfVoteState.value = null
   }
 
   function _onSpeakerChange(data) {
@@ -93,6 +97,11 @@ export const useGameStore = defineStore('game', () => {
   function _onNightRoleDone(data) {
     console.log('[gameStore] night_role_done', data)
     currentNightRole.value = null
+    if (data?.role === 'werewolf') werewolfVoteState.value = null
+  }
+
+  function _onWerewolfVoteUpdate(data) {
+    werewolfVoteState.value = data
   }
 
   function _onSeerResult(data) {
@@ -163,6 +172,10 @@ export const useGameStore = defineStore('game', () => {
     resetRoleRevealed()
   }
 
+  function _onReplayReady(data) {
+    replayGameId.value = data?.gameId || null
+  }
+
   function _onPlayerDisconnected(data) {
     const p = players.value.find(pl => pl.id === data.id)
     if (p) p.isAlive = false
@@ -175,11 +188,13 @@ export const useGameStore = defineStore('game', () => {
     socket.off('night_action_prompt', _onNightActionPrompt)
     socket.off('seer_result', _onSeerResult)
     socket.off('night_result', _onNightResult)
+    socket.off('werewolf_vote_update', _onWerewolfVoteUpdate)
     socket.off('hunter_trigger', _onHunterTrigger)
     socket.off('hunter_result', _onHunterResult)
     socket.off('vote_update', _onVoteUpdate)
     socket.off('vote_result', _onVoteResult)
     socket.off('game_over', _onGameOver)
+    socket.off('game_replay_ready', _onReplayReady)
     socket.off('player_disconnected', _onPlayerDisconnected)
     socket.off('speaker_change', _onSpeakerChange)
 
@@ -190,11 +205,13 @@ export const useGameStore = defineStore('game', () => {
     socket.on('night_role_done', _onNightRoleDone)
     socket.on('seer_result', _onSeerResult)
     socket.on('night_result', _onNightResult)
+    socket.on('werewolf_vote_update', _onWerewolfVoteUpdate)
     socket.on('hunter_trigger', _onHunterTrigger)
     socket.on('hunter_result', _onHunterResult)
     socket.on('vote_update', _onVoteUpdate)
     socket.on('vote_result', _onVoteResult)
     socket.on('game_over', _onGameOver)
+    socket.on('game_replay_ready', _onReplayReady)
     socket.on('player_disconnected', _onPlayerDisconnected)
     socket.on('speaker_change', _onSpeakerChange)
 
@@ -209,11 +226,13 @@ export const useGameStore = defineStore('game', () => {
     socket.off('night_role_done', _onNightRoleDone)
     socket.off('seer_result', _onSeerResult)
     socket.off('night_result', _onNightResult)
+    socket.off('werewolf_vote_update', _onWerewolfVoteUpdate)
     socket.off('hunter_trigger', _onHunterTrigger)
     socket.off('hunter_result', _onHunterResult)
     socket.off('vote_update', _onVoteUpdate)
     socket.off('vote_result', _onVoteResult)
     socket.off('game_over', _onGameOver)
+    socket.off('game_replay_ready', _onReplayReady)
     socket.off('player_disconnected', _onPlayerDisconnected)
     socket.off('speaker_change', _onSpeakerChange)
   }
@@ -252,8 +271,8 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     phase, myRole, myRoleName, players, timeout, message, nightCount,
-    candidates, myVote, votedCount, totalVoters, gameOver, seerResult, nightActionPrompt, hunterPrompt,
-    currentSpeaker, speakerName, currentNightRole, roleRevealed,
+    candidates, myVote, votedCount, totalVoters, gameOver, replayGameId, seerResult, nightActionPrompt, hunterPrompt,
+    currentSpeaker, speakerName, currentNightRole, werewolfVoteState, roleRevealed,
     isNight, isDay, isVote, isEnd, myPlayer, alivePlayers,
     bindEvents, unbindEvents,
     submitNightAction, submitHunterShoot, submitVote, skipDay, sendChat,
