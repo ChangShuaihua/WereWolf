@@ -12,6 +12,80 @@ class GameRetriever {
     this.docs = [];
     this.isLoaded = false;
     this._loadPromise = null;
+    
+    // 检索缓存：key = "roomCode:role:phase:situation"
+    this._cache = new Map();
+    this._CACHE_MAX = 100;
+    this._CACHE_TTL = 60000; // 60秒
+    
+    // 检索统计
+    this._stats = {
+      totalRetrievals: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      zeroResultCount: 0,
+      byRole: {},
+      byPhase: {},
+    };
+  }
+
+  /**
+   * 生成缓存key
+   */
+  _getCacheKey(game, socketId) {
+    const role = game.getRole(socketId) || 'unknown';
+    const phase = game.phase || 'unknown';
+    const situation = this._detectSituation(game) || 'none';
+    const nightCount = game.nightCount || 0;
+    return `${game.roomCode}:${role}:${phase}:${situation}:${nightCount}`;
+  }
+
+  /**
+   * 从缓存获取或执行检索
+   */
+  async _retrieveWithCache(game, socketId, retrieveFn) {
+    const key = this._getCacheKey(game, socketId);
+    const now = Date.now();
+    
+    // 检查缓存
+    const cached = this._cache.get(key);
+    if (cached && (now - cached.time) < this._CACHE_TTL) {
+      this._stats.cacheHits++;
+      return cached.value;
+    }
+    
+    // 缓存未命中，执行检索
+    this._stats.cacheMisses++;
+    const value = await retrieveFn();
+    
+    // 写入缓存
+    this._cache.set(key, { value, time: now });
+    
+    // 清理过期缓存
+    if (this._cache.size > this._CACHE_MAX) {
+      for (const [k, v] of this._cache) {
+        if (now - v.time > this._CACHE_TTL) {
+          this._cache.delete(k);
+        }
+      }
+    }
+    
+    return value;
+  }
+
+  /**
+   * 获取检索统计信息
+   */
+  getStats() {
+    const hitRate = this._stats.totalRetrievals > 0
+      ? (this._stats.cacheHits / this._stats.totalRetrievals * 100).toFixed(1)
+      : '0.0';
+    return {
+      ...this._stats,
+      cacheSize: this._cache.size,
+      cacheHitRate: `${hitRate}%`,
+      docsCount: this.docs.length,
+    };
   }
 
   /**
@@ -265,6 +339,7 @@ class GameRetriever {
 
   /**
    * 获取格式化的策略上下文，用于注入LLM Prompt
+   * 多策略融合：返回Top-5策略，附带相关度评分，让AI自主选择最合适的策略
    * @param {Object} context - 检索上下文
    * @param {string} context.role - 角色
    * @param {string} context.phase - 游戏阶段
@@ -273,23 +348,41 @@ class GameRetriever {
    * @returns {string} 格式化的策略文本，若无匹配则返回空字符串
    */
   async getContextForPrompt(context) {
-    const results = await this.retrieve(context, 3);
+    const results = await this.retrieve(context, 5);
     if (results.length === 0) return '';
 
     const sections = results.map((r, i) => {
       const title = r.source.replace('.md', '');
-      return `【策略${i + 1}·${title}】\n${r.content}`;
+      const relevance = Math.round(r.score * 100);
+      return `【策略${i + 1}·${title}·相关度${relevance}%】\n${r.content}`;
     });
 
-    return `\n===== 策略参考（请结合实际灵活运用，不要生搬硬套）=====\n${sections.join('\n---\n')}\n===== 结束 =====\n`;
+    return `\n===== 策略参考（共${results.length}条，请结合实际局势自主选择最合适的策略，不要生搬硬套）=====\n${sections.join('\n---\n')}\n===== 结束 =====\n`;
   }
 
   /**
-   * 便捷方法：直接从Game实例构建上下文并获取策略
+   * 便捷方法：直接从Game实例构建上下文并获取策略（带缓存）
    */
   async getStrategyForGame(game, aiPlayerSocketId) {
-    const context = this.buildContext(game, aiPlayerSocketId);
-    return this.getContextForPrompt(context);
+    return this._retrieveWithCache(game, aiPlayerSocketId, async () => {
+      this._stats.totalRetrievals++;
+      
+      const context = this.buildContext(game, aiPlayerSocketId);
+      const result = await this.getContextForPrompt(context);
+      
+      // 统计零结果
+      if (!result) this._stats.zeroResultCount++;
+      
+      // 按角色统计
+      const role = context.role || 'unknown';
+      this._stats.byRole[role] = (this._stats.byRole[role] || 0) + 1;
+      
+      // 按阶段统计
+      const phase = context.phase || 'unknown';
+      this._stats.byPhase[phase] = (this._stats.byPhase[phase] || 0) + 1;
+      
+      return result;
+    });
   }
 
   /**
@@ -410,17 +503,18 @@ class GameRetriever {
 
   /**
    * 将结束的对局存入知识库，供后续检索
-   * @param {Object} gameResult - 游戏结果数据
-   * @param {string} gameResult.roomCode - 房间号
-   * @param {string} gameResult.winner - 获胜方 ('werewolf' | 'villager')
-   * @param {number} gameResult.playerCount - 玩家数
-   * @param {number} gameResult.duration - 游戏时长(秒)
-   * @param {Array} gameResult.players - 玩家列表
-   * @param {Array} gameResult.history - 游戏历史
+   * 包含质量评分（只保留有学习价值的对局）和自动清理（限制100场）
    */
   async addGameReplay(gameResult) {
     try {
       if (!gameResult || !gameResult.players || !gameResult.history) {
+        return;
+      }
+
+      // 质量评分：过滤无学习价值的对局
+      const quality = this._evaluateGameQuality(gameResult);
+      if (quality.score < 30) {
+        console.log(`[GameRetriever] Skipped low-quality game (score=${quality.score}): ${quality.reason}`);
         return;
       }
 
@@ -435,23 +529,98 @@ class GameRetriever {
       const filePath = path.join(replaysDir, fileName);
 
       // 将对局转换为可读的Markdown文档
-      const content = this._formatGameAsDocument(gameResult, timestamp);
+      const content = this._formatGameAsDocument(gameResult, timestamp, quality);
       fs.writeFileSync(filePath, content, 'utf-8');
 
       // 将文档切块并加入内存索引
       const chunks = this._chunkDocument(content, fileName);
       this.docs.push(...chunks);
 
-      console.log(`[GameRetriever] Saved game replay: ${fileName} (${chunks.length} chunks, total: ${this.docs.length})`);
+      // 自动清理：保留最近100场对局
+      this._cleanupOldReplays(replaysDir, 100);
+
+      console.log(`[GameRetriever] Saved game replay: ${fileName} (quality=${quality.score}, chunks=${chunks.length}, total=${this.docs.length})`);
     } catch (err) {
       console.error('[GameRetriever] Failed to save game replay:', err.message);
     }
   }
 
   /**
+   * 评估对局质量，决定是否值得存入知识库
+   * 评分维度：时长、事件丰富度、势均力敌程度
+   */
+  _evaluateGameQuality(gameResult) {
+    const duration = gameResult.duration || 0;
+    const history = gameResult.history || [];
+    const players = gameResult.players || [];
+
+    let score = 0;
+    let reason = '';
+
+    // 1. 时长评分（3分钟以上才有价值）
+    if (duration >= 180) score += 30;
+    else if (duration >= 120) score += 20;
+    else if (duration >= 60) score += 10;
+    else { score += 0; reason = '对局过短'; }
+
+    // 2. 事件丰富度（历史记录数量）
+    const eventCount = history.length;
+    if (eventCount >= 15) score += 30;
+    else if (eventCount >= 10) score += 20;
+    else if (eventCount >= 5) score += 10;
+    else { score += 0; reason = reason || '事件过少'; }
+
+    // 3. 势均力敌程度（通过夜数判断）
+    const maxNight = Math.max(...history.map(h => h.night || 0), 0);
+    if (maxNight >= 4) score += 25;
+    else if (maxNight >= 3) score += 20;
+    else if (maxNight >= 2) score += 15;
+    else score += 5;
+
+    // 4. 玩家数（人多的对局更复杂）
+    if (players.length >= 10) score += 15;
+    else if (players.length >= 8) score += 10;
+    else if (players.length >= 6) score += 5;
+
+    return { score, reason: reason || '合格' };
+  }
+
+  /**
+   * 清理旧的对局文件，保留最近N场
+   */
+  _cleanupOldReplays(replaysDir, maxKeep = 100) {
+    try {
+      const files = fs.readdirSync(replaysDir)
+        .filter(f => f.endsWith('.md'))
+        .map(f => ({
+          name: f,
+          path: path.join(replaysDir, f),
+          mtime: fs.statSync(path.join(replaysDir, f)).mtime.getTime()
+        }))
+        .sort((a, b) => b.mtime - a.mtime);
+
+      if (files.length <= maxKeep) return;
+
+      const toDelete = files.slice(maxKeep);
+      const deletedNames = new Set();
+      for (const file of toDelete) {
+        fs.unlinkSync(file.path);
+        deletedNames.add(file.name);
+      }
+
+      // 从内存索引中移除已删除的文档
+      this.docs = this.docs.filter(c => !deletedNames.has(c.source));
+
+      console.log(`[GameRetriever] Cleaned up ${toDelete.length} old replays, kept ${maxKeep}`);
+    } catch (err) {
+      console.error('[GameRetriever] Cleanup failed:', err.message);
+    }
+  }
+
+  /**
    * 将游戏结果格式化为可检索的Markdown文档
    */
-  _formatGameAsDocument(result, timestamp) {
+  _formatGameAsDocument(result, timestamp, quality = null) {
     const date = new Date(timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
     const winnerName = result.winner === 'werewolf' ? '狼人阵营' : '村民阵营';
     const durationMin = Math.floor(result.duration / 60);
@@ -505,6 +674,9 @@ class GameRetriever {
     // 经验总结
     doc += `## 经验总结\n`;
     doc += `- ${winnerName}获胜，时长${durationMin}分${durationSec}秒\n`;
+    if (quality) {
+      doc += `- 对局质量评分：${quality.score}分（${quality.reason}）\n`;
+    }
     if (result.winner === 'werewolf') {
       doc += `- 狼人获胜关键：${werewolves.length}狼配合良好，有效隐藏身份并精准击杀关键好人\n`;
     } else {

@@ -32,7 +32,36 @@ class AIGameHandler {
     this.aiIdCounter = 0;
     this.aiChatTimers = {};
     this.model = null;
+    // AI决策日志（保留最近100条）
+    this.decisionLogs = [];
+    this._MAX_LOGS = 100;
     this._initModel();
+  }
+
+  /**
+   * 记录AI决策日志
+   */
+  _logDecision(roomCode, seatNum, role, phase, strategyUsed, decision) {
+    const log = {
+      time: Date.now(),
+      roomCode,
+      seatNum,
+      role,
+      phase,
+      strategyUsed: strategyUsed ? strategyUsed.substring(0, 200) : '无',
+      decision: typeof decision === 'string' ? decision.substring(0, 200) : JSON.stringify(decision).substring(0, 200),
+    };
+    this.decisionLogs.unshift(log);
+    if (this.decisionLogs.length > this._MAX_LOGS) {
+      this.decisionLogs = this.decisionLogs.slice(0, this._MAX_LOGS);
+    }
+  }
+
+  /**
+   * 获取AI决策日志
+   */
+  getDecisionLogs() {
+    return this.decisionLogs;
   }
 
   _initModel() {
@@ -172,7 +201,7 @@ class AIGameHandler {
 - 可疑玩家：{suspiciousPlayers}
 {strategyDesc}
 {ragStrategy}
-请根据你的角色和游戏状态做出决策。
+请根据你的角色和游戏状态做出决策。参考策略中的多条建议，结合当前局势自主选择最合适的一条执行，不要生搬硬套。
 
 {formatInstructions}`,
       inputVariables: ['roleName', 'roleAbility', 'alivePlayers', 'teammates', 'suspiciousPlayers', 'strategyDesc', 'ragStrategy', 'formatInstructions'],
@@ -193,11 +222,13 @@ class AIGameHandler {
       });
       
       if (result.action === 'skip') {
+        this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'NIGHT', ragStrategyText, 'skip');
         return null;
       }
 
       const isValidTarget = this._validateTarget(game, aiPlayer, result.action, result.targetId);
       if (isValidTarget) {
+        this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'NIGHT', ragStrategyText, `${result.action} -> ${game.getSeatNum(result.targetId)}`);
         return { action: result.action, targetId: result.targetId };
       }
 
@@ -356,7 +387,7 @@ class AIGameHandler {
 - 你的目标：{goal}
 {strategyDesc}
 {ragStrategy}
-请根据游戏状态决定投票给谁。
+请根据游戏状态决定投票给谁。参考策略中的多条建议，结合当前局势自主选择最合适的投票策略，不要生搬硬套。
 
 {formatInstructions}`,
       inputVariables: ['roleName', 'teamName', 'aliveOthers', 'goal', 'strategyDesc', 'ragStrategy', 'formatInstructions'],
@@ -367,11 +398,14 @@ class AIGameHandler {
     try {
       const result = await chain.invoke({ roleName, teamName, aliveOthers: aliveOthersStr, goal, strategyDesc, ragStrategy: ragStrategyText, formatInstructions });
       if (this._validateTarget(game, aiPlayer, 'vote', result.targetId)) {
+        this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, `vote -> ${game.getSeatNum(result.targetId)}`);
         return result.targetId;
       }
+      this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, 'fallback (invalid target)');
       return this._getFallbackVote(game, aiPlayer);
     } catch (error) {
       console.error('[AIGameHandler] Vote decision error:', error);
+      this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, `error: ${error.message}`);
       return this._getFallbackVote(game, aiPlayer);
     }
   }
@@ -647,6 +681,8 @@ class AIGameHandler {
 === 游戏事件记录 ===
 {gameEvents}
 {ragStrategy}
+=== 策略运用提示 ===
+上方提供了多条参考策略，请结合当前局势自主选择最合适的一条融入发言，不要生搬硬套，自然地体现在你的话语中。
 === 角色发言规则 ===
 - 狼人：伪装成好人，分析局势，引导舆论，保护队友，根据聊天记录找机会嫁祸好人
 - 预言家：报告查验结果（如果你验过的人），引导投票，对可疑的人提出质疑
@@ -719,9 +755,11 @@ class AIGameHandler {
       let message = result.message;
       message = this._postProcessMessage(message, aiPlayer);
       message = replaceNames(message);
+      this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'DAY', ragStrategyText, message);
       return message;
     } catch (error) {
       console.error('[AIGameHandler] Chat generation error:', error);
+      this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'DAY', ragStrategyText, `error: ${error.message}`);
       return this._getFallbackChatMessage(game, aiPlayer);
     }
   }

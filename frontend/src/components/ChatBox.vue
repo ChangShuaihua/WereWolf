@@ -72,6 +72,15 @@
     <div v-if="!canSpeak" class="chat-disabled-hint">
       {{ disabledHint }}
     </div>
+    <div class="quick-questions" v-if="canSpeak">
+      <button 
+        v-for="q in quickQuestions" 
+        :key="q" 
+        class="quick-q-btn" 
+        @click="askQuickQuestion(q)"
+        type="button"
+      >{{ q }}</button>
+    </div>
     <form class="chat-input-wrapper" @submit.prevent="sendMsg" :class="{ 'is-disabled': !canSpeak }">
       <input 
         v-model="text" 
@@ -102,6 +111,19 @@ const emit = defineEmits(['send'])
 
 const text = ref('')
 const chatContainer = ref(null)
+
+// 快捷规则问题
+const quickQuestions = [
+  '?女巫怎么玩',
+  '?守卫能连续守同一人吗',
+  '?猎人被毒杀能开枪吗',
+  '?预言家能验自己吗',
+  '?同守同救会怎样',
+]
+
+function askQuickQuestion(q) {
+  emit('send', q)
+}
 
 // Game phase labels
 const PHASE_LABELS = {
@@ -262,6 +284,45 @@ watch(() => props.messages.length, async () => {
   color: #86efac;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 快捷问题按钮 */
+.quick-questions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  overflow-x: auto;
+  border-top: var(--border-thin);
+  background: var(--bg-secondary);
+}
+
+.quick-questions::-webkit-scrollbar {
+  height: 3px;
+}
+
+.quick-questions::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border-radius: 2px;
+}
+
+.quick-q-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: #86efac;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+
+.quick-q-btn:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.4);
+  transform: translateY(-1px);
 }
 
 .chat-input-wrapper {

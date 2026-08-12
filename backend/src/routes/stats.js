@@ -3,6 +3,8 @@ const authMiddleware = require('../middleware/auth');
 const GameRecord = require('../models/GameRecord');
 const { ROLE_NAMES } = require('../game/constants');
 const statsService = require('../services/statsService');
+const gameRetriever = require('../services/GameRetriever');
+const aiGameHandler = require('../game/AIGameHandler');
 
 const router = express.Router();
 
@@ -94,6 +96,21 @@ router.post('/clear', authMiddleware, async (req, res, next) => {
   try {
     await statsService.clearAll();
     res.json({ message: '缓存已清空' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/stats/ai - AI 检索命中率与决策日志监控
+router.get('/ai', authMiddleware, async (req, res, next) => {
+  try {
+    const retrieverStats = gameRetriever.getStats();
+    const decisionLogs = aiGameHandler.getDecisionLogs();
+    res.json({
+      retrieverStats,
+      decisionLogs,
+      totalLogs: decisionLogs.length,
+    });
   } catch (err) {
     next(err);
   }
