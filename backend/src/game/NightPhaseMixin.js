@@ -249,7 +249,7 @@ const NightPhaseMixin = {
       try {
         const action = await Promise.race([
           aiGameHandler._decideNightAction(this, aiPlayer, role),
-          timeoutPromise(3000)
+          timeoutPromise(15000)
         ]);
 
         if (action) {

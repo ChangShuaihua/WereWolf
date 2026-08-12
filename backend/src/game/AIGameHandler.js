@@ -35,6 +35,8 @@ class AIGameHandler {
     // AI决策日志（保留最近100条）
     this.decisionLogs = [];
     this._MAX_LOGS = 100;
+    // AI发言状态追踪：key = socketId, value = { claimedRole, claimedChecks: [{target, result}], suspectedPlayers: [] }
+    this.aiClaims = {};
     this._initModel();
   }
 
@@ -77,7 +79,7 @@ class AIGameHandler {
           baseURL: apiUrl,
         },
         temperature: 0.7,
-        maxTokens: 500,
+        maxTokens: 1000,
       });
       console.log(`[AIGameHandler] Model initialized: ${modelName} (${apiUrl})`);
     } else {
@@ -152,6 +154,7 @@ class AIGameHandler {
 
   async _decideNightAction(game, aiPlayer, role) {
     if (!this.model) {
+      console.log(`[AIGameHandler] No LLM model, using fallback night action for ${aiPlayer.username}`);
       return this._getFallbackNightAction(game, aiPlayer, role);
     }
 
@@ -240,19 +243,22 @@ class AIGameHandler {
       });
       
       if (result.action === 'skip') {
+        console.log(`[AIGameHandler] LLM night action for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): skip`);
         this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'NIGHT', ragStrategyText, 'skip');
         return null;
       }
 
       const isValidTarget = this._validateTarget(game, aiPlayer, result.action, result.targetId);
       if (isValidTarget) {
+        console.log(`[AIGameHandler] LLM night action for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): ${result.action} -> ${game.getSeatNum(result.targetId)}`);
         this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'NIGHT', ragStrategyText, `${result.action} -> ${game.getSeatNum(result.targetId)}`);
         return { action: result.action, targetId: result.targetId };
       }
 
+      console.warn(`[AIGameHandler] LLM returned invalid target, using fallback for ${aiPlayer.username}`);
       return this._getFallbackNightAction(game, aiPlayer, role);
     } catch (error) {
-      console.error('[AIGameHandler] LLM decision error:', error);
+      console.error(`[AIGameHandler] LLM night action failed for ${aiPlayer.username}, using fallback:`, error.message);
       return this._getFallbackNightAction(game, aiPlayer, role);
     }
   }
@@ -349,6 +355,7 @@ class AIGameHandler {
 
   async _decideVote(game, aiPlayer) {
     if (!this.model) {
+      console.log(`[AIGameHandler] No LLM model, using fallback vote for ${aiPlayer.username}`);
       return this._getFallbackVote(game, aiPlayer);
     }
 
@@ -416,13 +423,15 @@ class AIGameHandler {
     try {
       const result = await chain.invoke({ roleName, teamName, aliveOthers: aliveOthersStr, goal, strategyDesc, ragStrategy: ragStrategyText, formatInstructions });
       if (this._validateTarget(game, aiPlayer, 'vote', result.targetId)) {
+        console.log(`[AIGameHandler] LLM vote for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): -> ${game.getSeatNum(result.targetId)}`);
         this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, `vote -> ${game.getSeatNum(result.targetId)}`);
         return result.targetId;
       }
+      console.warn(`[AIGameHandler] LLM vote invalid target for ${aiPlayer.username}, using fallback`);
       this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, 'fallback (invalid target)');
       return this._getFallbackVote(game, aiPlayer);
     } catch (error) {
-      console.error('[AIGameHandler] Vote decision error:', error);
+      console.error(`[AIGameHandler] LLM vote failed for ${aiPlayer.username}, using fallback:`, error.message);
       this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, `error: ${error.message}`);
       return this._getFallbackVote(game, aiPlayer);
     }
@@ -431,6 +440,7 @@ class AIGameHandler {
   _getFallbackVote(game, aiPlayer) {
     const role = game.getRole(aiPlayer.socketId);
     const team = TEAM[role];
+    const mySeat = game.getSeatNum(aiPlayer.socketId);
 
     let candidates = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
 
@@ -439,13 +449,63 @@ class AIGameHandler {
       candidates = candidates.filter(p => game.getRole(p.socketId) !== ROLE.WEREWOLF);
     }
 
-    // 好人不能通过读取角色来作弊，改为随机投票
     if (candidates.length === 0) {
       candidates = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
     }
 
     if (candidates.length === 0) return null;
 
+    // 好人阵营：基于公开信息（聊天记录）投票，不读取角色
+    if (team !== 'werewolf') {
+      const room = roomCache.get(game.roomCode);
+      const chat = room?.chat || [];
+
+      // 1. 找预言家公开查验的狼人（最高优先级）
+      const seerAccusations = [];
+      for (const msg of chat) {
+        if (msg.isSystem) continue;
+        const text = msg.message || '';
+        // 匹配"验了X号是狼人"
+        const checkMatch = text.match(/验了(\d+号).*狼人/);
+        if (checkMatch) {
+          seerAccusations.push(checkMatch[1]);
+        }
+      }
+
+      // 如果预言家验出了狼人，且该狼人还活着，优先投他
+      for (const accusedSeat of seerAccusations) {
+        const target = candidates.find(p => game.getSeatNum(p.socketId) === accusedSeat);
+        if (target) {
+          return target.socketId;
+        }
+      }
+
+      // 2. 找被多人怀疑的玩家
+      const suspicionCount = {}; // seatNum -> count
+      for (const msg of chat) {
+        if (msg.isSystem) continue;
+        const text = msg.message || '';
+        const speakerSeat = msg.username;
+        // 匹配怀疑某人的发言
+        const suspectMatch = text.match(/(\d+号).*(?:狼人|可疑|不对劲|漏洞|有问题|怀疑|投他|投他)/);
+        if (suspectMatch && suspectMatch[1] !== speakerSeat) {
+          suspicionCount[suspectMatch[1]] = (suspicionCount[suspectMatch[1]] || 0) + 1;
+        }
+      }
+
+      // 按被怀疑次数排序，选被怀疑最多的
+      const sortedSuspects = Object.entries(suspicionCount)
+        .sort((a, b) => b[1] - a[1])
+        .filter(([seat]) => candidates.some(p => game.getSeatNum(p.socketId) === seat));
+
+      if (sortedSuspects.length > 0) {
+        const targetSeat = sortedSuspects[0][0];
+        const target = candidates.find(p => game.getSeatNum(p.socketId) === targetSeat);
+        if (target) return target.socketId;
+      }
+    }
+
+    // 兜底：随机投票
     return candidates[Math.floor(Math.random() * candidates.length)].socketId;
   }
 
@@ -507,6 +567,7 @@ class AIGameHandler {
 
   async _generateChatMessage(game, aiPlayer) {
     if (!this.model) {
+      console.log(`[AIGameHandler] No LLM model, using fallback for ${aiPlayer.username}`);
       return this._getFallbackChatMessage(game, aiPlayer);
     }
 
@@ -773,134 +834,467 @@ class AIGameHandler {
     const chain = prompt.pipe(this.model).pipe(outputParser);
 
     try {
-      const result = await chain.invoke({ 
-        aiName: game.getSeatNum(aiPlayer.socketId),
-        roleName, 
-        teamName, 
-        alivePlayers: alivePlayersStr, 
-        deadPlayers: deadPlayersStr,
-        nightCount,
-        chatHistory,
-        gameEvents: gameEventsStr,
-        ragStrategy: ragStrategyText,
-        personalityDesc,
-        speakingStyleDesc,
-        languageDesc,
-        emotionDesc,
-        formatInstructions 
-      });
+      const result = await Promise.race([
+        chain.invoke({
+          aiName: game.getSeatNum(aiPlayer.socketId),
+          roleName,
+          teamName,
+          alivePlayers: alivePlayersStr,
+          deadPlayers: deadPlayersStr,
+          nightCount,
+          chatHistory,
+          gameEvents: gameEventsStr,
+          ragStrategy: ragStrategyText,
+          personalityDesc,
+          speakingStyleDesc,
+          languageDesc,
+          emotionDesc,
+          formatInstructions
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('LLM timeout')), 12000))
+      ]);
       let message = result.message;
       message = this._postProcessMessage(message, aiPlayer);
       message = replaceNames(message);
+      console.log(`[AIGameHandler] LLM chat generated for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): ${message.substring(0, 60)}...`);
       this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'DAY', ragStrategyText, message);
       return message;
     } catch (error) {
-      console.error('[AIGameHandler] Chat generation error:', error);
-      this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'DAY', ragStrategyText, `error: ${error.message}`);
+      console.error(`[AIGameHandler] LLM chat failed for ${aiPlayer.username}, using fallback:`, error.message);
+      this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'DAY', ragStrategyText, `LLM error: ${error.message}`);
       return this._getFallbackChatMessage(game, aiPlayer);
     }
   }
 
   _getFallbackChatMessage(game, aiPlayer) {
     const role = game.getRole(aiPlayer.socketId);
-    const templates = {
-      [ROLE.WEREWOLF]: [
-        '我昨晚平安度过，没有任何信息。大家看看谁的发言比较奇怪，一起分析一下局势。',
-        '预言家还没出来吗？我是好人阵营的，希望预言家能给点有用的信息帮助大家。',
-        '我觉得XX的发言不太对劲，他一直在回避问题，可能身份有问题，大家注意一下。',
-        '昨晚没什么特殊情况，我是好人，跟着大家的节奏走，希望能找出狼人。',
-        'XX刚才的发言漏洞百出，我怀疑他是狼人，建议大家把票投给他。',
-        '刚才XX说自己是平民，但他的分析太精准了，不像普通平民能做到的。',
-        '我是好人，昨晚没动静，今天先把最可疑的XX投出去再说，别犹豫。',
-        '预言家快出来说话啊！我们好人不能一直被动挨打，需要你的指引。',
-        'XX一直在帮XX说话，他们两个可能是一伙的，大家小心点。',
-        '我觉得今天应该先出XX，他的发言最没逻辑，身份最可疑。',
-        '我目前没有什么线索，只能先听听大家怎么说，再做判断。',
-        '我是平民，昨晚什么都不知道，现在还看不出谁是狼人，大家继续分析。',
-      ],
-      [ROLE.SEER]: [
-        '我是预言家，昨晚查了XX，他是狼人！请大家相信我，今天把他投出去。',
-        '昨晚查验了XX，是好人。今晚我会继续查验，大家注意保护我这个预言家。',
-        '我是真预言家，昨晚验了XX是狼人，希望好人能跟我一起把他投出去。',
-        '昨晚验了XX是好人，现在场上局势还不明朗，大家先别乱投，听我的分析。',
-        '我是预言家，昨晚查了XX是好人，今天建议先出发言最差的那个人。',
-        '昨晚我验了XX是狼人，今天必须先出他！如果你们不信我，好人就输了。',
-        '我是预言家，昨晚验了XX是好人，今晚我会验XX，大家等我消息。',
-        '刚才XX跳预言家，他是假的！我才是真预言家，昨晚验了XX是狼人。',
-        '我是预言家，昨晚验了XX是好人，现在我怀疑XX和XX是狼人，请大家跟我一起投。',
-        '我是预言家，昨晚验了XX是狼人，今天一定要出他，别让狼人继续作恶。',
-      ],
-      [ROLE.WITCH]: [
-        '昨晚有人被杀了，但我用了解药救了他，具体是谁暂时不能说，大家注意安全。',
-        '我是女巫，昨晚用了解药，现在场上还有一瓶毒药，狼人小心点别乱跳。',
-        '昨晚情况很复杂，我知道一些信息，XX的身份可能不简单，大家多留意一下。',
-        '我是女巫，昨晚救了一个人，今天希望大家能听我的分析，一起找出狼人。',
-        '我手里还有毒药，如果有人乱跳身份，我会毫不犹豫地毒掉他。',
-        '昨晚有人被杀，我救了，但我不说是谁。XX的发言让我很怀疑，大家小心。',
-        '我是女巫，解药已经用了，现在只有毒药了，狼人别逼我出手。',
-        '昨晚是平安夜，可能是守卫守对了，也可能是狼人空刀，大家继续分析。',
-        '我知道昨晚的情况，但现在不能说太多，XX的身份值得怀疑，大家注意。',
-        '我是女巫，昨晚救了人，今天希望大家能听我的，先把XX投出去。',
-      ],
-      [ROLE.GUARD]: [
-        '昨晚我守护了自己，平安无事。今晚我会继续守护关键人物，请大家放心。',
-        '昨晚我守了一个人，但不确定有没有被狼人盯上，大家注意发言的细节。',
-        '我是守卫，昨晚守了自己，今晚我会根据局势决定守护谁，好人别怕。',
-        '昨晚平安夜，可能是狼人空刀或者我守对了人，大家继续分析找出狼人。',
-        '我是守卫，昨晚守了XX，希望能帮到好人阵营，大家相信我。',
-        '昨晚我守了自己，今晚我会守预言家，请预言家放心发言。',
-        '昨晚平安夜，我可能守对了人，大家继续找狼，别让他们逍遥法外。',
-        '我是守卫，昨晚守了XX，希望能保护好人，今晚我会继续守护关键位置。',
-        '昨晚我守了自己，平安无事，今晚我会根据大家的发言决定守护谁。',
-        '我是守卫，昨晚守了预言家，希望能帮到好人，大家继续加油找出狼人。',
-      ],
-      [ROLE.HUNTER]: [
-        '我是猎人，身份很硬，谁敢出我我就带走谁！大家最好别乱投我。',
-        '我是猎人，有枪在手，狼人别想轻易把我弄出去，否则我会带走一个。',
-        '我是猎人，如果有人敢票我，我会开枪带走一个可疑的人，大家想清楚。',
-        '我是猎人，目前还没什么头绪，先听听其他人的分析再决定怎么投。',
-        '我是猎人，身份明了，希望好人能跟我一起找出狼人，别让狼人赢了。',
-        '我是猎人，身份在这里，谁敢动我我就带走谁！狼人别想轻易把我投出去。',
-        '我是猎人，目前还没什么线索，先听预言家的分析，再决定怎么投票。',
-        '我是猎人，有枪在手，狼人小心点！如果你们敢出我，我会带走一个。',
-        '我是猎人，身份很硬，大家可以先出别人，别浪费在我身上。',
-        '我是猎人，刚才XX的发言让我觉得很可疑，如果他继续乱跳，我会带走他。',
-      ],
-      [ROLE.VILLAGER]: [
-        '我是平民，没有任何技能，只能靠大家的发言来判断谁是狼人，请多指教。',
-        '预言家能给点信息吗？我是平民，完全没有方向，希望能得到指引。',
-        '我是平民，昨晚什么都不知道，只能跟着预言家的节奏走了，相信好人。',
-        '我是平民，大家说投谁就投谁，我完全相信好人阵营的判断，一起加油。',
-        '我是平民，刚才XX的发言让我觉得很可疑，建议大家把他投出去。',
-        '我是平民，昨晚什么都不知道，希望预言家能出来给点信息，我好跟着投票。',
-        '我是平民，刚才XX和XX的对话很奇怪，他们可能有问题，大家注意一下。',
-        '我是平民，完全没有头绪，只能跟着大家的节奏走，希望好人能赢。',
-        '我是平民，预言家快出来说话啊！没有你的信息，我们怎么找狼人？',
-        '我是平民，刚才XX的发言漏洞太多了，我觉得他是狼人，建议大家投他。',
-        '我是平民，目前没有什么线索，只能先听听大家的分析再做判断。',
-        '我是平民，昨晚什么都不知道，现在还看不出谁是狼人，大家继续讨论。',
-        '我是平民，没有任何信息，只能跟着大家的节奏走，相信好人能赢。',
-      ],
-    };
+    const mySeat = game.getSeatNum(aiPlayer.socketId);
+    const room = roomCache.get(game.roomCode);
+    const chat = room?.chat || [];
 
-    const messages = templates[role] || templates[ROLE.VILLAGER];
-    let message = messages[Math.floor(Math.random() * messages.length)];
+    // 解析聊天记录，提取关键信息
+    const chatContext = this._parseChatContext(chat, game, aiPlayer.socketId);
+
+    // 获取或初始化AI发言状态
+    if (!this.aiClaims[aiPlayer.socketId]) {
+      this.aiClaims[aiPlayer.socketId] = { claimedRole: null, claimedChecks: [], hasSpoken: false };
+    }
+    const myClaim = this.aiClaims[aiPlayer.socketId];
 
     const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
-    if (aliveOthers.length > 0 && message.includes('XX')) {
-      // 每个 XX 替换为不同的玩家，避免出现"11号帮11号说话"这类逻辑错误
-      const usedIds = new Set();
-      while (message.includes('XX') && aliveOthers.length > usedIds.size) {
-        let candidate;
-        do {
-          candidate = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
-        } while (usedIds.has(candidate.socketId) && usedIds.size < aliveOthers.length);
-        usedIds.add(candidate.socketId);
-        message = message.replace('XX', game.getSeatNum(candidate.socketId));
+    // 只引用真正发过言的玩家
+    const spokenPlayers = aliveOthers.filter(p => chatContext.spokenSeats.has(game.getSeatNum(p.socketId)));
+    const unspokenPlayers = aliveOthers.filter(p => !chatContext.spokenSeats.has(game.getSeatNum(p.socketId)));
+
+    let message = '';
+
+    switch (role) {
+      case ROLE.SEER:
+        message = this._seerFallback(game, aiPlayer, myClaim, chatContext, aliveOthers, spokenPlayers);
+        break;
+      case ROLE.WEREWOLF:
+        message = this._werewolfFallback(game, aiPlayer, myClaim, chatContext, aliveOthers, spokenPlayers);
+        break;
+      case ROLE.WITCH:
+        message = this._witchFallback(game, aiPlayer, myClaim, chatContext, aliveOthers, spokenPlayers);
+        break;
+      case ROLE.GUARD:
+        message = this._guardFallback(game, aiPlayer, myClaim, chatContext, aliveOthers, spokenPlayers);
+        break;
+      case ROLE.HUNTER:
+        message = this._hunterFallback(game, aiPlayer, myClaim, chatContext, aliveOthers, spokenPlayers);
+        break;
+      default:
+        message = this._villagerFallback(game, aiPlayer, myClaim, chatContext, aliveOthers, spokenPlayers);
+    }
+
+    // 更新发言状态
+    myClaim.hasSpoken = true;
+
+    return message;
+  }
+
+  /**
+   * 解析聊天记录，提取关键信息
+   */
+  _parseChatContext(chat, game, mySocketId) {
+    const spokenSeats = new Set();
+    const seerClaims = []; // 谁跳了预言家
+    const accusations = []; // 谁怀疑谁
+    const roleClaims = {}; // seatNum -> claimed role
+
+    for (const msg of chat) {
+      if (msg.isSystem || msg.isAI === undefined) continue;
+      const seat = msg.username;
+      if (!seat) continue;
+      spokenSeats.add(seat);
+
+      const text = msg.message || '';
+
+      // 检测跳预言家
+      if (/我是.*(预言家|预言)/.test(text) || /我.*验了|我.*查验了/.test(text)) {
+        seerClaims.push({ seat, text });
+        roleClaims[seat] = 'seer';
+      }
+
+      // 检测跳猎人
+      if (/我是.*猎人/.test(text)) {
+        roleClaims[seat] = 'hunter';
+      }
+
+      // 检测跳女巫
+      if (/我是.*女巫/.test(text)) {
+        roleClaims[seat] = 'witch';
+      }
+
+      // 检测跳守卫
+      if (/我是.*守卫/.test(text)) {
+        roleClaims[seat] = 'guard';
+      }
+
+      // 检测跳平民
+      if (/我是.*平民/.test(text)) {
+        roleClaims[seat] = 'villager';
+      }
+
+      // 检测怀疑某人
+      const suspectMatch = text.match(/(\d+号).*(?:狼人|可疑|不对劲|漏洞|有问题|怀疑)/);
+      if (suspectMatch) {
+        accusations.push({ from: seat, target: suspectMatch[1] });
       }
     }
 
-    return message;
+    return {
+      spokenSeats,
+      seerClaims,
+      accusations,
+      roleClaims,
+      hasSeerClaimed: seerClaims.length > 0,
+      mySeat: game.getSeatNum(mySocketId),
+    };
+  }
+
+  /**
+   * 从发过言的玩家中随机选一个（排除自己）
+   */
+  _pickSpokenPlayer(spokenPlayers, game, excludeSeat = null) {
+    const candidates = spokenPlayers.filter(p => {
+      const seat = game.getSeatNum(p.socketId);
+      return seat !== excludeSeat;
+    });
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  /**
+   * 从所有存活玩家中随机选一个（排除自己）
+   */
+  _pickAnyPlayer(aliveOthers, game, excludeSeat = null) {
+    const candidates = aliveOthers.filter(p => {
+      const seat = game.getSeatNum(p.socketId);
+      return seat !== excludeSeat;
+    });
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  /**
+   * 从指定列表中随机选 n 个不同的玩家
+   */
+  _pickMultiplePlayers(players, game, count, excludeSeat = null) {
+    const candidates = players.filter(p => {
+      const seat = game.getSeatNum(p.socketId);
+      return seat !== excludeSeat;
+    });
+    const result = [];
+    const used = new Set();
+    while (result.length < count && used.size < candidates.length) {
+      const idx = Math.floor(Math.random() * candidates.length);
+      const p = candidates[idx];
+      if (!used.has(p.socketId)) {
+        used.add(p.socketId);
+        result.push(p);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * 随机选一条消息
+   */
+  _pickRandom(messages) {
+    return messages[Math.floor(Math.random() * messages.length)];
+  }
+
+  _seerFallback(game, aiPlayer, myClaim, ctx, aliveOthers, spokenPlayers) {
+    const mySeat = game.getSeatNum(aiPlayer.socketId);
+
+    // 如果之前已经声明过查验结果，保持一致
+    if (myClaim.claimedChecks.length > 0) {
+      const lastCheck = myClaim.claimedChecks[myClaim.claimedChecks.length - 1];
+      const targetSeat = game.getSeatNum(lastCheck.targetId);
+      const result = lastCheck.result === 'werewolf' ? '狼人' : '好人';
+
+      if (lastCheck.result === 'werewolf') {
+        return this._pickRandom([
+          `我是预言家，之前验了${targetSeat}是${result}，今天必须出他，别让他跑了。`,
+          `我再强调一遍，${targetSeat}是狼人，我是真预言家，大家跟我投他。`,
+          ` ${targetSeat}就是狼人，我验过的，好人别被他骗了。`,
+        ]);
+      } else {
+        return this._pickRandom([
+          `我是预言家，验了${targetSeat}是好人，大家可以信他。今晚我继续验。`,
+          ` ${targetSeat}我验过是好人力挺他，现在主要看其他人发言找狼。`,
+          `上轮我验了${targetSeat}是好人，今天听大家发言再判断谁是狼。`,
+        ]);
+      }
+    }
+
+    // 第一次发言：声明查验结果
+    // 优先选发过言的玩家作为查验目标
+    const checkTarget = (spokenPlayers.length > 0 ? spokenPlayers : aliveOthers)[
+      Math.floor(Math.random() * (spokenPlayers.length > 0 ? spokenPlayers.length : aliveOthers.length))
+    ];
+    if (!checkTarget) return '我是预言家，昨晚验了一个人，结果待会儿再说。';
+
+    const isWerewolf = Math.random() < 0.5;
+    const result = isWerewolf ? 'werewolf' : 'good';
+    const targetSeat = game.getSeatNum(checkTarget.socketId);
+
+    myClaim.claimedRole = 'seer';
+    myClaim.claimedChecks.push({ targetId: checkTarget.socketId, result });
+
+    if (isWerewolf) {
+      return this._pickRandom([
+        `我是预言家，昨晚验了${targetSeat}，他是狼人！大家今天把他投出去。`,
+        `我跳预言家，验了${targetSeat}是狼人，好人跟我走，先出他。`,
+        `我是真预言家，${targetSeat}是狼人，不信的话今晚你们就知道了。`,
+      ]);
+    } else {
+      return this._pickRandom([
+        `我是预言家，昨晚验了${targetSeat}是好人，大家可以信他。`,
+        `我跳预言家，验了${targetSeat}是好人，今晚继续验，大家保护好我。`,
+        `我是预言家，${targetSeat}是好人，现在还要看其他人发言找狼。`,
+      ]);
+    }
+  }
+
+  _werewolfFallback(game, aiPlayer, myClaim, ctx, aliveOthers, spokenPlayers) {
+    const mySeat = game.getSeatNum(aiPlayer.socketId);
+
+    // 如果已经有人跳预言家，狼人可以选择跟投或质疑
+    if (ctx.hasSeerClaimed) {
+      const seerClaim = ctx.seerClaims[ctx.seerClaims.length - 1];
+      // 如果预言家验了某人是狼人，狼人可以反咬预言家
+      const accusedBySeer = ctx.accusations.filter(a => a.from === seerClaim.seat);
+
+      if (accusedBySeer.length > 0 && Math.random() < 0.4) {
+        return this._pickRandom([
+          `${seerClaim.seat}你说你是预言家？我觉得你才是狼人，跳出来带节奏。`,
+          `我不信${seerClaim.seat}是预言家，他的发言太刻意了，像在悍跳。`,
+          `${seerClaim.seat}你验人验得也太巧了吧，我看你才是狼。`,
+        ]);
+      }
+
+      // 正常跟风发言
+      const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+      if (suspect) {
+        const seat = game.getSeatNum(suspect.socketId);
+        return this._pickRandom([
+          `我觉着${seat}的发言有问题，听他说话就不像好人，建议大家关注一下。`,
+          `${seat}你刚才说的不太对吧，逻辑上有漏洞啊。`,
+          `我是好人，${seat}给我的感觉不太好，大家注意他。`,
+        ]);
+      }
+    }
+
+    // 没有预言家跳出来的情况
+    if (myClaim.hasSpoken) {
+      // 第二次发言，引用发过言的玩家
+      const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+      if (suspect) {
+        const seat = game.getSeatNum(suspect.socketId);
+        return this._pickRandom([
+          `我还是觉得${seat}有问题，他发言太闪躲了。`,
+          `${seat}刚才说的我不太信，感觉在隐瞒什么。`,
+          `大家注意${seat}，他发言的时候一直在回避关键问题。`,
+        ]);
+      }
+      return '我没什么新信息，听听大家怎么说，再做判断。';
+    }
+
+    // 第一次发言
+    const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+    if (suspect) {
+      const seat = game.getSeatNum(suspect.socketId);
+      return this._pickRandom([
+        `我是好人，觉着${seat}的发言有点奇怪，大家注意一下。`,
+        `${seat}刚才说的不太对劲，我感觉他身份有问题。`,
+        `我昨晚没什么信息，但${seat}给我感觉不太好，大家留意。`,
+      ]);
+    }
+
+    return this._pickRandom([
+      '我昨晚没什么信息，听听大家怎么说吧。',
+      '我是好人，先听听大家发言，再做判断。',
+      '没啥线索，等预言家出来给点信息。' + (ctx.hasSeerClaimed ? '' : ''),
+    ]);
+  }
+
+  _witchFallback(game, aiPlayer, myClaim, ctx, aliveOthers, spokenPlayers) {
+    const mySeat = game.getSeatNum(aiPlayer.socketId);
+
+    if (myClaim.hasSpoken) {
+      const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+      if (suspect) {
+        const seat = game.getSeatNum(suspect.socketId);
+        return this._pickRandom([
+          `${seat}的发言让我更怀疑了，我觉得他身份有问题。`,
+          `我还是关注${seat}，他说的东西前后矛盾。`,
+          `大家注意${seat}，他不太像好人。`,
+        ]);
+      }
+      return '我继续观察，暂时没有新的判断。';
+    }
+
+    const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+    if (suspect) {
+      const seat = game.getSeatNum(suspect.socketId);
+      return this._pickRandom([
+        `我知道一些昨晚的情况，但现在不方便说太多。${seat}的发言让我比较怀疑。`,
+        `昨晚有情况，我暂时不细说。大家注意${seat}，他发言不太对。`,
+        `我有一些信息，${seat}给我感觉不太好，大家留意。`,
+      ]);
+    }
+
+    return this._pickRandom([
+      '昨晚的情况我了解一些，但现在不方便说，大家先发言。',
+      '我知道点信息，等关键时刻再说。先听听大家的。',
+      '昨晚有情况，先不说具体是什么，大家继续分析。',
+    ]);
+  }
+
+  _guardFallback(game, aiPlayer, myClaim, ctx, aliveOthers, spokenPlayers) {
+    const mySeat = game.getSeatNum(aiPlayer.socketId);
+
+    if (myClaim.hasSpoken) {
+      const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+      if (suspect) {
+        const seat = game.getSeatNum(suspect.socketId);
+        return this._pickRandom([
+          `我还是觉得${seat}有问题，建议大家关注他。`,
+          `${seat}刚才说的不太对，逻辑上有漏洞。`,
+          `大家注意${seat}，他发言不太自然。`,
+        ]);
+      }
+      return '我继续观察，大家继续发言吧。';
+    }
+
+    const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+    if (suspect) {
+      const seat = game.getSeatNum(suspect.socketId);
+      return this._pickRandom([
+        `我是好人，${seat}的发言让我比较怀疑，大家注意。`,
+        `${seat}刚才说的不太对劲，我觉得他可能有问题。`,
+        `我没什么特殊信息，但${seat}给我感觉不太好。`,
+      ]);
+    }
+
+    return this._pickRandom([
+      '我是好人，昨晚没什么特别的情况，听听大家怎么说。',
+      '我没什么信息，先听听大家的发言再做判断。',
+      '昨晚平安度过，大家继续分析吧。',
+    ]);
+  }
+
+  _hunterFallback(game, aiPlayer, myClaim, ctx, aliveOthers, spokenPlayers) {
+    const mySeat = game.getSeatNum(aiPlayer.socketId);
+
+    if (myClaim.claimedRole === 'hunter' || myClaim.hasSpoken) {
+      const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+      if (suspect) {
+        const seat = game.getSeatNum(suspect.socketId);
+        return this._pickRandom([
+          `我是猎人，${seat}的发言让我觉得很可疑，如果他是狼我绝不手软。`,
+          `${seat}你小心点，我是猎人，你要是狼就别想跑。`,
+          `我还是关注${seat}，他发言太闪躲了，像狼。`,
+        ]);
+      }
+      return '我是猎人，身份在这里，狼人别想动我。大家继续找狼。';
+    }
+
+    myClaim.claimedRole = 'hunter';
+    const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+    if (suspect) {
+      const seat = game.getSeatNum(suspect.socketId);
+      return this._pickRandom([
+        `我是猎人，${seat}的发言让我怀疑，你如果是狼最好别乱动。`,
+        `我是猎人，身份明了。${seat}给我感觉不太好，大家注意他。`,
+        `我是猎人，有枪在手。${seat}你发言小心点，我盯着你呢。`,
+      ]);
+    }
+
+    return this._pickRandom([
+      '我是猎人，身份很硬，狼人别想轻易动我。大家继续分析。',
+      '我是猎人，目前还在观察，先听听大家的发言。',
+      '我是猎人，有枪在手，狼人小心点。大家继续找狼。',
+    ]);
+  }
+
+  _villagerFallback(game, aiPlayer, myClaim, ctx, aliveOthers, spokenPlayers) {
+    const mySeat = game.getSeatNum(aiPlayer.socketId);
+
+    // 如果有预言家跳了，跟随预言家
+    if (ctx.hasSeerClaimed) {
+      const seerClaim = ctx.seerClaims[ctx.seerClaims.length - 1];
+      // 找到预言家验出的狼人
+      const wolfAccusation = ctx.accusations.find(a => a.from === seerClaim.seat);
+
+      if (wolfAccusation) {
+        return this._pickRandom([
+          `我是平民，信${seerClaim.seat}的查验，${wolfAccusation.target}确实可疑，跟他投。`,
+          `${seerClaim.seat}跳预言家了，验了${wolfAccusation.target}是狼人，我信他，先出${wolfAccusation.target}。`,
+          `我是好人，${seerClaim.seat}的查验结果我觉得靠谱，${wolfAccusation.target}有问题。`,
+        ]);
+      }
+
+      return this._pickRandom([
+        `我是平民，${seerClaim.seat}跳预言家了，我暂时信他，听听后续。`,
+        `我是好人，${seerClaim.seat}的查验信息很有用，大家跟着分析吧。`,
+        `我是平民，先信${seerClaim.seat}是预言家，看他后续验人。`,
+      ]);
+    }
+
+    // 没有预言家跳出来
+    if (myClaim.hasSpoken) {
+      const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+      if (suspect) {
+        const seat = game.getSeatNum(suspect.socketId);
+        return this._pickRandom([
+          `我还是觉得${seat}有问题，他发言不太自然。`,
+          `${seat}刚才说的不太对，逻辑上有问题。`,
+          `我是平民，${seat}给我的感觉不太好，大家注意。`,
+        ]);
+      }
+      return '我是平民，没什么新线索，继续听大家说。';
+    }
+
+    // 第一次发言
+    const suspect = this._pickSpokenPlayer(spokenPlayers, game, mySeat);
+    if (suspect) {
+      const seat = game.getSeatNum(suspect.socketId);
+      return this._pickRandom([
+        `我是平民，昨晚什么都不知道。${seat}的发言让我觉得有点可疑。`,
+        `我是好人，${seat}刚才说的不太对劲，大家注意一下。`,
+        `我是平民，没啥信息。${seat}给我感觉不太好，大家留意。`,
+      ]);
+    }
+
+    return this._pickRandom([
+      '我是平民，昨晚什么都不知道，等预言家出来给信息。',
+      '我是好人，没什么线索，先听听大家的发言。',
+      '我是平民，目前看不出谁是狼，大家继续分析。',
+    ]);
   }
 
   async _generateLastWillMessage(game, aiPlayer) {
@@ -912,17 +1306,39 @@ class AIGameHandler {
       const role = game.getRole(aiPlayer.socketId);
       const roleName = getRoleName(role);
       const seatNum = game.getSeatNum(aiPlayer.socketId);
-      
-      const prompt = `你是一个${roleName}，${seatNum}号，刚刚在狼人杀游戏中死亡了。请发表你的死亡遗言，告诉其他玩家你的身份和怀疑对象。用中文回答，30-50字。`;
 
-      const response = await this.model.generateContent(prompt);
-      const text = response.response.text();
-      
+      // 构建聊天记录摘要
+      const room = roomCache.get(game.roomCode);
+      const recentChat = (room?.chat || []).slice(-10).map(msg => {
+        const name = game.getSeatNum(msg.username) || msg.username;
+        return `${name}: ${msg.message}`;
+      }).join('\n');
+
+      const promptText = `你是一个狼人杀游戏中的AI玩家，角色是${roleName}，座位号${seatNum}号。你刚刚在游戏中死亡了。
+
+最近聊天记录：
+${recentChat || '（无）'}
+
+请发表你的死亡遗言。要求：
+1. 用口语说话，像真人一样
+2. 根据你的角色，可以透露身份或怀疑对象
+3. 30-60字
+4. 不要用书面语，不要说"综上所述"之类的话
+
+直接输出遗言内容，不要加引号或其他格式。`;
+
+      const response = await Promise.race([
+        this.model.invoke(promptText),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
+      ]);
+
+      const text = typeof response === 'string' ? response : (response?.content || response?.text || '');
       if (text && text.trim()) {
+        console.log(`[AIGameHandler] LLM last will for ${seatNum}号 (${roleName}): ${text.substring(0, 50)}...`);
         return text.trim();
       }
     } catch (error) {
-      console.error('[AIGameHandler] _generateLastWillMessage error:', error);
+      console.error(`[AIGameHandler] LLM last will failed for ${aiPlayer.username}, using fallback:`, error.message);
     }
 
     return this._getFallbackLastWillMessage(game, aiPlayer);
@@ -1014,58 +1430,39 @@ class AIGameHandler {
     const agentConfig = aiPlayer.agentConfig || {};
     const lang = agentConfig.language || {};
 
+    // 只替换明显的书面语，降低概率避免过度修改
     const colloquialMap = [
-      ['我认为', '我觉得'],
-      ['我觉得', '我觉着'],
-      ['因此', '所以嘛'],
-      ['所以', '所以说'],
-      ['并且', '还有'],
-      ['此外', '再说了'],
       ['综上所述', '总的来说'],
+      ['毫无疑问', '肯定'],
+      ['值得注意的是', '你们看'],
       ['首先', '第一'],
       ['其次', '然后'],
-      ['最后', '还有'],
-      ['总之', '反正'],
-      ['毫无疑问', '肯定'],
-      ['可能', '说不定'],
-      ['应该', '八成'],
-      ['一定', '绝对'],
-      ['大家注意', '你们看啊'],
-      ['我是', '我就是'],
-      ['请大家', '大伙'],
-      ['希望', '但愿'],
-      ['建议', '我觉得可以'],
-      ['怀疑', '觉得'],
-      ['分析', '琢磨'],
-      ['判断', '猜'],
     ];
     for (const [formal, casual] of colloquialMap) {
-      if (Math.random() < 0.5) {
-        result = result.split(formal).join(casual);
-      }
+      result = result.split(formal).join(casual);
     }
 
-    result = result.replace(/。+$/g, () => {
-      const punctuations = ['啊', '嘛', '呢', '呗', '啦', '咯', '哈'];
-      return '！' + punctuations[Math.floor(Math.random() * punctuations.length)];
-    });
-    result = result.replace(/^。/, '');
-    result = result.replace(/,/g, () => Math.random() < 0.3 ? '，' : '');
+    // 偶尔加语气词结尾
+    if (Math.random() < 0.3 && /[。]$/.test(result)) {
+      const punctuations = ['啊', '嘛', '呢', '呗', '啦', '哈'];
+      result = result.slice(0, -1) + punctuations[Math.floor(Math.random() * punctuations.length)] + '。';
+    }
 
-    if (lang.prefixes && lang.prefixes.length > 0 && Math.random() < 0.4) {
+    // 偶尔加语言习惯词
+    if (lang.prefixes && lang.prefixes.length > 0 && Math.random() < 0.25) {
       const prefix = lang.prefixes[Math.floor(Math.random() * lang.prefixes.length)];
       result = prefix + '，' + result;
     }
 
-    if (lang.suffixes && lang.suffixes.length > 0 && Math.random() < 0.4) {
+    if (lang.suffixes && lang.suffixes.length > 0 && Math.random() < 0.25) {
       const suffix = lang.suffixes[Math.floor(Math.random() * lang.suffixes.length)];
       result = result + suffix;
     }
 
-    if (lang.favoriteWords && lang.favoriteWords.length > 0 && Math.random() < 0.6) {
+    if (lang.favoriteWords && lang.favoriteWords.length > 0 && Math.random() < 0.3) {
       const word = lang.favoriteWords[Math.floor(Math.random() * lang.favoriteWords.length)];
       if (!result.includes(word)) {
-        result = result.replace(/[，,！!呀啊嘛呢呗啦咯哈。]$/, `，${word}$&`);
+        result = result.replace(/[，,！!。]$/, `，${word}$&`);
         if (!result.includes(word)) {
           result += `，${word}！`;
         }
@@ -1105,6 +1502,8 @@ class AIGameHandler {
 
   cleanup(roomCode) {
     this._stopDayChat(roomCode);
+    // 清理AI发言状态
+    this.aiClaims = {};
   }
 }
 

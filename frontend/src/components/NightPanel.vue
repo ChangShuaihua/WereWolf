@@ -45,6 +45,17 @@
         <p>🐺 你的队友：{{ prompt.teammates.map(t => t.username).join('、') }}</p>
       </div>
 
+      <!-- 狼人实时投票状态（选择目标时也可见） -->
+      <div v-if="prompt.isWerewolfTeam && werewolfVoteState" class="werewolf-vote-live">
+        <p class="vote-title">🐺 队友击杀选择</p>
+        <div v-for="choice in werewolfVoteState.choices" :key="choice.playerId" class="vote-row" :class="{ 'vote-done': choice.targetName, 'vote-pending': !choice.targetName }">
+          <span class="vote-player">{{ choice.playerName }}</span>
+          <span class="vote-arrow">→</span>
+          <span class="vote-target">{{ choice.targetName || '尚未选择' }}</span>
+        </div>
+        <p v-if="werewolfVoteState.isUnanimous" class="vote-unanimous">✅ 狼人已统一目标</p>
+      </div>
+
       <!-- Witch special: show killed info + save/poison options -->
       <div v-if="prompt.action === 'witch'" class="witch-options">
         <div class="witch-hint">
@@ -423,6 +434,61 @@ function confirmSkip() {
   margin: 0;
   color: var(--werewolf-primary);
   font-size: 14px;
+}
+
+.werewolf-vote-live {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.vote-title {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--werewolf-primary);
+}
+
+.vote-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.vote-row.vote-done .vote-target {
+  color: var(--status-success);
+  font-weight: 600;
+}
+
+.vote-row.vote-pending .vote-target {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.vote-player {
+  color: var(--text-primary);
+  font-weight: 600;
+  min-width: 40px;
+}
+
+.vote-arrow {
+  color: var(--text-tertiary);
+}
+
+.vote-target {
+  flex: 1;
+}
+
+.vote-unanimous {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  color: var(--status-success);
+  font-weight: 600;
+  text-align: center;
 }
 
 .witch-options {
