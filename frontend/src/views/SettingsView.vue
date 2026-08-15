@@ -97,20 +97,6 @@
           />
         </div>
 
-        <div v-if="message" class="form-message" :class="messageType">
-          {{ message }}
-        </div>
-
-        <div v-if="testResult" class="form-message" :class="testResult.ok ? 'success' : 'error'">
-          <template v-if="testResult.ok">
-            ✓ 连接成功（{{ testResult.latency }}ms）
-            <span v-if="testResult.reply" class="test-reply">模型回复：{{ testResult.reply }}</span>
-          </template>
-          <template v-else>
-            ✗ 连接失败（{{ testResult.latency }}ms）：{{ testResult.message }}
-          </template>
-        </div>
-
         <div class="btn-row">
           <button class="btn btn-primary" @click="handleSave" :disabled="saving">
             {{ saving ? '保存中...' : '保存并生效' }}
@@ -130,6 +116,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import api from '../api'
+import { useToast } from '../composables/useToast'
+
+const { showToast } = useToast()
 
 const form = ref({
   apiKey: '',
@@ -167,9 +156,6 @@ const status = ref({
 const saving = ref(false)
 const clearing = ref(false)
 const testing = ref(false)
-const message = ref('')
-const messageType = ref('success')
-const testResult = ref(null)
 
 // 绑定模型的可用性：idle=未检测 / checking=检测中 / ok / fail
 const availability = ref({ state: 'idle', latency: 0, message: '' })
@@ -218,18 +204,15 @@ async function loadStatus() {
       checkAvailability()
     }
   } catch (err) {
-    message.value = err.response?.data?.message || '设置加载失败'
-    messageType.value = 'error'
+    showToast(err.response?.data?.message || '设置加载失败', 'error')
   }
 }
 
 async function handleSave() {
   saving.value = true
-  message.value = ''
 
   if (form.value.apiUrl && !/^https?:\/\//.test(form.value.apiUrl.trim())) {
-    message.value = 'API 地址需以 http:// 或 https:// 开头'
-    messageType.value = 'error'
+    showToast('API 地址需以 http:// 或 https:// 开头', 'error')
     saving.value = false
     return
   }
@@ -242,12 +225,10 @@ async function handleSave() {
     })
     status.value = data
     form.value.apiKey = ''
-    message.value = data.message || 'LLM 配置已更新'
-    messageType.value = 'success'
+    showToast(data.message || 'LLM 配置已更新', 'success')
     checkAvailability()
   } catch (err) {
-    message.value = err.response?.data?.message || '保存失败'
-    messageType.value = 'error'
+    showToast(err.response?.data?.message || '保存失败', 'error')
   } finally {
     saving.value = false
   }
@@ -255,8 +236,6 @@ async function handleSave() {
 
 async function handleTest() {
   testing.value = true
-  message.value = ''
-  testResult.value = null
 
   try {
     const { data } = await api.post('/settings/llm/test', {
@@ -264,9 +243,14 @@ async function handleTest() {
       apiUrl: form.value.apiUrl.trim() || undefined,
       modelName: form.value.modelName.trim() || undefined,
     })
-    testResult.value = data
+    if (data.ok) {
+      const reply = data.reply ? `，模型回复：${data.reply}` : ''
+      showToast(`连接成功（${data.latency}ms）${reply}`, 'success')
+    } else {
+      showToast(data.message || '连接失败', 'error')
+    }
   } catch (err) {
-    testResult.value = { ok: false, latency: 0, message: err.response?.data?.message || '测试请求失败' }
+    showToast(err.response?.data?.message || '测试请求失败', 'error')
   } finally {
     testing.value = false
   }
@@ -274,7 +258,6 @@ async function handleTest() {
 
 async function handleClear() {
   clearing.value = true
-  message.value = ''
 
   try {
     const { data } = await api.delete('/settings/llm')
@@ -282,12 +265,10 @@ async function handleClear() {
     form.value.apiUrl = data.apiUrl || ''
     form.value.modelName = data.modelName || ''
     form.value.apiKey = ''
-    message.value = data.message || '已清除运行时配置'
-    messageType.value = 'success'
+    showToast(data.message || '已清除配置', 'success')
     checkAvailability()
   } catch (err) {
-    message.value = err.response?.data?.message || '清除失败'
-    messageType.value = 'error'
+    showToast(err.response?.data?.message || '清除失败', 'error')
   } finally {
     clearing.value = false
   }
@@ -361,6 +342,11 @@ onMounted(loadStatus)
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* 状态卡内容较少，等高后垂直均匀分布，避免底部大片留白 */
+.status-card {
+  justify-content: space-between;
 }
 
 .status-card h3,
@@ -509,31 +495,6 @@ onMounted(loadStatus)
 .form-hint {
   font-size: 0.8rem;
   color: var(--text-tertiary);
-}
-
-.form-message {
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
-}
-
-.form-message.success {
-  background: rgba(54, 211, 153, 0.1);
-  border: 1px solid rgba(54, 211, 153, 0.3);
-  color: var(--status-success);
-}
-
-.form-message.error {
-  background: rgba(229, 57, 53, 0.1);
-  border: 1px solid rgba(229, 57, 53, 0.3);
-  color: var(--status-error);
-}
-
-.test-reply {
-  display: block;
-  margin-top: 6px;
-  font-size: 0.85rem;
-  opacity: 0.85;
 }
 
 .btn-row {

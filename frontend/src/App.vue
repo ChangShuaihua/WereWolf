@@ -37,6 +37,7 @@
     <main class="app-main" :class="{ 'page-scroll': isScrollablePage }">
       <router-view />
     </main>
+    <Toast />
     <ConfirmDialog
       v-model="dialogVisible"
       :title="dialogState.title"
@@ -58,6 +59,7 @@ import { useUserStore } from './stores/user'
 import { useThemeStore } from './stores/theme'
 import { useConfirmDialog } from './composables/useConfirm'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import Toast from './components/Toast.vue'
 
 const route = useRoute()
 const userStore = useUserStore()
