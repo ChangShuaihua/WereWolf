@@ -1,10 +1,23 @@
 /**
  * 轻量 Markdown → HTML 渲染器
  * 支持: 标题(# ~ ###), 加粗(**), 斜体(*), 列表(-), 换行, 段落
+ * 
+ * 安全：先做 HTML 实体转义再处理 markdown 标记，
+ * 避免原始文本中的 <script> 等被直接输出。
  */
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export function renderMarkdown(text) {
   if (!text) return ''
-  let html = text
+  // 先转义 HTML，再做 markdown 解析
+  let html = escapeHtml(text)
 
   html = html.replace(/###\s+(.+)/g, '<h4>$1</h4>')
   html = html.replace(/##\s+(.+)/g, '<h3>$1</h3>')

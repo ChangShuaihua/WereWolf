@@ -51,6 +51,9 @@ class GameRetriever {
     const cached = this._cache.get(key);
     if (cached && (now - cached.time) < this._CACHE_TTL) {
       this._stats.cacheHits++;
+      // LRU：命中时删除并重新插入，让最近使用的条目排在后面（迭代顺序）
+      this._cache.delete(key);
+      this._cache.set(key, cached);
       return cached.value;
     }
     
@@ -61,12 +64,18 @@ class GameRetriever {
     // 写入缓存
     this._cache.set(key, { value, time: now });
     
-    // 清理过期缓存
+    // 容量保护：超过 MAX 时先清理过期条目；仍超额则按插入顺序淘汰最老的（简易 LRU）
     if (this._cache.size > this._CACHE_MAX) {
+      // 1. 清理过期
       for (const [k, v] of this._cache) {
         if (now - v.time > this._CACHE_TTL) {
           this._cache.delete(k);
         }
+      }
+      // 2. 仍超额则淘汰最早插入的（Map 按插入顺序迭代）
+      while (this._cache.size > this._CACHE_MAX) {
+        const firstKey = this._cache.keys().next().value;
+        this._cache.delete(firstKey);
       }
     }
     
@@ -104,56 +113,55 @@ class GameRetriever {
     const replaysDir = path.join(__dirname, '../knowledge/replays');
     const rulesDir = path.join(__dirname, '../knowledge/rules');
     
-    try {
-      let totalChunks = 0;
-      let totalFiles = 0;
+    let totalChunks = 0;
+    let totalFiles = 0;
+    let failedFiles = 0;
 
-      // 加载策略文档
-      if (fs.existsSync(strategiesDir)) {
-        const files = fs.readdirSync(strategiesDir).filter(f => f.endsWith('.md'));
-        for (const file of files) {
-          const filePath = path.join(strategiesDir, file);
-          const content = fs.readFileSync(filePath, 'utf-8');
+    // 辅助方法：安全加载单个目录下的所有 .md 文件
+    const loadDir = (dir, dirName) => {
+      if (!fs.existsSync(dir)) {
+        console.warn(`[GameRetriever] ${dirName} directory not found: ${dir}`);
+        return;
+      }
+      let files;
+      try {
+        files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
+      } catch (e) {
+        console.error(`[GameRetriever] Failed to list ${dirName} dir: ${e.message}`);
+        return;
+      }
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        let content;
+        try {
+          content = fs.readFileSync(filePath, 'utf-8');
+        } catch (e) {
+          console.error(`[GameRetriever] Failed to read ${dirName} file "${file}": ${e.message}. Skipping.`);
+          failedFiles++;
+          continue;
+        }
+        try {
           const chunks = this._chunkDocument(content, file);
           this.docs.push(...chunks);
           totalChunks += chunks.length;
+          totalFiles++;
+        } catch (e) {
+          console.error(`[GameRetriever] Failed to parse ${dirName} file "${file}": ${e.message}. Skipping.`);
+          failedFiles++;
         }
-        totalFiles += files.length;
-      } else {
-        console.warn('[GameRetriever] Strategies directory not found:', strategiesDir);
       }
+    };
 
-      // 加载游戏规则文档
-      if (fs.existsSync(rulesDir)) {
-        const ruleFiles = fs.readdirSync(rulesDir).filter(f => f.endsWith('.md'));
-        for (const file of ruleFiles) {
-          const filePath = path.join(rulesDir, file);
-          const content = fs.readFileSync(filePath, 'utf-8');
-          const chunks = this._chunkDocument(content, file);
-          this.docs.push(...chunks);
-          totalChunks += chunks.length;
-        }
-        totalFiles += ruleFiles.length;
-      }
+    // 加载策略文档
+    loadDir(strategiesDir, 'Strategies');
+    // 加载游戏规则文档
+    loadDir(rulesDir, 'Rules');
+    // 加载历史对局
+    loadDir(replaysDir, 'Replays');
 
-      // 加载历史对局
-      if (fs.existsSync(replaysDir)) {
-        const replayFiles = fs.readdirSync(replaysDir).filter(f => f.endsWith('.md'));
-        for (const file of replayFiles) {
-          const filePath = path.join(replaysDir, file);
-          const content = fs.readFileSync(filePath, 'utf-8');
-          const chunks = this._chunkDocument(content, file);
-          this.docs.push(...chunks);
-          totalChunks += chunks.length;
-        }
-        totalFiles += replayFiles.length;
-      }
-
-      this.isLoaded = true;
-      console.log(`[GameRetriever] Loaded ${totalChunks} chunks from ${totalFiles} files (${this.docs.length} total in memory)`);
-    } catch (err) {
-      console.error('[GameRetriever] Failed to initialize:', err.message);
-    }
+    this.isLoaded = true;
+    const failedInfo = failedFiles > 0 ? `, ${failedFiles} files skipped due to errors` : '';
+    console.log(`[GameRetriever] Loaded ${totalChunks} chunks from ${totalFiles} files (${this.docs.length} total in memory)${failedInfo}`);
   }
 
   /**

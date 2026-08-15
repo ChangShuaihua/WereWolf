@@ -35,7 +35,8 @@ class AIGameHandler {
     // AI决策日志（保留最近100条）
     this.decisionLogs = [];
     this._MAX_LOGS = 100;
-    // AI发言状态追踪：key = socketId, value = { claimedRole, claimedChecks: [{target, result}], suspectedPlayers: [] }
+    // AI发言状态追踪：按 roomCode 隔离，避免多房间互相污染
+    // key = roomCode, value = { socketId: { claimedRole, claimedChecks, suspectedPlayers } }
     this.aiClaims = {};
     this._initModel();
   }
@@ -875,11 +876,15 @@ class AIGameHandler {
     // 解析聊天记录，提取关键信息
     const chatContext = this._parseChatContext(chat, game, aiPlayer.socketId);
 
-    // 获取或初始化AI发言状态
-    if (!this.aiClaims[aiPlayer.socketId]) {
-      this.aiClaims[aiPlayer.socketId] = { claimedRole: null, claimedChecks: [], hasSpoken: false };
+    // 获取或初始化AI发言状态（按 roomCode 隔离）
+    const roomCode = game.roomCode;
+    if (!this.aiClaims[roomCode]) {
+      this.aiClaims[roomCode] = {};
     }
-    const myClaim = this.aiClaims[aiPlayer.socketId];
+    if (!this.aiClaims[roomCode][aiPlayer.socketId]) {
+      this.aiClaims[roomCode][aiPlayer.socketId] = { claimedRole: null, claimedChecks: [], hasSpoken: false };
+    }
+    const myClaim = this.aiClaims[roomCode][aiPlayer.socketId];
 
     const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
     // 只引用真正发过言的玩家
@@ -1502,8 +1507,10 @@ ${recentChat || '（无）'}
 
   cleanup(roomCode) {
     this._stopDayChat(roomCode);
-    // 清理AI发言状态
-    this.aiClaims = {};
+    // 只清理当前房间的 AI 发言状态，保留其他房间
+    if (this.aiClaims[roomCode]) {
+      delete this.aiClaims[roomCode];
+    }
   }
 }
 

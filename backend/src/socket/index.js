@@ -3,6 +3,11 @@ const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect,
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
 const { kickOldSocket, removeUserSocket, getUserBySocket } = require('../utils/userSocketMap');
+const {
+  getRoomInfoOrReject,
+  validatePhaseOrReject,
+  validateAliveOrReject,
+} = require('../utils/socketValidators');
 
 /**
  * Initialize Socket.io with all event handlers
@@ -96,15 +101,11 @@ function initSocket(io) {
 
     // Add AI player
     socket.on('add_ai_player', async ({ roomCode, agentId } = {}) => {
-      console.log(`[socket] add_ai_player event received from socket=${socket.id}, roomCode=${roomCode}, agentId=${agentId}`);
       const info = socketCache.get(socket.id);
-      console.log(`[socket] socketCache info:`, info);
       const code = roomCode || info?.roomCode;
-      console.log(`[socket] resolved code: ${code}`);
       if (code) {
         try {
-          const result = await addAIPlayer(socket, code, agentId);
-          console.log(`[socket] addAIPlayer result:`, result ? result.username : 'null');
+          await addAIPlayer(socket, code, agentId);
         } catch (err) {
           console.error('[socket] addAIPlayer failed:', err);
           socket.emit('error', { message: '添加AI玩家失败' });
@@ -114,12 +115,10 @@ function initSocket(io) {
 
     // Remove AI player
     socket.on('remove_ai_player', ({ roomCode, aiSocketId } = {}) => {
-      console.log(`[socket] remove_ai_player event received from socket=${socket.id}, roomCode=${roomCode}, aiSocketId=${aiSocketId}`);
       const info = socketCache.get(socket.id);
       const code = roomCode || info?.roomCode;
       if (code && aiSocketId) {
-        const result = removeAIPlayer(socket, code, aiSocketId);
-        console.log(`[socket] removeAIPlayer result:`, result ? result.username : 'null');
+        removeAIPlayer(socket, code, aiSocketId);
       }
     });
 
@@ -130,37 +129,61 @@ function initSocket(io) {
       if (code) startGame(io, socket, code);
     });
 
-    // Night action
+    // Night action（仅 NIGHT 阶段且该玩家存活）
     socket.on('night_action', (data) => {
-      const info = socketCache.get(socket.id);
-      if (info?.roomCode) handleNightAction(socket, info.roomCode, data);
+      const ctx = getRoomInfoOrReject(socket);
+      if (!ctx) return;
+      const { game, player } = ctx;
+      if (!validatePhaseOrReject(socket, game, 'NIGHT', '执行夜间行动')) return;
+      if (!validateAliveOrReject(socket, player, '执行夜间行动')) return;
+      handleNightAction(socket, ctx.code, data);
     });
 
-    // Hunter shoot
+    // Hunter shoot（仅 HUNTER_SHOOT 阶段且该玩家存活）
     socket.on('hunter_shoot', (data) => {
-      const info = socketCache.get(socket.id);
-      if (info?.roomCode) handleHunterShoot(socket, info.roomCode, data);
+      const ctx = getRoomInfoOrReject(socket);
+      if (!ctx) return;
+      const { game, player } = ctx;
+      if (!validatePhaseOrReject(socket, game, 'HUNTER_SHOOT', '开枪')) return;
+      if (!validateAliveOrReject(socket, player, '开枪')) return;
+      handleHunterShoot(socket, ctx.code, data);
     });
 
-    // Vote
+    // Vote（仅 VOTING 阶段且该玩家存活）
     socket.on('vote', (data) => {
-      const info = socketCache.get(socket.id);
-      if (info?.roomCode) handleVote(socket, info.roomCode, data);
+      const ctx = getRoomInfoOrReject(socket);
+      if (!ctx) return;
+      const { game, player } = ctx;
+      if (!validatePhaseOrReject(socket, game, 'VOTING', '投票')) return;
+      if (!validateAliveOrReject(socket, player, '投票')) return;
+      handleVote(socket, ctx.code, data);
     });
 
-    // Skip day
+    // Skip day（仅 DAY 阶段，允许非存活玩家触发，但需要游戏开始）
     socket.on('skip_day', () => {
-      const info = socketCache.get(socket.id);
-      if (info?.roomCode) skipDay(info.roomCode);
+      const ctx = getRoomInfoOrReject(socket);
+      if (!ctx) return;
+      if (!validatePhaseOrReject(socket, ctx.game, 'DAY', '跳过白天发言')) return;
+      skipDay(ctx.code);
     });
 
     // Chat
     socket.on('chat', ({ message, roomCode: code } = {}) => {
-      console.log(`[socket] chat from ${socket.id}: msg="${message}" code="${code}"`);
       const info = socketCache.get(socket.id);
       const roomCode = code || info?.roomCode;
-      
+
       if (roomCode && message) {
+        if (typeof message !== 'string') {
+          socket.emit('chat_error', { message: '无效的消息格式' });
+          return;
+        }
+        if (message.length > 1000) {
+          socket.emit('chat_error', { message: '消息过长（限1000字符）' });
+          return;
+        }
+        const trimmedMsg = message.trim();
+        if (trimmedMsg.length === 0) return;
+
         const game = gameCache.get(roomCode);
         if (game && game.phase === 'DAY' && game.speakingOrder.length > 0) {
           const currentSpeaker = game.speakingOrder[game.currentSpeakerIndex];
@@ -169,14 +192,23 @@ function initSocket(io) {
             return;
           }
         }
-        addChat(socket, roomCode, message);
+        addChat(socket, roomCode, trimmedMsg);
       }
     });
 
     // Rule QA (独立通道，不进入聊天记录)
     socket.on('rule_qa', ({ question } = {}) => {
       if (question) {
-        ruleQA(socket, question);
+        if (typeof question !== 'string' || question.length > 200) {
+          socket.emit('rule_qa_answer', {
+            question: String(question || '').slice(0, 50),
+            answer: '问题过长或格式无效（限200字符）',
+            error: true,
+            timestamp: Date.now(),
+          });
+          return;
+        }
+        ruleQA(socket, question.trim());
       }
     });
 

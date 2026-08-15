@@ -8,6 +8,25 @@ const aiGameHandler = require('../game/AIGameHandler');
 
 const router = express.Router();
 
+// 管理员ID白名单（逗号分隔），未配置时管理接口完全禁用
+const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(s => s)
+  .map(s => Number(s))
+  .filter(n => Number.isInteger(n));
+
+function requireAdmin(req, res, next) {
+  const id = Number(req.user?.id);
+  if (ADMIN_USER_IDS.length === 0) {
+    return res.status(501).json({ message: '管理接口未启用' });
+  }
+  if (!ADMIN_USER_IDS.includes(id)) {
+    return res.status(403).json({ message: '需要管理员权限' });
+  }
+  next();
+}
+
 // 禁止缓存所有 stats 路由
 router.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -47,7 +66,6 @@ router.get('/me', authMiddleware, async (req, res, next) => {
       totalLosses: 0,
       winRate: 0,
       rank: null,
-      _error: err.message,
     });
   }
 });
@@ -81,8 +99,8 @@ router.get('/leaderboard', authMiddleware, async (req, res, next) => {
   }
 });
 
-// POST /api/stats/sync - 手动同步 MySQL 数据到 Redis（管理用）
-router.post('/sync', authMiddleware, async (req, res, next) => {
+// POST /api/stats/sync - 手动同步 MySQL 数据到 Redis（管理员）
+router.post('/sync', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     await statsService.syncAllUsersToRedis();
     res.json({ message: '同步完成' });
@@ -91,8 +109,8 @@ router.post('/sync', authMiddleware, async (req, res, next) => {
   }
 });
 
-// POST /api/stats/clear - 清空 Redis 缓存（管理用）
-router.post('/clear', authMiddleware, async (req, res, next) => {
+// POST /api/stats/clear - 清空 Redis 缓存（管理员）
+router.post('/clear', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     await statsService.clearAll();
     res.json({ message: '缓存已清空' });
@@ -101,15 +119,26 @@ router.post('/clear', authMiddleware, async (req, res, next) => {
   }
 });
 
-// GET /api/stats/ai - AI 检索命中率与决策日志监控
-router.get('/ai', authMiddleware, async (req, res, next) => {
+// GET /api/stats/ai - AI 检索命中率与决策聚合统计（管理员）
+router.get('/ai', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     const retrieverStats = gameRetriever.getStats();
     const decisionLogs = aiGameHandler.getDecisionLogs();
+
+    // 聚合统计，不暴露详细日志内容
+    const phaseCounts = {};
+    const roleCounts = {};
+    for (const log of decisionLogs) {
+      if (log.phase) phaseCounts[log.phase] = (phaseCounts[log.phase] || 0) + 1;
+      if (log.role) roleCounts[log.role] = (roleCounts[log.role] || 0) + 1;
+    }
+
     res.json({
       retrieverStats,
-      decisionLogs,
-      totalLogs: decisionLogs.length,
+      decisionLogCount: decisionLogs.length,
+      phaseBreakdown: phaseCounts,
+      roleBreakdown: roleCounts,
+      latestTimestamp: decisionLogs.length > 0 ? decisionLogs[0]?.timestamp : null,
     });
   } catch (err) {
     next(err);

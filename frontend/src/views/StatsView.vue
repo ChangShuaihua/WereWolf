@@ -9,7 +9,7 @@
         </div>
         <div class="score-main">
           <div class="score-value">{{ myStats.score }}</div>
-          <div class="score-rank" v-if="myRank">排名 #{{ myRank }}</div>
+          <div class="score-rank" v-if="myRank">排名 {{ myRank }}</div>
         </div>
         <div class="score-details">
           <div class="detail-item">

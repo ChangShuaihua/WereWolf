@@ -16,6 +16,7 @@ function toAgent(row) {
 
   return {
     id: row.id,
+    ownerId: row.owner_id ? Number(row.owner_id) : null,
     name: row.name,
     avatar: row.avatar,
     personality: parseJson(row.personality, {}),
@@ -51,10 +52,11 @@ const AIAgent = {
   async create(agent) {
     await pool.query(
       `INSERT INTO ai_agents
-        (id, name, avatar, personality, speaking_style, strategy, language, created_at_ms, updated_at_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, owner_id, name, avatar, personality, speaking_style, strategy, language, created_at_ms, updated_at_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         agent.id,
+        agent.ownerId || null,
         agent.name,
         agent.avatar,
         JSON.stringify(agent.personality),
@@ -109,6 +111,7 @@ const AIAgent = {
 
     const values = agents.map(agent => [
       agent.id,
+      agent.ownerId || null,
       agent.name,
       agent.avatar,
       JSON.stringify(agent.personality),
@@ -121,7 +124,7 @@ const AIAgent = {
 
     await pool.query(
       `INSERT INTO ai_agents
-        (id, name, avatar, personality, speaking_style, strategy, language, created_at_ms, updated_at_ms)
+        (id, owner_id, name, avatar, personality, speaking_style, strategy, language, created_at_ms, updated_at_ms)
        VALUES ?`,
       [values]
     );

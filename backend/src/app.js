@@ -16,6 +16,7 @@ const aiAgentRoutes = require('./routes/aiAgentRoutes');
 const replayRoutes = require('./routes/replayRoutes');
 const statsRoutes = require('./routes/stats');
 const initSocket = require('./socket');
+const authMiddleware = require('./middleware/auth');
 const { AppError } = require('./utils/AppError');
 
 /**
@@ -113,7 +114,7 @@ app.use('/api/replays', replayRoutes);
 app.use('/api/stats', statsRoutes);
 
 // GET /api/lobby-stats - lobby stats (online users + AI agent count)
-app.get('/api/lobby-stats', async (req, res, next) => {
+app.get('/api/lobby-stats', authMiddleware, async (req, res, next) => {
   try {
     const aiAgents = await aiAgentManager.getAllAgents();
     res.json({
@@ -126,7 +127,7 @@ app.get('/api/lobby-stats', async (req, res, next) => {
 });
 
 // GET /api/rooms - list active rooms
-app.get('/api/rooms', (req, res) => {
+app.get('/api/rooms', authMiddleware, (req, res) => {
   const rooms = [];
   const allRooms = roomCache.keys();
   for (const code of allRooms) {
@@ -147,7 +148,7 @@ app.get('/api/rooms', (req, res) => {
 });
 
 // GET /api/room/:code - get room details
-app.get('/api/room/:code', (req, res) => {
+app.get('/api/room/:code', authMiddleware, (req, res) => {
   const { code } = req.params;
   const room = roomCache.get(code);
   if (!room) {
@@ -165,9 +166,38 @@ app.get('/api/room/:code', (req, res) => {
   });
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', redis: getRedisStatus(), timestamp: Date.now() });
+// Health check（免登录，用于 Docker 健康探针）
+app.get('/api/health', async (req, res) => {
+  const { pool } = require('./config/db');
+  let dbStatus = 'unknown';
+  let rooms = 0;
+  let online = 0;
+  try {
+    if (pool && pool.promise) {
+      await pool.promise().query('SELECT 1');
+      dbStatus = 'ok';
+    }
+  } catch (e) {
+    dbStatus = 'error';
+  }
+  try { online = getUserCount(); } catch (_) {}
+  try { rooms = roomCache.keys().length; } catch (_) {}
+
+  const redisOk = !!(getRedisStatus() && getRedisStatus().connected);
+  const overall = (dbStatus === 'ok' && redisOk) ? 'ok' : 'degraded';
+  res.status(overall === 'ok' ? 200 : 503).json({
+    status: overall,
+    timestamp: Date.now(),
+    db: dbStatus,
+    redis: getRedisStatus(),
+    onlineUsers: online,
+    activeRooms: rooms,
+  });
+});
+
+// Readiness probe（就绪探针）
+app.get('/api/ready', (req, res) => {
+  res.json({ ready: true, uptime: process.uptime(), timestamp: Date.now() });
 });
 
 // 404 handler

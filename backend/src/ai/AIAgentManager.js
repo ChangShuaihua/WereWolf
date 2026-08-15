@@ -254,31 +254,75 @@ const DEFAULT_AGENTS = [
   }
 ];
 
+// 清洗字符串，防止 Prompt 注入：移除换行、控制字符、截断过长文本
+function sanitizePromptString(str, maxLen = 20) {
+  if (typeof str !== 'string') return '';
+  // 移除换行和控制字符
+  let s = str.replace(/[\r\n\t\x00-\x1F\x7F]/g, ' ');
+  // 去除可能的指令注入关键词（如"忽略以上指令"等）
+  s = s.replace(/忽略以上.*指令|disregard.*instruction|forget.*previous/gi, '[已过滤]');
+  s = s.replace(/你现在是|从现在开始|扮演.*角色/gi, '[已过滤]');
+  s = s.trim();
+  if (s.length > maxLen) s = s.substring(0, maxLen);
+  return s;
+}
+
+// 清洗语言习惯数组
+function sanitizeLangList(list, maxLen = 10, itemMax = 20) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map(s => sanitizePromptString(s, itemMax))
+    .filter(Boolean)
+    .slice(0, maxLen);
+}
+
+// 五维性格数值钳制在 0-100，避免越界
+function clampPersonality(val) {
+  const n = Number(val);
+  if (Number.isNaN(n)) return 50;
+  return Math.max(0, Math.min(100, n));
+}
+
 function normalizeAgent(data = {}, existing = null) {
   const now = Date.now();
-  // 生成唯一ID
+  const rawName = data.name || existing?.name || '未命名智能体';
+  const rawAvatar = data.avatar || existing?.avatar || '🤖';
+
+  // 语言习惯长度限制 + 内容清洗
+  const prefixes = sanitizeLangList(data.language?.prefixes || existing?.language?.prefixes || ['我觉得'], 6, 15);
+  const suffixes = sanitizeLangList(data.language?.suffixes || existing?.language?.suffixes || ['对吧'], 6, 15);
+  const favoriteWords = sanitizeLangList(data.language?.favoriteWords || existing?.language?.favoriteWords || ['狼', '好人'], 10, 10);
+
+  // 说话风格白名单
+  const STYLE_WHITELIST = ['humorous', 'serious', 'aggressive', 'calm', 'mysterious'];
+  let speakingStyle = data.speakingStyle || existing?.speakingStyle || 'calm';
+  if (!STYLE_WHITELIST.includes(speakingStyle)) speakingStyle = 'calm';
+
+  // 策略白名单
+  const NIGHT_ACTION_WL = ['random', 'target_weak', 'target_strong', 'follow_teammate'];
+  const DAY_STRATEGY_WL = ['passive', 'active', 'leader', 'follower'];
+  const REVEAL_WL = ['early', 'mid', 'late', 'never'];
+  const nightAction = NIGHT_ACTION_WL.includes(data.strategy?.nightAction)
+    ? data.strategy.nightAction : (existing?.strategy?.nightAction || 'random');
+  const dayStrategy = DAY_STRATEGY_WL.includes(data.strategy?.dayStrategy)
+    ? data.strategy.dayStrategy : (existing?.strategy?.dayStrategy || 'passive');
+  const revealIdentity = REVEAL_WL.includes(data.strategy?.revealIdentity)
+    ? data.strategy.revealIdentity : (existing?.strategy?.revealIdentity || 'mid');
+
   return {
     id: existing?.id || data.id || `agent-${now}`,
-    name: data.name || existing?.name || '未命名智能体',
-    avatar: data.avatar || existing?.avatar || '🤖',
+    name: sanitizePromptString(rawName, 30) || '未命名智能体',
+    avatar: (rawAvatar && rawAvatar.length <= 4) ? rawAvatar : '🤖',
     personality: {
-      aggressiveness: data.personality?.aggressiveness ?? existing?.personality?.aggressiveness ?? 50,
-      caution: data.personality?.caution ?? existing?.personality?.caution ?? 50,
-      cunning: data.personality?.cunning ?? existing?.personality?.cunning ?? 50,
-      honesty: data.personality?.honesty ?? existing?.personality?.honesty ?? 50,
-      talkativeness: data.personality?.talkativeness ?? existing?.personality?.talkativeness ?? 50,
+      aggressiveness: clampPersonality(data.personality?.aggressiveness ?? existing?.personality?.aggressiveness ?? 50),
+      caution: clampPersonality(data.personality?.caution ?? existing?.personality?.caution ?? 50),
+      cunning: clampPersonality(data.personality?.cunning ?? existing?.personality?.cunning ?? 50),
+      honesty: clampPersonality(data.personality?.honesty ?? existing?.personality?.honesty ?? 50),
+      talkativeness: clampPersonality(data.personality?.talkativeness ?? existing?.personality?.talkativeness ?? 50),
     },
-    speakingStyle: data.speakingStyle || existing?.speakingStyle || 'calm',
-    strategy: {
-      nightAction: data.strategy?.nightAction || existing?.strategy?.nightAction || 'random',
-      dayStrategy: data.strategy?.dayStrategy || existing?.strategy?.dayStrategy || 'passive',
-      revealIdentity: data.strategy?.revealIdentity || existing?.strategy?.revealIdentity || 'mid',
-    },
-    language: {
-      prefixes: data.language?.prefixes || existing?.language?.prefixes || ['我觉得'],
-      suffixes: data.language?.suffixes || existing?.language?.suffixes || ['对吧'],
-      favoriteWords: data.language?.favoriteWords || existing?.language?.favoriteWords || ['狼', '好人'],
-    },
+    speakingStyle,
+    strategy: { nightAction, dayStrategy, revealIdentity },
+    language: { prefixes, suffixes, favoriteWords },
     createdAt: existing?.createdAt || data.createdAt || now,
     updatedAt: existing ? now : (data.updatedAt || now),
   };
@@ -313,9 +357,10 @@ class AIAgentManager {
     return AIAgent.findById(id);
   }
 // 创建一个智能体
-  async createAgent(data) {
+  async createAgent(data, ownerId = null) {
     await this.ensureInitialized();
     const agent = normalizeAgent(data);
+    agent.ownerId = ownerId;
     const created = await AIAgent.create(agent);
     await this.resetRandomAgents();
     return created;

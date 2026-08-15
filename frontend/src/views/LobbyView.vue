@@ -15,7 +15,7 @@
           <h1 class="hero-title">
             <span class="title-gradient">欢迎来到</span>
             <br />
-            Werewolf AI 大厅
+            Werewolf AI 游戏大厅
           </h1>
           <p class="hero-desc">选择你的游戏模式，或使用 AI 智能体开启一场精彩的对局</p>
         </div>
