@@ -15,6 +15,7 @@ const authRoutes = require('./routes/auth');
 const aiAgentRoutes = require('./routes/aiAgentRoutes');
 const replayRoutes = require('./routes/replayRoutes');
 const statsRoutes = require('./routes/stats');
+const settingsRoutes = require('./routes/settings');
 const initSocket = require('./socket');
 const authMiddleware = require('./middleware/auth');
 const { AppError } = require('./utils/AppError');
@@ -112,6 +113,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/ai-agents', aiAgentRoutes);
 app.use('/api/replays', replayRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // GET /api/lobby-stats - lobby stats (online users + AI agent count)
 app.get('/api/lobby-stats', authMiddleware, async (req, res, next) => {
@@ -135,9 +137,11 @@ app.get('/api/rooms', authMiddleware, (req, res) => {
     if (room) {
       const connectedPlayers = room.players.filter(p => p.socketId !== null);
       if (connectedPlayers.length > 0) {
+        const host = connectedPlayers.find(p => p.socketId === room.hostId)
+          || connectedPlayers.find(p => Number(p.userId) === Number(room.hostUserId));
         rooms.push({
           code: room.code,
-          hostUsername: connectedPlayers[0]?.username || '未知',
+          hostUsername: host?.username || '未知',
           playerCount: connectedPlayers.length,
           maxPlayers: Number(room.maxPlayers) || 6,
         });
@@ -154,12 +158,12 @@ app.get('/api/room/:code', authMiddleware, (req, res) => {
   if (!room) {
     return res.status(404).json({ message: '房间不存在' });
   }
-  const { buildSeats } = require('./socket/roomHandler');
+  const { buildSeats, buildPublicPlayers } = require('./socket/roomHandler');
   const connectedPlayers = room.players.filter(p => p.socketId !== null);
   res.json({
     code: room.code,
     hostId: room.hostId,
-    players: connectedPlayers,
+    players: buildPublicPlayers(connectedPlayers),
     seats: buildSeats(room),
     chat: room.chat,
     maxPlayers: Number(room.maxPlayers) || 6,
@@ -173,8 +177,8 @@ app.get('/api/health', async (req, res) => {
   let rooms = 0;
   let online = 0;
   try {
-    if (pool && pool.promise) {
-      await pool.promise().query('SELECT 1');
+    if (pool) {
+      await pool.query('SELECT 1');
       dbStatus = 'ok';
     }
   } catch (e) {
@@ -184,8 +188,8 @@ app.get('/api/health', async (req, res) => {
   try { rooms = roomCache.keys().length; } catch (_) {}
 
   const redisOk = !!(getRedisStatus() && getRedisStatus().connected);
-  const overall = (dbStatus === 'ok' && redisOk) ? 'ok' : 'degraded';
-  res.status(overall === 'ok' ? 200 : 503).json({
+  const overall = dbStatus === 'ok' ? (redisOk ? 'ok' : 'degraded') : 'unhealthy';
+  res.status(dbStatus === 'ok' ? 200 : 503).json({
     status: overall,
     timestamp: Date.now(),
     db: dbStatus,

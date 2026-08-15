@@ -278,6 +278,22 @@ const NightPhaseMixin = {
     if (!player || !player.isAlive) return;
 
     const target = this.getPlayer(targetId);
+    const role = this.roles[socketId];
+    const allowedActions = {
+      [ROLE.GUARD]: ['guard'],
+      [ROLE.WEREWOLF]: ['kill'],
+      [ROLE.SEER]: ['check'],
+      [ROLE.WITCH]: ['save', 'poison', 'skip'],
+    };
+
+    if (!allowedActions[role]?.includes(action)) return;
+    if (this.nightActions[socketId]) return;
+
+    if (['kill', 'check', 'guard', 'poison'].includes(action)) {
+      if (!target || !target.isAlive || target.socketId === socketId) return;
+    }
+
+    if (action === 'save' && (!this.killedByWerewolves || targetId !== this.killedByWerewolves)) return;
 
     // C1: role-based validation
     if (action === 'save' && this.witchSaveUsed) return;
@@ -285,14 +301,12 @@ const NightPhaseMixin = {
     if (action === 'guard' && targetId && targetId === this.guardLastProtected) {
       return;
     }
-    if (action === 'kill' && target && this.roles[target.socketId] === ROLE.WEREWOLF) {
+    if (action === 'kill' && this.roles[target.socketId] === ROLE.WEREWOLF) {
       return;
     }
 
-    // Store action
-    if (!this.nightActions[socketId] || (action !== 'save' && action !== 'poison')) {
-      this.nightActions[socketId] = { action, targetId };
-    }
+    // 每名玩家每夜只接受一次有效行动，避免重复用药或覆盖已确认选择。
+    this.nightActions[socketId] = { action, targetId };
 
     let detail;
     if (action === 'skip') {

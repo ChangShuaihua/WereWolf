@@ -82,6 +82,27 @@
         </button>
       </div>
 
+      <div class="edit-card">
+        <h3>AI 行为设置</h3>
+
+        <label class="setting-row">
+          <span class="setting-copy">
+            <strong>启用 fallback</strong>
+            <span>模型不可用、超时或输出无效时，使用本地策略和模板继续游戏。</span>
+          </span>
+          <input v-model="aiFallbackEnabled" class="switch-input" type="checkbox" />
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+
+        <div v-if="aiMessage" class="form-message" :class="aiMessageType">
+          {{ aiMessage }}
+        </div>
+
+        <button class="btn btn-primary" @click="saveAISettings" :disabled="savingAISettings">
+          {{ savingAISettings ? '保存中...' : '保存 AI 设置' }}
+        </button>
+      </div>
+
     </div>
   </div>
 </template>
@@ -108,12 +129,47 @@ const form = ref({
 const saving = ref(false)
 const message = ref('')
 const messageType = ref('success')
+const aiFallbackEnabled = ref(true)
+const savingAISettings = ref(false)
+const aiMessage = ref('')
+const aiMessageType = ref('success')
 
-onMounted(() => {
+onMounted(async () => {
   if (userStore.user) {
     form.value.username = userStore.user.username
+    aiFallbackEnabled.value = userStore.user.aiFallbackEnabled !== false
+  }
+
+  try {
+    const { data } = await api.get('/auth/me')
+    userStore.user = data.user
+    localStorage.setItem('werewolf_user', JSON.stringify(data.user))
+    form.value.username = data.user.username
+    aiFallbackEnabled.value = data.user.aiFallbackEnabled !== false
+  } catch (err) {
+    aiMessage.value = err.response?.data?.message || 'AI 设置加载失败'
+    aiMessageType.value = 'error'
   }
 })
+
+async function saveAISettings() {
+  savingAISettings.value = true
+  aiMessage.value = ''
+  try {
+    const { data } = await api.put('/auth/me', {
+      aiFallbackEnabled: aiFallbackEnabled.value,
+    })
+    userStore.user = { ...userStore.user, ...data.user }
+    localStorage.setItem('werewolf_user', JSON.stringify(userStore.user))
+    aiMessage.value = 'AI 设置已保存，新添加的 AI 玩家将使用该设置。'
+    aiMessageType.value = 'success'
+  } catch (err) {
+    aiMessage.value = err.response?.data?.message || 'AI 设置保存失败'
+    aiMessageType.value = 'error'
+  } finally {
+    savingAISettings.value = false
+  }
+}
 
 async function handleSave() {
   message.value = ''
@@ -383,6 +439,70 @@ async function handleLogout() {
 
 .edit-card .btn + .btn {
   margin-top: 12px;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.setting-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.setting-copy strong {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.switch-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  border: var(--border-medium);
+  position: relative;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  top: 2px;
+  left: 2px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.switch-input:checked + .switch {
+  background: var(--ai-primary);
+  border-color: var(--ai-primary);
+}
+
+.switch-input:checked + .switch::after {
+  transform: translateX(20px);
+  background: white;
+}
+
+.switch-input:focus-visible + .switch {
+  box-shadow: 0 0 0 3px var(--ai-glow);
 }
 
 @media (max-width: 600px) {

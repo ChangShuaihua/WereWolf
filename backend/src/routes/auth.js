@@ -48,7 +48,7 @@ router.post('/register', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
     );
 
-    res.json({ token, user: { id: user.id, username: user.username } });
+    res.json({ token, user: { id: user.id, username: user.username, aiFallbackEnabled: true } });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ message: '注册失败，请稍后重试' });
@@ -81,7 +81,11 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username },
+      user: {
+        id: user.id,
+        username: user.username,
+        aiFallbackEnabled: Boolean(user.ai_fallback_enabled),
+      },
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -96,7 +100,13 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: '用户不存在' });
     }
-    res.json({ user });
+    const { ai_fallback_enabled: aiFallbackEnabled, ...publicUser } = user;
+    res.json({
+      user: {
+        ...publicUser,
+        aiFallbackEnabled: Boolean(aiFallbackEnabled),
+      },
+    });
   } catch (err) {
     console.error('Get user error:', err);
     res.status(500).json({ message: '获取用户信息失败' });
@@ -106,9 +116,9 @@ router.get('/me', authMiddleware, async (req, res) => {
 // PUT /api/auth/me
 router.put('/me', authMiddleware, async (req, res) => {
   try {
-    const { username, password, oldPassword } = req.body;
+    const { username, password, oldPassword, aiFallbackEnabled } = req.body;
 
-    if (!username && !password) {
+    if (!username && !password && typeof aiFallbackEnabled !== 'boolean') {
       return res.status(400).json({ message: '请提供要修改的信息' });
     }
 
@@ -128,7 +138,7 @@ router.put('/me', authMiddleware, async (req, res) => {
     if (password) {
       const passwordErr = validatePassword(password);
       if (passwordErr) return res.status(400).json({ message: passwordErr });
-      const user = await User.findById(req.user.id);
+      const user = await User.findAuthById(req.user.id);
       if (!user) {
         return res.status(404).json({ message: '用户不存在' });
       }
@@ -138,12 +148,18 @@ router.put('/me', authMiddleware, async (req, res) => {
       }
     }
 
-    const updated = await User.updateProfile(req.user.id, { username, password });
+    const updated = await User.updateProfile(req.user.id, { username, password, aiFallbackEnabled });
     if (!updated) {
       return res.status(400).json({ message: '更新失败' });
     }
 
-    res.json({ user: { id: updated.id, username: updated.username } });
+    res.json({
+      user: {
+        id: updated.id,
+        username: updated.username,
+        aiFallbackEnabled: Boolean(updated.ai_fallback_enabled),
+      },
+    });
   } catch (err) {
     console.error('Update profile error:', err);
     res.status(500).json({ message: '更新失败，请稍后重试' });

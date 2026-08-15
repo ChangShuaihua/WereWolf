@@ -138,7 +138,7 @@ router.get('/ai', authMiddleware, requireAdmin, async (req, res, next) => {
       decisionLogCount: decisionLogs.length,
       phaseBreakdown: phaseCounts,
       roleBreakdown: roleCounts,
-      latestTimestamp: decisionLogs.length > 0 ? decisionLogs[0]?.timestamp : null,
+      latestTimestamp: decisionLogs.length > 0 ? decisionLogs[0]?.time : null,
     });
   } catch (err) {
     next(err);

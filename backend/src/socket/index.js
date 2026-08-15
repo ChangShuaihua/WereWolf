@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA } = require('./roomHandler');
+const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
 const { kickOldSocket, removeUserSocket, getUserBySocket } = require('../utils/userSocketMap');
@@ -7,6 +7,7 @@ const {
   getRoomInfoOrReject,
   validatePhaseOrReject,
   validateAliveOrReject,
+  PHASE,
 } = require('../utils/socketValidators');
 
 /**
@@ -134,27 +135,26 @@ function initSocket(io) {
       const ctx = getRoomInfoOrReject(socket);
       if (!ctx) return;
       const { game, player } = ctx;
-      if (!validatePhaseOrReject(socket, game, 'NIGHT', '执行夜间行动')) return;
+      if (!validatePhaseOrReject(socket, game, PHASE.NIGHT, '执行夜间行动')) return;
       if (!validateAliveOrReject(socket, player, '执行夜间行动')) return;
       handleNightAction(socket, ctx.code, data);
     });
 
-    // Hunter shoot（仅 HUNTER_SHOOT 阶段且该玩家存活）
+    // 猎人窗口发生在 NIGHT 阶段，具体射手由 pendingHunterId 再校验。
     socket.on('hunter_shoot', (data) => {
       const ctx = getRoomInfoOrReject(socket);
       if (!ctx) return;
       const { game, player } = ctx;
-      if (!validatePhaseOrReject(socket, game, 'HUNTER_SHOOT', '开枪')) return;
-      if (!validateAliveOrReject(socket, player, '开枪')) return;
+      if (!validatePhaseOrReject(socket, game, PHASE.NIGHT, '开枪')) return;
       handleHunterShoot(socket, ctx.code, data);
     });
 
-    // Vote（仅 VOTING 阶段且该玩家存活）
+    // Vote（仅 VOTE 阶段且该玩家存活）
     socket.on('vote', (data) => {
       const ctx = getRoomInfoOrReject(socket);
       if (!ctx) return;
       const { game, player } = ctx;
-      if (!validatePhaseOrReject(socket, game, 'VOTING', '投票')) return;
+      if (!validatePhaseOrReject(socket, game, PHASE.VOTE, '投票')) return;
       if (!validateAliveOrReject(socket, player, '投票')) return;
       handleVote(socket, ctx.code, data);
     });
@@ -163,7 +163,11 @@ function initSocket(io) {
     socket.on('skip_day', () => {
       const ctx = getRoomInfoOrReject(socket);
       if (!ctx) return;
-      if (!validatePhaseOrReject(socket, ctx.game, 'DAY', '跳过白天发言')) return;
+      if (!validatePhaseOrReject(socket, ctx.game, PHASE.DAY, '跳过白天发言')) return;
+      if (ctx.room.hostId !== socket.id && Number(ctx.room.hostUserId) !== Number(socket.userId)) {
+        socket.emit('error', { message: '只有房主可以跳过白天阶段' });
+        return;
+      }
       skipDay(ctx.code);
     });
 
@@ -185,7 +189,7 @@ function initSocket(io) {
         if (trimmedMsg.length === 0) return;
 
         const game = gameCache.get(roomCode);
-        if (game && game.phase === 'DAY' && game.speakingOrder.length > 0) {
+        if (game && game.phase === PHASE.DAY && game.speakingOrder.length > 0) {
           const currentSpeaker = game.speakingOrder[game.currentSpeakerIndex];
           if (socket.id !== currentSpeaker) {
             socket.emit('chat_error', { message: '请等待轮到你发言' });
@@ -208,6 +212,15 @@ function initSocket(io) {
           });
           return;
         }
+        if (isRuleQARateLimited(socket.id)) {
+          socket.emit('rule_qa_answer', {
+            question: question.slice(0, 50),
+            answer: '规则问答请求过于频繁，请稍后再试。',
+            error: true,
+            timestamp: Date.now(),
+          });
+          return;
+        }
         ruleQA(socket, question.trim());
       }
     });
@@ -218,7 +231,9 @@ function initSocket(io) {
       const code = roomCode || info?.roomCode;
       if (code) {
         const game = gameCache.get(code);
-        if (game) game.nextSpeaker();
+        if (game && game.phase === PHASE.DAY && game.currentSpeaker === socket.id) {
+          game.nextSpeaker();
+        }
       }
     });
 
@@ -228,14 +243,18 @@ function initSocket(io) {
       const code = roomCode || info?.roomCode;
       if (code) {
         const game = gameCache.get(code);
-        if (game) game.skipSpeaking();
+        if (game && game.phase === PHASE.DAY && game.currentSpeaker === socket.id) {
+          game.skipSpeaking();
+        }
       }
     });
 
     // Reset game and return to room
     socket.on('reset_game', () => {
       const info = socketCache.get(socket.id);
-      if (info?.roomCode) resetGame(info.roomCode);
+      if (!info?.roomCode) return;
+      const game = gameCache.get(info.roomCode);
+      if (game?.phase === PHASE.END) resetGame(info.roomCode);
     });
 
     // Disconnect
@@ -246,6 +265,7 @@ function initSocket(io) {
         removeUserSocket(userId, socket.id);
       }
       handleDisconnect(socket);
+      cleanupSocketRateLimits(socket.id);
     });
   });
 }

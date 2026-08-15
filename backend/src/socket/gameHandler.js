@@ -92,6 +92,9 @@ function startGame(io, socket, code) {
     isAlive: true,
     isReady: p.isReady,
     isAI: p.isAI || false,
+    agentId: p.agentId || null,
+    agentConfig: p.agentConfig || null,
+    fallbackEnabled: p.fallbackEnabled !== false,
   })), emit, Number(room.maxPlayers) || 6);
 
   gameCache.set(code, engine);
@@ -112,8 +115,12 @@ function handleNightAction(socket, code, { action, targetId }) {
 
   const role = game.getRole(socket.id);
 
-  // Skip action
-  if (action === 'skip') return;
+  const allowedActions = {
+    guard: ['guard'],
+    werewolf: ['kill'],
+    seer: ['check'],
+    witch: ['save', 'poison'],
+  };
 
   // Map role to default action if not explicitly provided
   if (!action) {
@@ -124,6 +131,13 @@ function handleNightAction(socket, code, { action, targetId }) {
       default: return;
     }
   }
+
+  if (action === 'skip') {
+    if (role === 'witch') game.submitNightAction(socket.id, action, null);
+    return;
+  }
+
+  if (!allowedActions[role]?.includes(action)) return;
 
   // Validate witch can use potions
   if (role === 'witch') {
@@ -230,11 +244,9 @@ async function handleGameResult(data) {
         if (p.userId) {
           await GameRecord.addPlayer(gameId, p.userId, p.role, p.isWinner);
           // 更新积分（Redis + MySQL 双写）
-          const scoreChange = p.isWinner ? 1 : -1;
           await statsService.updateUserScore(
             p.userId,
             p.username || '玩家',
-            scoreChange,
             p.isWinner
           );
         }
@@ -275,6 +287,9 @@ async function handleGameResult(data) {
 function resetGame(code) {
   const room = roomCache.get(code);
   if (!room) return;
+
+  const game = gameCache.get(code);
+  if (!game || game.phase !== PHASE.END) return;
 
   aiGameHandler.cleanup(code);
   gameCache.del(code);

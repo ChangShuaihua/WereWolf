@@ -7,6 +7,7 @@ import AIAgentWorkshop from '../views/AIAgentWorkshop.vue'
 import ProfileView from '../views/ProfileView.vue'
 import ReplayView from '../views/ReplayView.vue'
 import StatsView from '../views/StatsView.vue'
+import SettingsView from '../views/SettingsView.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -18,6 +19,7 @@ const routes = [
   { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
   { path: '/stats', name: 'Stats', component: StatsView, meta: { requiresAuth: true } },
   { path: '/replay/:id', name: 'Replay', component: ReplayView, meta: { requiresAuth: true } },
+  { path: '/settings', name: 'Settings', component: SettingsView, meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({

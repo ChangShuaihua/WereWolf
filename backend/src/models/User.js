@@ -13,7 +13,7 @@ const User = {
 
   async findByUsername(username) {
     const [rows] = await pool.query(
-      'SELECT id, username, password, created_at FROM users WHERE username = ?',
+      'SELECT id, username, password, ai_fallback_enabled, created_at FROM users WHERE username = ?',
       [username]
     );
     return rows[0] || null;
@@ -21,18 +21,26 @@ const User = {
 
   async findById(id) {
     const [rows] = await pool.query(
-      'SELECT id, username, score, total_games, total_wins, total_losses, created_at FROM users WHERE id = ?',
+      'SELECT id, username, score, total_games, total_wins, total_losses, ai_fallback_enabled, created_at FROM users WHERE id = ?',
       [id]
     );
     return rows[0] || null;
   },
 
-  // 更新用户积分和战绩（相对增量方式，注意和重算并存时不要双重计数）
-  async updateScore(userId, scoreChange, isWin) {
+  async findAuthById(id) {
+    const [rows] = await pool.query(
+      'SELECT id, username, password, ai_fallback_enabled FROM users WHERE id = ?',
+      [id]
+    );
+    return rows[0] || null;
+  },
+
+  // 积分等于累计胜场：胜利 +1，失败不改变积分。
+  async updateScore(userId, isWin) {
     const sql = isWin
-      ? 'UPDATE users SET score = GREATEST(0, score + ?), total_games = total_games + 1, total_wins = total_wins + 1 WHERE id = ?'
-      : 'UPDATE users SET score = GREATEST(0, score + ?), total_games = total_games + 1, total_losses = total_losses + 1 WHERE id = ?';
-    await pool.query(sql, [scoreChange, userId]);
+      ? 'UPDATE users SET score = score + 1, total_games = total_games + 1, total_wins = total_wins + 1 WHERE id = ?'
+      : 'UPDATE users SET total_games = total_games + 1, total_losses = total_losses + 1 WHERE id = ?';
+    await pool.query(sql, [userId]);
   },
 
   // 用真实 game_players 记录覆盖重算用户 score/total_*，返回重算后的值
@@ -81,6 +89,11 @@ const User = {
       const hash = await bcrypt.hash(data.password, 10);
       updates.push('password = ?');
       values.push(hash);
+    }
+
+    if (typeof data.aiFallbackEnabled === 'boolean') {
+      updates.push('ai_fallback_enabled = ?');
+      values.push(data.aiFallbackEnabled);
     }
 
     if (updates.length === 0) {

@@ -2,6 +2,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
 const gameRetriever = require('./GameRetriever');
+const llmConfig = require('../config/llmConfig');
 
 /**
  * RuleQAService - 房间内规则问答服务
@@ -16,10 +17,8 @@ class RuleQAService {
   }
 
   _initModel() {
-    const apiKey = process.env.XIAOMI_API_KEY || process.env.DEEPSEEK_API_KEY;
-    const apiUrl = process.env.XIAOMI_API_URL || process.env.DEEPSEEK_API_URL || 'https://api.xiaomimimo.com';
-    const modelName = process.env.XIAOMI_MODEL_NAME || process.env.MODEL_NAME || 'mimo-v2-flash';
-    
+    const { apiKey, apiUrl, modelName } = llmConfig.getEffectiveConfig();
+
     if (apiKey) {
       this.model = new ChatOpenAI({
         apiKey,
@@ -30,8 +29,16 @@ class RuleQAService {
       });
       console.log(`[RuleQAService] Model initialized: ${modelName}`);
     } else {
+      this.model = null;
       console.warn('[RuleQAService] No AI API key set, using fallback mode');
     }
+  }
+
+  /**
+   * 运行时热更新模型（设置页修改 API 配置后调用）
+   */
+  refreshModel() {
+    this._initModel();
   }
 
   /**

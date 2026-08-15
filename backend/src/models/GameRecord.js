@@ -78,7 +78,7 @@ const GameRecord = {
     };
   },
 
-  // 根据真实的 game_players 记录重算单个用户的总场次/胜场/负场/积分（赢+1，输-1，下限0）
+  // 根据真实 game_players 重算战绩；积分始终等于累计胜场数。
   async calcRealStatsForUser(userId) {
     const [rows] = await pool.query(
       `SELECT
@@ -93,8 +93,7 @@ const GameRecord = {
     const totalGames = Number(r.actual_games) || 0;
     const totalWins = Number(r.actual_wins) || 0;
     const totalLosses = Number(r.actual_losses) || 0;
-    // 赢 +1，输 -1，下限 0
-    const score = Math.max(0, totalWins - totalLosses);
+    const score = totalWins;
     return { totalGames, totalWins, totalLosses, score };
   },
 };

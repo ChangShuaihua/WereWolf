@@ -44,9 +44,9 @@ async function syncAllUsersToRedis() {
   }
 }
 
-async function updateUserScore(userId, username, scoreChange, isWin) {
+async function updateUserScore(userId, username, isWin) {
   // 1. 先更新 MySQL（主数据）
-  await User.updateScore(userId, scoreChange, isWin);
+  await User.updateScore(userId, isWin);
 
   // 2. 更新 Redis（缓存，可降级）
   if (isRedisAvailable()) {

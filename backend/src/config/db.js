@@ -113,6 +113,24 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 5,
+    description: 'users 表增加 AI fallback 偏好',
+    up: async (conn) => {
+      const [cols] = await conn.query('SHOW COLUMNS FROM users');
+      const existing = new Set(cols.map(c => c.Field));
+      if (!existing.has('ai_fallback_enabled')) {
+        await conn.query('ALTER TABLE users ADD COLUMN ai_fallback_enabled BOOLEAN NOT NULL DEFAULT TRUE AFTER total_losses');
+      }
+    },
+  },
+  {
+    version: 6,
+    description: '积分规则改为累计胜场数',
+    up: async (conn) => {
+      await conn.query('UPDATE users SET score = total_wins');
+    },
+  },
 ];
 
 async function ensureTableExists(conn) {

@@ -44,6 +44,7 @@ class GameRetriever {
    * 从缓存获取或执行检索
    */
   async _retrieveWithCache(game, socketId, retrieveFn) {
+    this._stats.totalRetrievals++;
     const key = this._getCacheKey(game, socketId);
     const now = Date.now();
     
@@ -373,8 +374,6 @@ class GameRetriever {
    */
   async getStrategyForGame(game, aiPlayerSocketId) {
     return this._retrieveWithCache(game, aiPlayerSocketId, async () => {
-      this._stats.totalRetrievals++;
-      
       const context = this.buildContext(game, aiPlayerSocketId);
       const result = await this.getContextForPrompt(context);
       

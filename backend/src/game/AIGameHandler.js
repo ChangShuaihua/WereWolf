@@ -6,6 +6,7 @@ const { PHASE, ROLE, TEAM } = require('./constants');
 const { getRoleName } = require('./RoleConfig');
 const aiAgentManager = require('../ai/AIAgentManager');
 const gameRetriever = require('../services/GameRetriever');
+const llmConfig = require('../config/llmConfig');
 
 // W13: simple concurrency limiter for parallel AI LLM calls
 function pLimit(concurrency) {
@@ -68,10 +69,8 @@ class AIGameHandler {
   }
 
   _initModel() {
-    const apiKey = process.env.XIAOMI_API_KEY || process.env.DEEPSEEK_API_KEY;
-    const apiUrl = process.env.XIAOMI_API_URL || process.env.DEEPSEEK_API_URL || 'https://api.xiaomimimo.com';
-    const modelName = process.env.XIAOMI_MODEL_NAME || process.env.MODEL_NAME || 'mimo-v2-flash';
-    
+    const { apiKey, apiUrl, modelName } = llmConfig.getEffectiveConfig();
+
     if (apiKey) {
       this.model = new ChatOpenAI({
         apiKey,
@@ -84,11 +83,19 @@ class AIGameHandler {
       });
       console.log(`[AIGameHandler] Model initialized: ${modelName} (${apiUrl})`);
     } else {
-      console.warn('[AIGameHandler] No AI API key set, using fallback AI logic. Set XIAOMI_API_KEY or DEEPSEEK_API_KEY in .env');
+      this.model = null;
+      console.warn('[AIGameHandler] No AI API key set, using fallback AI logic. Set API key in 设置 or in .env');
     }
   }
 
-  async createAIPlayer(roomCode, agentId = null) {
+  /**
+   * 运行时热更新模型（设置页修改 API 配置后调用）
+   */
+  refreshModel() {
+    this._initModel();
+  }
+
+  async createAIPlayer(roomCode, agentId = null, fallbackEnabled = true) {
     this.aiIdCounter++;
     
     const room = roomCache.get(roomCode);
@@ -108,7 +115,12 @@ class AIGameHandler {
       isAI: true,
       agentId: agent?.id || null,
       agentConfig: agent || null,
+      fallbackEnabled,
     };
+  }
+
+  _isFallbackEnabled(aiPlayer) {
+    return aiPlayer?.fallbackEnabled !== false;
   }
 
   async handlePhaseChange(roomCode, phase) {
@@ -265,6 +277,7 @@ class AIGameHandler {
   }
 
   _getFallbackNightAction(game, aiPlayer, role) {
+    if (!this._isFallbackEnabled(aiPlayer)) return null;
     const aliveOthers = game.alivePlayers.filter(p => p.socketId !== aiPlayer.socketId);
     if (aliveOthers.length === 0) return null;
 
@@ -439,6 +452,7 @@ class AIGameHandler {
   }
 
   _getFallbackVote(game, aiPlayer) {
+    if (!this._isFallbackEnabled(aiPlayer)) return null;
     const role = game.getRole(aiPlayer.socketId);
     const team = TEAM[role];
     const mySeat = game.getSeatNum(aiPlayer.socketId);
@@ -576,6 +590,7 @@ class AIGameHandler {
     const team = TEAM[role];
     const alivePlayers = game.alivePlayers;
     const teamName = team === 'werewolf' ? '狼人' : '村民';
+    const isWerewolf = team === 'werewolf';
     const alivePlayersStr = alivePlayers.map(p => game.getSeatNum(p.socketId)).join(', ');
 
     // Build username to seat number mapping for sanitizing context
@@ -656,8 +671,6 @@ class AIGameHandler {
     const ragStrategyText = await gameRetriever.getStrategyForGame(game, aiPlayer.socketId);
 
     const agentConfig = aiPlayer.agentConfig || await aiAgentManager.getAgentById(aiPlayer.agentId);
-    const isWerewolf = team === 'werewolf';
-    
     let personalityDesc = '';
     let speakingStyleDesc = '';
     let languageDesc = '';
@@ -868,6 +881,7 @@ class AIGameHandler {
   }
 
   _getFallbackChatMessage(game, aiPlayer) {
+    if (!this._isFallbackEnabled(aiPlayer)) return '';
     const role = game.getRole(aiPlayer.socketId);
     const mySeat = game.getSeatNum(aiPlayer.socketId);
     const room = roomCache.get(game.roomCode);
@@ -1350,6 +1364,7 @@ ${recentChat || '（无）'}
   }
 
   _getFallbackLastWillMessage(game, aiPlayer) {
+    if (!this._isFallbackEnabled(aiPlayer)) return '';
     const role = game.getRole(aiPlayer.socketId);
     const templates = {
       [ROLE.WEREWOLF]: [

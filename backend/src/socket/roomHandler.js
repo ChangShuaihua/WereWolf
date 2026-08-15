@@ -3,11 +3,15 @@ const { gameCache } = require('../utils/cache');
 const { GAME_MODES } = require('../game/constants');
 const aiGameHandler = require('../game/AIGameHandler');
 const ruleQAService = require('../services/RuleQAService');
+const User = require('../models/User');
 
 // W9: per-socket chat rate limiting (3 messages/sec)
 const chatRateMap = new Map(); // socketId -> timestamps[]
 const CHAT_RATE_WINDOW_MS = 1000;
 const CHAT_RATE_MAX = 3;
+const ruleQARateMap = new Map();
+const RULE_QA_RATE_WINDOW_MS = 60000;
+const RULE_QA_RATE_MAX = 5;
 function isChatRateLimited(socketId) {
   const now = Date.now();
   const arr = (chatRateMap.get(socketId) || []).filter(t => now - t < CHAT_RATE_WINDOW_MS);
@@ -18,6 +22,24 @@ function isChatRateLimited(socketId) {
   arr.push(now);
   chatRateMap.set(socketId, arr);
   return false;
+}
+
+function isRuleQARateLimited(socketId) {
+  const now = Date.now();
+  const timestamps = (ruleQARateMap.get(socketId) || [])
+    .filter(time => now - time < RULE_QA_RATE_WINDOW_MS);
+  if (timestamps.length >= RULE_QA_RATE_MAX) {
+    ruleQARateMap.set(socketId, timestamps);
+    return true;
+  }
+  timestamps.push(now);
+  ruleQARateMap.set(socketId, timestamps);
+  return false;
+}
+
+function cleanupSocketRateLimits(socketId) {
+  chatRateMap.delete(socketId);
+  ruleQARateMap.delete(socketId);
 }
 
 /**
@@ -70,6 +92,18 @@ function buildSeats(room) {
     }
   }
   return seats;
+}
+
+function buildPublicPlayers(players) {
+  return players.map(player => ({
+    socketId: player.socketId,
+    userId: player.userId,
+    username: player.username,
+    seatIndex: player.seatIndex,
+    isReady: Boolean(player.isReady),
+    isAlive: Boolean(player.isAlive),
+    isAI: Boolean(player.isAI),
+  }));
 }
 
 /**
@@ -151,7 +185,9 @@ async function addAIPlayer(socket, code, agentId = null) {
     return null;
   }
 
-  const aiPlayer = await aiGameHandler.createAIPlayer(code, agentId);
+  const host = await User.findById(socket.userId);
+  const fallbackEnabled = host ? Boolean(host.ai_fallback_enabled) : true;
+  const aiPlayer = await aiGameHandler.createAIPlayer(code, agentId, fallbackEnabled);
   aiPlayer.isReady = true;
 
   // Assign to first empty seat
@@ -441,7 +477,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     }
     
     broadcastRoomUpdate(code);
-    socket.emit('room_joined', { code, players: room.players, seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers, chat: room.chat || [] });
+    socket.emit('room_joined', { code, players: buildPublicPlayers(room.players), seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers, chat: room.chat || [] });
     console.log(`[roomHandler] ${username} reconnected to room ${code}`);
     return room;
   }
@@ -505,7 +541,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
 
   console.log(`[roomHandler] ${username} joined room ${code}, players=${room.players.length}`);
 
-  socket.emit('room_joined', { code, players: room.players, seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers });
+  socket.emit('room_joined', { code, players: buildPublicPlayers(room.players), seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers });
   broadcastRoomUpdate(code, room);
   
   const io = require('../app').getIO();
@@ -842,4 +878,4 @@ function handleDisconnect(socket) {
   }
 }
 
-module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer, buildSeats, ruleQA };
+module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits };
