@@ -234,16 +234,6 @@ JWT_EXPIRES_IN=7d
 # 服务端口
 PORT=3000
 
-# AI API 配置（可选，不配置则使用 fallback 逻辑）
-DEEPSEEK_API_KEY=your_deepseek_api_key
-DEEPSEEK_API_URL=https://api.deepseek.com
-MODEL_NAME=deepseek-chat
-
-# 或使用 小米 Mimo API（二选一）
-XIAOMI_API_KEY=your_xiaomi_api_key
-XIAOMI_API_URL=https://api.xiaomimimo.com
-XIAOMI_MODEL_NAME=mimo-v2-flash
-
 # CORS 允许的源（逗号分隔）
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
@@ -305,8 +295,8 @@ npm run dev
 - 💡 AI 自动发言和决策（支持 LLM 或 fallback 模板）
 
 **LLM 配置与 fallback 机制：**
-- 配置 `.env` 中的 `XIAOMI_API_KEY` 或 `DEEPSEEK_API_KEY` 启用大模型推理
-- 不配置 API Key 时自动降级为模板引擎（fallback），不影响游戏运行
+- 在「设置」页为每个用户填写自己的 API Key / Base URL / 模型名启用大模型推理（绑定到账号，无内置默认模型）
+- 未配置 API Key 时自动降级为模板引擎（fallback），不影响游戏运行
 - LLM 超时保护：聊天 12s / 夜晚行动 15s / 遗言 10s，超时自动回退模板
 - AI 信息隔离：只暴露自己角色 + 狼人队友身份，其他人均为 unknown，保证公平性
 - AI 决策基于公开信息：预言家查验结果被跟随，被多人怀疑的玩家更可能被投

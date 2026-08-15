@@ -50,9 +50,6 @@ services:
       PORT: 3001
       CORS_ORIGINS: ${CORS_ORIGINS:-http://121.196.239.144}
       REDIS_URL: redis://redis:6379/0
-      XIAOMI_API_KEY: ${XIAOMI_API_KEY:-}
-      XIAOMI_API_URL: ${XIAOMI_API_URL:-https://api.xiaomimimo.com}
-      XIAOMI_MODEL_NAME: ${XIAOMI_MODEL_NAME:-mimo-v2-flash}
     depends_on:
       mysql:
         condition: service_healthy

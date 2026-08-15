@@ -235,7 +235,7 @@ async function handleGameResult(data) {
         data.playerCount,
         data.duration,
         { players: data.players, history: data.history },
-        await analyzeReplay(data, aiGameHandler.model)
+        await analyzeReplay(data, await aiGameHandler._getModelForRoom(data.roomCode))
       );
 
       // Record each player

@@ -109,6 +109,58 @@ const User = {
     return this.findById(userId);
   },
 
+  // 获取用户的大模型 API 配置（完整 Key，仅服务端内部使用）
+  async getLLMConfig(userId) {
+    const [rows] = await pool.query(
+      'SELECT api_key, api_url, model_name FROM users WHERE id = ?',
+      [userId]
+    );
+    const r = rows[0] || {};
+    return {
+      apiKey: r.api_key || '',
+      apiUrl: r.api_url || '',
+      modelName: r.model_name || '',
+    };
+  },
+
+  // 更新用户的大模型 API 配置；传 undefined 表示不改动，传空字符串表示清空
+  async updateLLMConfig(userId, { apiKey, apiUrl, modelName } = {}) {
+    const sets = [];
+    const values = [];
+
+    if (typeof apiKey === 'string') {
+      sets.push('api_key = ?');
+      values.push(apiKey.trim() || null);
+    }
+    if (typeof apiUrl === 'string') {
+      sets.push('api_url = ?');
+      values.push(apiUrl.trim() || null);
+    }
+    if (typeof modelName === 'string') {
+      sets.push('model_name = ?');
+      values.push(modelName.trim() || null);
+    }
+
+    if (sets.length > 0) {
+      values.push(userId);
+      await pool.query(
+        `UPDATE users SET ${sets.join(', ')} WHERE id = ?`,
+        values
+      );
+    }
+
+    return this.getLLMConfig(userId);
+  },
+
+  // 清除用户的大模型 API 配置
+  async clearLLMConfig(userId) {
+    await pool.query(
+      'UPDATE users SET api_key = NULL, api_url = NULL, model_name = NULL WHERE id = ?',
+      [userId]
+    );
+    return this.getLLMConfig(userId);
+  },
+
 };
 
 module.exports = User;

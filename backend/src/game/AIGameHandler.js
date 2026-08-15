@@ -1,4 +1,3 @@
-const { ChatOpenAI } = require('@langchain/openai');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { StructuredOutputParser } = require('@langchain/core/output_parsers');
 const { roomCache, gameCache } = require('../utils/cache');
@@ -7,6 +6,7 @@ const { getRoleName } = require('./RoleConfig');
 const aiAgentManager = require('../ai/AIAgentManager');
 const gameRetriever = require('../services/GameRetriever');
 const llmConfig = require('../config/llmConfig');
+const User = require('../models/User');
 
 // W13: simple concurrency limiter for parallel AI LLM calls
 function pLimit(concurrency) {
@@ -32,14 +32,12 @@ class AIGameHandler {
     this.aiNames = ['小狼', '预言', '女巫', '守卫', '猎人', '村民', '智者', '勇者'];
     this.aiIdCounter = 0;
     this.aiChatTimers = {};
-    this.model = null;
     // AI决策日志（保留最近100条）
     this.decisionLogs = [];
     this._MAX_LOGS = 100;
     // AI发言状态追踪：按 roomCode 隔离，避免多房间互相污染
     // key = roomCode, value = { socketId: { claimedRole, claimedChecks, suspectedPlayers } }
     this.aiClaims = {};
-    this._initModel();
   }
 
   /**
@@ -68,31 +66,26 @@ class AIGameHandler {
     return this.decisionLogs;
   }
 
-  _initModel() {
-    const { apiKey, apiUrl, modelName } = llmConfig.getEffectiveConfig();
-
-    if (apiKey) {
-      this.model = new ChatOpenAI({
-        apiKey,
-        modelName,
-        configuration: {
-          baseURL: apiUrl,
-        },
-        temperature: 0.7,
-        maxTokens: 1000,
-      });
-      console.log(`[AIGameHandler] Model initialized: ${modelName} (${apiUrl})`);
-    } else {
-      this.model = null;
-      console.warn('[AIGameHandler] No AI API key set, using fallback AI logic. Set API key in 设置 or in .env');
-    }
-  }
-
   /**
-   * 运行时热更新模型（设置页修改 API 配置后调用）
+   * 解析某房间应使用的 LLM 模型。
+   * 仅使用房主自己的 Key；无 Key 时返回 null（走 fallback 逻辑）。
+   * @param {string} roomCode
+   * @returns {Promise<import('@langchain/openai').ChatOpenAI|null>}
    */
-  refreshModel() {
-    this._initModel();
+  async _getModelForRoom(roomCode) {
+    const room = roomCache.get(roomCode);
+    const hostUserId = room && room.hostUserId;
+
+    let cfg = llmConfig.getEnvConfig();
+    if (hostUserId) {
+      try {
+        cfg = llmConfig.mergeConfig(await User.getLLMConfig(hostUserId));
+      } catch (err) {
+        console.warn('[AIGameHandler] load host LLM config failed:', err.message);
+      }
+    }
+
+    return llmConfig.buildModel(cfg);
   }
 
   async createAIPlayer(roomCode, agentId = null, fallbackEnabled = true) {
@@ -166,7 +159,8 @@ class AIGameHandler {
   }
 
   async _decideNightAction(game, aiPlayer, role) {
-    if (!this.model) {
+    const model = await this._getModelForRoom(game.roomCode);
+    if (!model) {
       console.log(`[AIGameHandler] No LLM model, using fallback night action for ${aiPlayer.username}`);
       return this._getFallbackNightAction(game, aiPlayer, role);
     }
@@ -240,7 +234,7 @@ class AIGameHandler {
       inputVariables: ['roleName', 'roleAbility', 'alivePlayers', 'teammates', 'teammateChoice', 'suspiciousPlayers', 'strategyDesc', 'ragStrategy', 'formatInstructions'],
     });
 
-    const chain = prompt.pipe(this.model).pipe(outputParser);
+    const chain = prompt.pipe(model).pipe(outputParser);
 
     try {
       const result = await chain.invoke({
@@ -368,7 +362,8 @@ class AIGameHandler {
   }
 
   async _decideVote(game, aiPlayer) {
-    if (!this.model) {
+    const model = await this._getModelForRoom(game.roomCode);
+    if (!model) {
       console.log(`[AIGameHandler] No LLM model, using fallback vote for ${aiPlayer.username}`);
       return this._getFallbackVote(game, aiPlayer);
     }
@@ -432,7 +427,7 @@ class AIGameHandler {
       inputVariables: ['roleName', 'teamName', 'aliveOthers', 'goal', 'strategyDesc', 'ragStrategy', 'formatInstructions'],
     });
 
-    const chain = prompt.pipe(this.model).pipe(outputParser);
+    const chain = prompt.pipe(model).pipe(outputParser);
 
     try {
       const result = await chain.invoke({ roleName, teamName, aliveOthers: aliveOthersStr, goal, strategyDesc, ragStrategy: ragStrategyText, formatInstructions });
@@ -581,7 +576,8 @@ class AIGameHandler {
   }
 
   async _generateChatMessage(game, aiPlayer) {
-    if (!this.model) {
+    const model = await this._getModelForRoom(game.roomCode);
+    if (!model) {
       console.log(`[AIGameHandler] No LLM model, using fallback for ${aiPlayer.username}`);
       return this._getFallbackChatMessage(game, aiPlayer);
     }
@@ -841,11 +837,9 @@ class AIGameHandler {
     });
 
     const personalityTemp = this._getTemperatureForPersonality(agentConfig);
-    if (this.model) {
-      this.model.temperature = personalityTemp;
-    }
+    const chatModel = model.bind({ temperature: personalityTemp });
 
-    const chain = prompt.pipe(this.model).pipe(outputParser);
+    const chain = prompt.pipe(chatModel).pipe(outputParser);
 
     try {
       const result = await Promise.race([
@@ -1317,7 +1311,8 @@ class AIGameHandler {
   }
 
   async _generateLastWillMessage(game, aiPlayer) {
-    if (!this.model) {
+    const model = await this._getModelForRoom(game.roomCode);
+    if (!model) {
       return this._getFallbackLastWillMessage(game, aiPlayer);
     }
 
@@ -1347,7 +1342,7 @@ ${recentChat || '（无）'}
 直接输出遗言内容，不要加引号或其他格式。`;
 
       const response = await Promise.race([
-        this.model.invoke(promptText),
+        model.invoke(promptText),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
       ]);
 

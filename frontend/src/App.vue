@@ -18,11 +18,12 @@
           <span class="tab-icon">🏆</span>
           <span class="tab-text">战绩</span>
         </router-link>
+        <router-link to="/settings" class="tab-item" active-class="tab-active">
+          <span class="tab-icon">⚙️</span>
+          <span class="tab-text">设置</span>
+        </router-link>
       </nav>
       <div class="header-user">
-        <button class="theme-toggle-btn" @click="$router.push('/settings')" title="设置">
-          <span class="theme-icon">⚙️</span>
-        </button>
         <button class="theme-toggle-btn" @click="themeStore.toggleTheme()" :title="themeStore.isDark ? '切换到亮色模式' : '切换到暗色模式'">
           <span v-if="themeStore.isDark" class="theme-icon">☀️</span>
           <span v-else class="theme-icon">🌙</span>

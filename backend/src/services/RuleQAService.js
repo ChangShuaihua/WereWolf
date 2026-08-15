@@ -1,44 +1,31 @@
-const { ChatOpenAI } = require('@langchain/openai');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
 const gameRetriever = require('./GameRetriever');
 const llmConfig = require('../config/llmConfig');
+const User = require('../models/User');
 
 /**
  * RuleQAService - 房间内规则问答服务
- * 
+ *
  * 玩家在房间内发送以"?"或"规则"开头的消息时，
  * 通过RAG检索游戏规则文档，生成自然语言回答。
+ * 使用「提问者自己」的 API Key。
  */
 class RuleQAService {
-  constructor() {
-    this.model = null;
-    this._initModel();
-  }
-
-  _initModel() {
-    const { apiKey, apiUrl, modelName } = llmConfig.getEffectiveConfig();
-
-    if (apiKey) {
-      this.model = new ChatOpenAI({
-        apiKey,
-        modelName,
-        configuration: { baseURL: apiUrl },
-        temperature: 0.2,
-        maxTokens: 800,
-      });
-      console.log(`[RuleQAService] Model initialized: ${modelName}`);
-    } else {
-      this.model = null;
-      console.warn('[RuleQAService] No AI API key set, using fallback mode');
-    }
-  }
-
   /**
-   * 运行时热更新模型（设置页修改 API 配置后调用）
+   * 解析某用户应使用的 LLM 模型。
+   * 仅使用该用户自己的 Key；无 Key 时返回 null。
    */
-  refreshModel() {
-    this._initModel();
+  async _getModelForUser(userId) {
+    let cfg = llmConfig.getEnvConfig();
+    if (userId) {
+      try {
+        cfg = llmConfig.mergeConfig(await User.getLLMConfig(userId));
+      } catch (err) {
+        console.warn('[RuleQAService] load user LLM config failed:', err.message);
+      }
+    }
+    return llmConfig.buildModel(cfg, { temperature: 0.2, maxTokens: 800 });
   }
 
   /**
@@ -57,17 +44,20 @@ class RuleQAService {
   /**
    * 回答规则问题
    * @param {string} question - 用户的问题
+   * @param {number|string} [userId] - 提问者的用户 id
    * @returns {string} 回答内容
    */
-  async answerQuestion(question) {
+  async answerQuestion(question, userId) {
     // 清理问题（移除开头的?）
     const cleanQuestion = question.trim().replace(/^[?？]+/, '').trim();
     if (!cleanQuestion) return '请问你想了解什么规则呢？';
 
+    const model = await this._getModelForUser(userId);
+
     // 检索相关规则
     const rulesContext = await gameRetriever.getRulesContextForPrompt(cleanQuestion);
 
-    if (!this.model) {
+    if (!model) {
       // 无LLM时返回检索到的规则片段
       if (rulesContext) {
         return `根据游戏规则：\n${rulesContext}`;
@@ -101,7 +91,7 @@ class RuleQAService {
     });
 
     try {
-      const chain = prompt.pipe(this.model).pipe(new StringOutputParser());
+      const chain = prompt.pipe(model).pipe(new StringOutputParser());
       const answer = await chain.invoke({
         rulesContext: rulesContext || '暂无相关规则参考',
         question: cleanQuestion,

@@ -341,7 +341,7 @@ ai_agents: id, name, avatar, personality(JSON), speaking_style, strategy(JSON), 
 **功能**：AI 玩家的决策逻辑，包括夜晚行动、投票和发言。
 
 **实现方式**：
-- **LLM 集成**：使用 LangChain + ChatOpenAI，默认接入小米 mimo-v2-flash 模型（`XIAOMI_API_KEY`/`XIAOMI_API_URL`/`XIAOMI_MODEL_NAME`），也兼容 DeepSeek 等 OpenAI 兼容 API
+- **LLM 集成**：使用 LangChain + ChatOpenAI，无内置默认模型；用户可在「设置」页配置自己的 OpenAI 兼容 API（Key/URL/模型名，存 `users` 表）
 - **Fallback 机制**：LLM 不可用或未配置 API Key 时使用随机/模板逻辑
 - **用户自定义 API**：支持每个用户配置自己的 API Key、URL 和模型名称
 - **并发控制**：`pLimit` 限制最多 5 个并行 AI LLM 调用，避免突发请求过多

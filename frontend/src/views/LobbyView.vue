@@ -197,10 +197,12 @@ import { useRoomStore } from '../stores/room'
 import { useUserStore } from '../stores/user'
 import socket, { authenticate } from '../socket'
 import api from '../api'
+import { useConfirmDialog } from '../composables/useConfirm'
 
 const router = useRouter()
 const roomStore = useRoomStore()
 const userStore = useUserStore()
+const { showConfirm } = useConfirmDialog()
 
 const rooms = ref([])
 const creating = ref(0)
@@ -270,21 +272,89 @@ onUnmounted(() => {
   socket.off('room_deleted', _onRoomDeleted)
 })
 
+// 上次检查结果缓存：30s 内复用，避免反复调用大模型。
+// 注意：只缓存「已放行」的结果（可用，或用户选择了「直接进入」）；
+// 若用户选择「去配置」，组件会跳转设置页并被卸载，缓存自然失效，返回后会重新检测。
+let _llmReadyCache = null
+const LLM_READY_CACHE_MS = 30000
+
+/**
+ * 创建房间前的检查（你是房主，房间里 AI 玩家用你的 Key）：
+ * 未绑定 Key 或绑定的 Key 不可用时弹框，让用户选择「去配置」或「直接进入」。
+ * 加入房间不在此检查——房间 AI 用的是房主的 Key，与加入者无关。
+ * @returns {Promise<boolean>} true = 可进入，false = 已跳转设置页
+ */
+async function ensureLLMReady() {
+  if (_llmReadyCache && Date.now() - _llmReadyCache.at < LLM_READY_CACHE_MS) return true
+
+  let status
+  try {
+    status = (await api.get('/settings/llm')).data
+  } catch (e) {
+    return true // 无法判断时不阻塞
+  }
+
+  // 未绑定 → 提示
+  if (!status.ownKeySet) {
+    const goConfig = await showConfirm({
+      title: '未配置大模型 API',
+      message: '你还没有配置大模型 API，房间里的 AI 玩家将使用本地模板逻辑。是否先去配置？',
+      confirmText: '去配置',
+      cancelText: '直接进入',
+      type: 'warning',
+    })
+    if (goConfig) {
+      router.push('/settings')
+      return false
+    }
+    _llmReadyCache = { at: Date.now() }
+    return true
+  }
+
+  // 已绑定 → 检测是否可用
+  let ok = true
+  try {
+    ok = !!(await api.post('/settings/llm/test', {})).data?.ok
+  } catch (e) {
+    ok = false
+  }
+
+  if (ok) {
+    _llmReadyCache = { at: Date.now() }
+    return true
+  }
+
+  const goConfig = await showConfirm({
+    title: '大模型 API 不可用',
+    message: '你绑定的大模型 API 似乎无法连接，AI 玩家将使用本地模板逻辑。是否先去重新配置？',
+    confirmText: '去配置',
+    cancelText: '直接进入',
+    type: 'warning',
+  })
+  if (goConfig) {
+    router.push('/settings')
+    return false
+  }
+  _llmReadyCache = { at: Date.now() }
+  return true
+}
+
 async function handleCreateRoom(mode) {
+  if (!(await ensureLLMReady())) return
   creating.value = mode
   roomStore.createRoom(mode)
   setTimeout(() => { creating.value = 0 }, 3000)
 }
 
-function handleJoinRoom(code) {
+async function handleJoinRoom(code) {
   if (!code) return
   roomStore.joinRoom(code)
 }
 
-function handleSearchJoin() {
+async function handleSearchJoin() {
   const code = searchQuery.value.trim().toUpperCase()
   if (code) {
-    handleJoinRoom(code)
+    await handleJoinRoom(code)
   }
 }
 </script>

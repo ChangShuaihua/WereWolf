@@ -1,9 +1,8 @@
 <template>
   <div class="settings-page">
     <header class="settings-header">
-      <button class="btn btn-ai btn-sm" @click="$router.push('/lobby')">← 返回大厅</button>
       <h1>⚙️ 设置</h1>
-      <div class="header-spacer"></div>
+      <p class="settings-subtitle">配置你自己的大模型 API，绑定到你的账号，不影响其他玩家</p>
     </header>
 
     <div class="settings-content">
@@ -11,9 +10,21 @@
         <h3>🤖 大模型 API 状态</h3>
         <div class="status-grid">
           <div class="status-item">
-            <span class="status-label">配置状态</span>
-            <span class="status-value" :class="status.configured ? 'ok' : 'muted'">
-              {{ status.configured ? '✓ 已配置' : '未配置' }}
+            <span class="status-label">我的 Key</span>
+            <span class="status-value" :class="status.ownKeySet ? 'ok' : 'muted'">
+              {{ status.ownKeySet ? '✓ 已绑定' : '未绑定' }}
+            </span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">可用性</span>
+            <span class="status-value" :class="availabilityClass">
+              {{ availabilityText }}
+              <button
+                v-if="status.configured && availability.state !== 'checking'"
+                class="recheck-btn"
+                type="button"
+                @click="checkAvailability"
+              >重新检测</button>
             </span>
           </div>
           <div class="status-item">
@@ -29,16 +40,19 @@
             <span class="status-value">{{ status.apiKeyPreview || '未设置' }}</span>
           </div>
         </div>
-        <p v-if="status.runtimeOverride" class="status-note">
-          当前使用运行时配置（仅内存，重启后失效）。
+        <p v-if="status.source === 'user'" class="status-note">
+          已使用你自己的 API Key（绑定到你的账号）。
+        </p>
+        <p v-else class="status-note">
+          尚未配置任何 Key，AI 将使用本地策略（fallback）。
         </p>
       </div>
 
       <div class="edit-card">
         <h3>✏️ 大模型 API 配置</h3>
         <p class="card-desc">
-          在这里填写你希望调用的大模型 API。配置仅保存在服务器内存中，
-          <strong>不会写入数据库或本地文件</strong>，服务重启后即失效并回退到 <code>.env</code> 默认值。
+          在这里填写你自己的大模型 API，配置会<strong>绑定到你的账号并保存到服务器</strong>，其他用户不受影响。
+          房间里 AI 玩家使用「房主」的配置，规则问答使用「提问者」自己的配置。
         </p>
 
         <div class="form-group">
@@ -50,7 +64,16 @@
             autocomplete="off"
             class="form-input"
           />
-          <span class="form-hint">兼容 OpenAI 的 API Key（如 MiMo、DeepSeek 等），仅在内存中保存</span>
+          <span class="form-hint">兼容 OpenAI 的 API Key（如 DeepSeek 等），保存到你的账号</span>
+        </div>
+
+        <div class="form-group">
+          <label>快速预设（可选）</label>
+          <select v-model="preset" class="form-input" @change="applyPreset">
+            <option value="">选择预设，自动填充地址与模型…</option>
+            <option v-for="p in PRESETS" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+          <span class="form-hint">选择后会自动填充下方「API 地址」和「模型名称」，仍可手动修改</span>
         </div>
 
         <div class="form-group">
@@ -58,7 +81,7 @@
           <input
             v-model="form.apiUrl"
             type="text"
-            placeholder="https://api.xiaomimimo.com"
+            placeholder="https://api.deepseek.com"
             class="form-input"
           />
           <span class="form-hint">需以 http:// 或 https:// 开头</span>
@@ -69,7 +92,7 @@
           <input
             v-model="form.modelName"
             type="text"
-            placeholder="mimo-v2-flash"
+            placeholder="deepseek-chat"
             class="form-input"
           />
         </div>
@@ -105,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '../api'
 
 const form = ref({
@@ -114,13 +137,31 @@ const form = ref({
   modelName: '',
 })
 
+// 常见 OpenAI 兼容服务商预设，选中后自动填充地址与模型名
+const PRESETS = [
+  { id: 'deepseek', name: 'DeepSeek', apiUrl: 'https://api.deepseek.com', modelName: 'deepseek-chat' },
+  { id: 'openai', name: 'OpenAI', apiUrl: 'https://api.openai.com/v1', modelName: 'gpt-4o-mini' },
+  { id: 'qwen', name: '通义千问（阿里云）', apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', modelName: 'qwen-plus' },
+  { id: 'kimi', name: 'Kimi（月之暗面）', apiUrl: 'https://api.moonshot.cn/v1', modelName: 'moonshot-v1-8k' },
+  { id: 'glm', name: '智谱 GLM', apiUrl: 'https://open.bigmodel.cn/api/paas/v4', modelName: 'glm-4-plus' },
+]
+
+const preset = ref('')
+
+function applyPreset() {
+  const p = PRESETS.find(x => x.id === preset.value)
+  if (!p) return
+  form.value.apiUrl = p.apiUrl
+  form.value.modelName = p.modelName
+}
+
 const status = ref({
   configured: false,
-  apiKeySet: false,
+  ownKeySet: false,
   apiKeyPreview: '',
   apiUrl: '',
   modelName: '',
-  runtimeOverride: false,
+  source: 'none',
 })
 
 const saving = ref(false)
@@ -130,6 +171,42 @@ const message = ref('')
 const messageType = ref('success')
 const testResult = ref(null)
 
+// 绑定模型的可用性：idle=未检测 / checking=检测中 / ok / fail
+const availability = ref({ state: 'idle', latency: 0, message: '' })
+
+const availabilityText = computed(() => {
+  if (!status.value.configured) return '未配置'
+  if (availability.value.state === 'checking') return '检测中…'
+  if (availability.value.state === 'ok') return `✓ 可用（${availability.value.latency}ms）`
+  if (availability.value.state === 'fail') return '✗ 不可用'
+  return '未检测'
+})
+
+const availabilityClass = computed(() => {
+  if (availability.value.state === 'ok') return 'ok'
+  if (availability.value.state === 'fail') return 'error'
+  return 'muted'
+})
+
+async function checkAvailability() {
+  if (!status.value.configured) {
+    availability.value = { state: 'idle', latency: 0, message: '' }
+    return
+  }
+  availability.value = { state: 'checking', latency: 0, message: '' }
+  try {
+    // 空 body 表示检测「已保存」的配置
+    const { data } = await api.post('/settings/llm/test', {})
+    if (data.ok) {
+      availability.value = { state: 'ok', latency: data.latency, message: data.reply || '' }
+    } else {
+      availability.value = { state: 'fail', latency: data.latency, message: data.message || '' }
+    }
+  } catch (err) {
+    availability.value = { state: 'fail', latency: 0, message: err.response?.data?.message || '检测失败' }
+  }
+}
+
 async function loadStatus() {
   try {
     const { data } = await api.get('/settings/llm')
@@ -137,6 +214,9 @@ async function loadStatus() {
     form.value.apiUrl = data.apiUrl || ''
     form.value.modelName = data.modelName || ''
     form.value.apiKey = ''
+    if (status.value.configured) {
+      checkAvailability()
+    }
   } catch (err) {
     message.value = err.response?.data?.message || '设置加载失败'
     messageType.value = 'error'
@@ -164,6 +244,7 @@ async function handleSave() {
     form.value.apiKey = ''
     message.value = data.message || 'LLM 配置已更新'
     messageType.value = 'success'
+    checkAvailability()
   } catch (err) {
     message.value = err.response?.data?.message || '保存失败'
     messageType.value = 'error'
@@ -203,6 +284,7 @@ async function handleClear() {
     form.value.apiKey = ''
     message.value = data.message || '已清除运行时配置'
     messageType.value = 'success'
+    checkAvailability()
   } catch (err) {
     message.value = err.response?.data?.message || '清除失败'
     messageType.value = 'error'
@@ -236,10 +318,10 @@ onMounted(loadStatus)
 
 .settings-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 800px;
-  margin: 0 auto 32px;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 1200px;
+  margin: 0 auto 24px;
   position: relative;
   z-index: 1;
 }
@@ -251,15 +333,18 @@ onMounted(loadStatus)
   margin: 0;
 }
 
-.header-spacer {
-  width: 100px;
+.settings-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
 .settings-content {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  align-items: stretch;
   gap: 24px;
   position: relative;
   z-index: 1;
@@ -317,6 +402,31 @@ onMounted(loadStatus)
 
 .status-value.muted {
   color: var(--text-tertiary);
+}
+
+.status-value.error {
+  color: var(--status-error);
+}
+
+.recheck-btn {
+  margin-left: 10px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  color: var(--ai-primary);
+  background: transparent;
+  border: 1px solid var(--ai-primary);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recheck-btn:hover {
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.recheck-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .status-note {
@@ -430,6 +540,12 @@ onMounted(loadStatus)
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .settings-content {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 600px) {

@@ -131,6 +131,17 @@ const MIGRATIONS = [
       await conn.query('UPDATE users SET score = total_wins');
     },
   },
+  {
+    version: 7,
+    description: 'users 表增加用户级大模型 API 配置（api_key/api_url/model_name）',
+    up: async (conn) => {
+      const [cols] = await conn.query('SHOW COLUMNS FROM users');
+      const existing = new Set(cols.map(c => c.Field));
+      if (!existing.has('api_key'))     await conn.query('ALTER TABLE users ADD COLUMN api_key VARCHAR(500) NULL AFTER ai_fallback_enabled');
+      if (!existing.has('api_url'))     await conn.query('ALTER TABLE users ADD COLUMN api_url VARCHAR(255) NULL AFTER api_key');
+      if (!existing.has('model_name'))  await conn.query('ALTER TABLE users ADD COLUMN model_name VARCHAR(100) NULL AFTER api_url');
+    },
+  },
 ];
 
 async function ensureTableExists(conn) {

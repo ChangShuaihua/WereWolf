@@ -756,7 +756,7 @@ function addChat(socket, code, message) {
  */
 async function ruleQA(socket, question) {
   try {
-    const answer = await ruleQAService.answerQuestion(question);
+    const answer = await ruleQAService.answerQuestion(question, socket.userId);
     socket.emit('rule_qa_answer', {
       question,
       answer,

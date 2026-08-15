@@ -53,11 +53,10 @@ flowchart LR
 
 ### 3.1 模型初始化
 
-`AIGameHandler` 和 `RuleQAService` 分别创建一个 `ChatOpenAI` 实例，通过 OpenAI 兼容协议访问模型：
+`AIGameHandler` 和 `RuleQAService` 通过 OpenAI 兼容协议访问模型，模型实例由 `llmConfig.buildModel` 按配置签名缓存：
 
-- API Key：优先 `XIAOMI_API_KEY`，其次 `DEEPSEEK_API_KEY`。
-- Base URL：优先 `XIAOMI_API_URL`，其次 `DEEPSEEK_API_URL`，默认小米 MiMo 地址。
-- 模型名：优先 `XIAOMI_MODEL_NAME`，其次 `MODEL_NAME`，默认 `mimo-v2-flash`。
+- API Key / Base URL / 模型名：由用户在「设置」页配置，绑定到用户账号（存 `users` 表），系统不内置任何默认模型。
+- 房间 AI：使用房主的 Key；规则问答：使用提问者的 Key。
 - 对局 AI：默认 `temperature=0.7`、`maxTokens=1000`。
 - 规则问答：`temperature=0.2`、`maxTokens=800`，以降低规则回答的随机性。
 
