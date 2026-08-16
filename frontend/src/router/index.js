@@ -1,13 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
-import LobbyView from '../views/LobbyView.vue'
-import RoomView from '../views/RoomView.vue'
-import GameView from '../views/GameView.vue'
-import AIAgentWorkshop from '../views/AIAgentWorkshop.vue'
-import ProfileView from '../views/ProfileView.vue'
-import ReplayView from '../views/ReplayView.vue'
-import StatsView from '../views/StatsView.vue'
-import SettingsView from '../views/SettingsView.vue'
+const LoginView = () => import('../views/LoginView.vue')
+const LobbyView = () => import('../views/LobbyView.vue')
+const RoomView = () => import('../views/RoomView.vue')
+const GameView = () => import('../views/GameView.vue')
+const AIAgentWorkshop = () => import('../views/AIAgentWorkshop.vue')
+const ProfileView = () => import('../views/ProfileView.vue')
+const ReplayView = () => import('../views/ReplayView.vue')
+const StatsView = () => import('../views/StatsView.vue')
+const SettingsView = () => import('../views/SettingsView.vue')
 
 const routes = [
   { path: '/', redirect: '/login' },

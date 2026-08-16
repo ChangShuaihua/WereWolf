@@ -11,6 +11,8 @@
  */
 
 const { ChatOpenAI } = require('@langchain/openai');
+const crypto = require('crypto');
+const net = require('net');
 
 // 模型实例缓存，key 由 apiKey/apiUrl/modelName/temperature/maxTokens 决定
 const modelCache = new Map();
@@ -39,7 +41,64 @@ function modelKey(cfg, opts = {}) {
   const temperature = opts.temperature ?? 0.7;
   const maxTokens = opts.maxTokens ?? 1000;
   const timeout = opts.timeout ?? 0;
-  return `${cfg.apiKey}|${cfg.apiUrl}|${cfg.modelName}|${temperature}|${maxTokens}|${timeout}`;
+  const keyHash = crypto.createHash('sha256').update(cfg.apiKey).digest('hex');
+  return `${keyHash}|${cfg.apiUrl}|${cfg.modelName}|${temperature}|${maxTokens}|${timeout}`;
+}
+
+function isPrivateIp(hostname) {
+  if (net.isIPv4(hostname)) {
+    const [a, b] = hostname.split('.').map(Number);
+    return (
+      a === 10 ||
+      a === 127 ||
+      a === 0 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    );
+  }
+  if (net.isIPv6(hostname)) {
+    const host = hostname.toLowerCase();
+    return (
+      host === '::1' ||
+      host === '::' ||
+      host.startsWith('fc') ||
+      host.startsWith('fd') ||
+      host.startsWith('fe8') ||
+      host.startsWith('fe9') ||
+      host.startsWith('fea') ||
+      host.startsWith('feb')
+    );
+  }
+  return false;
+}
+
+function validateApiUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch (_) {
+    return 'API 地址格式无效';
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+    return 'API 地址必须使用 http/https，且不能包含认证信息';
+  }
+
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || isPrivateIp(hostname)) {
+    return 'API 地址不能指向本机、内网或链路本地地址';
+  }
+
+  const allowedHosts = (process.env.LLM_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  if (allowedHosts.length > 0 && !allowedHosts.includes(hostname)) {
+    return '该 API 域名不在服务器允许列表中';
+  }
+
+  return null;
 }
 
 /**
@@ -49,16 +108,23 @@ function modelKey(cfg, opts = {}) {
  */
 function buildModel(cfg, opts = {}) {
   if (!cfg || !cfg.apiKey) return null;
+  if (cfg.apiUrl) {
+    const urlError = validateApiUrl(cfg.apiUrl);
+    if (urlError) throw new Error(urlError);
+  }
   const key = modelKey(cfg, opts);
   if (!modelCache.has(key)) {
-    modelCache.set(key, new ChatOpenAI({
-      apiKey: cfg.apiKey,
-      modelName: cfg.modelName,
-      configuration: cfg.apiUrl ? { baseURL: cfg.apiUrl } : {},
-      temperature: opts.temperature ?? 0.7,
-      maxTokens: opts.maxTokens ?? 1000,
-      timeout: opts.timeout,
-    }));
+    modelCache.set(
+      key,
+      new ChatOpenAI({
+        apiKey: cfg.apiKey,
+        modelName: cfg.modelName,
+        configuration: cfg.apiUrl ? { baseURL: cfg.apiUrl } : {},
+        temperature: opts.temperature ?? 0.7,
+        maxTokens: opts.maxTokens ?? 1000,
+        timeout: opts.timeout,
+      })
+    );
   }
   return modelCache.get(key);
 }
@@ -72,4 +138,4 @@ function maskKey(key) {
   return `${key.slice(0, 4)}••••${key.slice(-4)}`;
 }
 
-module.exports = { getEnvConfig, mergeConfig, buildModel, maskKey, modelCache };
+module.exports = { getEnvConfig, mergeConfig, buildModel, maskKey, validateApiUrl, modelCache };

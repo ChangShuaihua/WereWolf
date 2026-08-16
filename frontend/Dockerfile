@@ -1,10 +1,10 @@
 # 构建阶段
-FROM docker.1ms.run/library/node:18-alpine AS builder
+FROM docker.1ms.run/library/node:22-alpine AS builder
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
 RUN npm run build

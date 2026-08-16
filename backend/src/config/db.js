@@ -1,4 +1,3 @@
-
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
@@ -85,11 +84,17 @@ const MIGRATIONS = [
     description: 'users 表补齐 score/total_games/total_wins/total_losses（兼容老库）',
     up: async (conn) => {
       const [cols] = await conn.query('SHOW COLUMNS FROM users');
-      const existing = new Set(cols.map(c => c.Field));
-      if (!existing.has('score'))        await conn.query('ALTER TABLE users ADD COLUMN score INT DEFAULT 0 AFTER password');
-      if (!existing.has('total_games'))  await conn.query('ALTER TABLE users ADD COLUMN total_games INT DEFAULT 0 AFTER score');
-      if (!existing.has('total_wins'))   await conn.query('ALTER TABLE users ADD COLUMN total_wins INT DEFAULT 0 AFTER total_games');
-      if (!existing.has('total_losses')) await conn.query('ALTER TABLE users ADD COLUMN total_losses INT DEFAULT 0 AFTER total_wins');
+      const existing = new Set(cols.map((c) => c.Field));
+      if (!existing.has('score'))
+        await conn.query('ALTER TABLE users ADD COLUMN score INT DEFAULT 0 AFTER password');
+      if (!existing.has('total_games'))
+        await conn.query('ALTER TABLE users ADD COLUMN total_games INT DEFAULT 0 AFTER score');
+      if (!existing.has('total_wins'))
+        await conn.query('ALTER TABLE users ADD COLUMN total_wins INT DEFAULT 0 AFTER total_games');
+      if (!existing.has('total_losses'))
+        await conn.query(
+          'ALTER TABLE users ADD COLUMN total_losses INT DEFAULT 0 AFTER total_wins'
+        );
     },
   },
   {
@@ -97,9 +102,15 @@ const MIGRATIONS = [
     description: 'game_records 表补齐 replay_data/analysis（兼容老库）',
     up: async (conn) => {
       const [cols] = await conn.query('SHOW COLUMNS FROM game_records');
-      const existing = new Set(cols.map(c => c.Field));
-      if (!existing.has('replay_data')) await conn.query('ALTER TABLE game_records ADD COLUMN replay_data JSON NULL AFTER duration');
-      if (!existing.has('analysis'))    await conn.query('ALTER TABLE game_records ADD COLUMN analysis JSON NULL AFTER replay_data');
+      const existing = new Set(cols.map((c) => c.Field));
+      if (!existing.has('replay_data'))
+        await conn.query(
+          'ALTER TABLE game_records ADD COLUMN replay_data JSON NULL AFTER duration'
+        );
+      if (!existing.has('analysis'))
+        await conn.query(
+          'ALTER TABLE game_records ADD COLUMN analysis JSON NULL AFTER replay_data'
+        );
     },
   },
   {
@@ -107,9 +118,11 @@ const MIGRATIONS = [
     description: 'ai_agents 表补齐 owner_id（兼容老库）',
     up: async (conn) => {
       const [cols] = await conn.query('SHOW COLUMNS FROM ai_agents');
-      const existing = new Set(cols.map(c => c.Field));
+      const existing = new Set(cols.map((c) => c.Field));
       if (!existing.has('owner_id')) {
-        await conn.query('ALTER TABLE ai_agents ADD COLUMN owner_id INT NULL AFTER id, ADD INDEX idx_ai_agents_owner (owner_id)');
+        await conn.query(
+          'ALTER TABLE ai_agents ADD COLUMN owner_id INT NULL AFTER id, ADD INDEX idx_ai_agents_owner (owner_id)'
+        );
       }
     },
   },
@@ -118,9 +131,11 @@ const MIGRATIONS = [
     description: 'users 表增加 AI fallback 偏好',
     up: async (conn) => {
       const [cols] = await conn.query('SHOW COLUMNS FROM users');
-      const existing = new Set(cols.map(c => c.Field));
+      const existing = new Set(cols.map((c) => c.Field));
       if (!existing.has('ai_fallback_enabled')) {
-        await conn.query('ALTER TABLE users ADD COLUMN ai_fallback_enabled BOOLEAN NOT NULL DEFAULT TRUE AFTER total_losses');
+        await conn.query(
+          'ALTER TABLE users ADD COLUMN ai_fallback_enabled BOOLEAN NOT NULL DEFAULT TRUE AFTER total_losses'
+        );
       }
     },
   },
@@ -136,10 +151,22 @@ const MIGRATIONS = [
     description: 'users 表增加用户级大模型 API 配置（api_key/api_url/model_name）',
     up: async (conn) => {
       const [cols] = await conn.query('SHOW COLUMNS FROM users');
-      const existing = new Set(cols.map(c => c.Field));
-      if (!existing.has('api_key'))     await conn.query('ALTER TABLE users ADD COLUMN api_key VARCHAR(500) NULL AFTER ai_fallback_enabled');
-      if (!existing.has('api_url'))     await conn.query('ALTER TABLE users ADD COLUMN api_url VARCHAR(255) NULL AFTER api_key');
-      if (!existing.has('model_name'))  await conn.query('ALTER TABLE users ADD COLUMN model_name VARCHAR(100) NULL AFTER api_url');
+      const existing = new Set(cols.map((c) => c.Field));
+      if (!existing.has('api_key'))
+        await conn.query(
+          'ALTER TABLE users ADD COLUMN api_key VARCHAR(500) NULL AFTER ai_fallback_enabled'
+        );
+      if (!existing.has('api_url'))
+        await conn.query('ALTER TABLE users ADD COLUMN api_url VARCHAR(255) NULL AFTER api_key');
+      if (!existing.has('model_name'))
+        await conn.query('ALTER TABLE users ADD COLUMN model_name VARCHAR(100) NULL AFTER api_url');
+    },
+  },
+  {
+    version: 8,
+    description: '扩大用户 LLM API Key 字段以容纳加密数据',
+    up: async (conn) => {
+      await conn.query('ALTER TABLE users MODIFY COLUMN api_key TEXT NULL');
     },
   },
 ];
@@ -174,7 +201,7 @@ async function initDB() {
     await conn.query('USE ' + DB_NAME);
     await ensureTableExists(conn);
     const [appliedRows] = await conn.query('SELECT version FROM schema_version');
-    const applied = new Set(appliedRows.map(r => r.version));
+    const applied = new Set(appliedRows.map((r) => r.version));
 
     let appliedCount = 0;
     for (const m of MIGRATIONS) {
@@ -183,10 +210,10 @@ async function initDB() {
       await conn.beginTransaction();
       try {
         await m.up(conn);
-        await conn.query(
-          'INSERT INTO schema_version (version, name) VALUES (?, ?)',
-          [m.version, m.description]
-        );
+        await conn.query('INSERT INTO schema_version (version, name) VALUES (?, ?)', [
+          m.version,
+          m.description,
+        ]);
         await conn.commit();
         appliedCount++;
         console.log(`[DB Migration] v${m.version} applied: ${m.description}`);
@@ -200,7 +227,9 @@ async function initDB() {
     if (appliedCount === 0) {
       console.log(`Database "${DB_NAME}" is up to date (${applied.size} migrations)`);
     } else {
-      console.log(`Database "${DB_NAME}" initialized with ${appliedCount} new migration(s) (total ${applied.size})`);
+      console.log(
+        `Database "${DB_NAME}" initialized with ${appliedCount} new migration(s) (total ${applied.size})`
+      );
     }
   } finally {
     conn.release();

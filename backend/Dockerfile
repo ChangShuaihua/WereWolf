@@ -1,9 +1,9 @@
-FROM docker.1ms.run/library/node:18-alpine
+FROM docker.1ms.run/library/node:22-alpine
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install --production
+RUN npm ci --omit=dev
 
 COPY . .
 

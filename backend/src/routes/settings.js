@@ -37,8 +37,9 @@ router.get('/llm', async (req, res) => {
 router.put('/llm', async (req, res) => {
   const { apiKey, apiUrl, modelName } = req.body || {};
 
-  if (apiUrl && !/^https?:\/\//.test(apiUrl)) {
-    return res.status(400).json({ message: 'API 地址需以 http:// 或 https:// 开头' });
+  const apiUrlError = apiUrl ? llmConfig.validateApiUrl(apiUrl) : null;
+  if (apiUrlError) {
+    return res.status(400).json({ message: apiUrlError });
   }
   if (typeof modelName === 'string' && modelName.length > 100) {
     return res.status(400).json({ message: '模型名过长' });
@@ -85,9 +86,10 @@ router.post('/llm/test', async (req, res) => {
 
   // 表单传入的值优先，未传则用已保存/默认配置，方便「先测试再保存」
   const effective = {
-    apiKey: (typeof apiKey === 'string' && apiKey.trim()) ? apiKey.trim() : saved.apiKey,
-    apiUrl: (typeof apiUrl === 'string' && apiUrl.trim()) ? apiUrl.trim() : saved.apiUrl,
-    modelName: (typeof modelName === 'string' && modelName.trim()) ? modelName.trim() : saved.modelName,
+    apiKey: typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : saved.apiKey,
+    apiUrl: typeof apiUrl === 'string' && apiUrl.trim() ? apiUrl.trim() : saved.apiUrl,
+    modelName:
+      typeof modelName === 'string' && modelName.trim() ? modelName.trim() : saved.modelName,
   };
 
   if (!effective.apiKey) {
@@ -97,15 +99,23 @@ router.post('/llm/test', async (req, res) => {
     return res.json({ ok: false, message: '缺少模型名称，请填写模型名称（如 deepseek-chat）' });
   }
   if (!effective.apiUrl) {
-    return res.json({ ok: false, message: '缺少 API 地址，请填写 Base URL（如 https://api.deepseek.com）' });
+    return res.json({
+      ok: false,
+      message: '缺少 API 地址，请填写 Base URL（如 https://api.deepseek.com）',
+    });
   }
-  if (!/^https?:\/\//.test(effective.apiUrl)) {
-    return res.json({ ok: false, message: 'API 地址需以 http:// 或 https:// 开头' });
+  const apiUrlError = llmConfig.validateApiUrl(effective.apiUrl);
+  if (apiUrlError) {
+    return res.json({ ok: false, message: apiUrlError });
   }
 
   const start = Date.now();
   try {
-    const testModel = llmConfig.buildModel(effective, { temperature: 0, maxTokens: 32, timeout: 15000 });
+    const testModel = llmConfig.buildModel(effective, {
+      temperature: 0,
+      maxTokens: 32,
+      timeout: 15000,
+    });
     const reply = await testModel.invoke('请只回复两个字：OK');
     res.json({
       ok: true,

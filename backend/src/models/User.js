@@ -1,13 +1,14 @@
 const { pool } = require('../config/db');
 const bcrypt = require('bcryptjs');
+const { encryptSecret, decryptSecret } = require('../utils/secretCrypto');
 
 const User = {
   async create(username, password) {
     const hash = await bcrypt.hash(password, 10);
-    const [result] = await pool.query(
-      'INSERT INTO users (username, password) VALUES (?, ?)',
-      [username, hash]
-    );
+    const [result] = await pool.query('INSERT INTO users (username, password) VALUES (?, ?)', [
+      username,
+      hash,
+    ]);
     return { id: result.insertId, username };
   },
 
@@ -101,23 +102,19 @@ const User = {
     }
 
     values.push(userId);
-    await pool.query(
-      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
-      values
-    );
+    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
 
     return this.findById(userId);
   },
 
   // 获取用户的大模型 API 配置（完整 Key，仅服务端内部使用）
   async getLLMConfig(userId) {
-    const [rows] = await pool.query(
-      'SELECT api_key, api_url, model_name FROM users WHERE id = ?',
-      [userId]
-    );
+    const [rows] = await pool.query('SELECT api_key, api_url, model_name FROM users WHERE id = ?', [
+      userId,
+    ]);
     const r = rows[0] || {};
     return {
-      apiKey: r.api_key || '',
+      apiKey: decryptSecret(r.api_key),
       apiUrl: r.api_url || '',
       modelName: r.model_name || '',
     };
@@ -130,7 +127,8 @@ const User = {
 
     if (typeof apiKey === 'string') {
       sets.push('api_key = ?');
-      values.push(apiKey.trim() || null);
+      const normalizedKey = apiKey.trim();
+      values.push(normalizedKey ? encryptSecret(normalizedKey) : null);
     }
     if (typeof apiUrl === 'string') {
       sets.push('api_url = ?');
@@ -143,10 +141,7 @@ const User = {
 
     if (sets.length > 0) {
       values.push(userId);
-      await pool.query(
-        `UPDATE users SET ${sets.join(', ')} WHERE id = ?`,
-        values
-      );
+      await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, values);
     }
 
     return this.getLLMConfig(userId);
@@ -160,7 +155,6 @@ const User = {
     );
     return this.getLLMConfig(userId);
   },
-
 };
 
 module.exports = User;

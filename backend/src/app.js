@@ -35,11 +35,22 @@ function validateEnv() {
     if (!process.env.DB_USER) errors.push('DB_USER must be set in production');
     if (!process.env.DB_PASSWORD) errors.push('DB_PASSWORD must be set in production');
     if (!process.env.DB_HOST) errors.push('DB_HOST must be set in production');
+    if (
+      !process.env.LLM_CONFIG_ENCRYPTION_KEY ||
+      process.env.LLM_CONFIG_ENCRYPTION_KEY.length < 32
+    ) {
+      errors.push(
+        'LLM_CONFIG_ENCRYPTION_KEY must be set and at least 32 characters long in production'
+      );
+    }
+    if (!process.env.LLM_ALLOWED_HOSTS) {
+      errors.push('LLM_ALLOWED_HOSTS must list trusted LLM API hostnames in production');
+    }
   }
 
   if (errors.length > 0) {
     console.error('[validateEnv] Environment validation failed:');
-    errors.forEach(e => console.error('  - ' + e));
+    errors.forEach((e) => console.error('  - ' + e));
     process.exit(1);
   }
 }
@@ -52,19 +63,21 @@ const server = http.createServer(app);
 
 // CORS configuration
 const allowedOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
   : ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS not allowed'));
-    }
-  },
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS not allowed'));
+      }
+    },
+    credentials: true,
+  })
+);
 
 // Socket.IO with CORS
 const io = new Server(server, {
@@ -135,10 +148,11 @@ app.get('/api/rooms', authMiddleware, (req, res) => {
   for (const code of allRooms) {
     const room = roomCache.get(code);
     if (room) {
-      const connectedPlayers = room.players.filter(p => p.socketId !== null);
+      const connectedPlayers = room.players.filter((p) => p.socketId !== null);
       if (connectedPlayers.length > 0) {
-        const host = connectedPlayers.find(p => p.socketId === room.hostId)
-          || connectedPlayers.find(p => Number(p.userId) === Number(room.hostUserId));
+        const host =
+          connectedPlayers.find((p) => p.socketId === room.hostId) ||
+          connectedPlayers.find((p) => Number(p.userId) === Number(room.hostUserId));
         rooms.push({
           code: room.code,
           hostUsername: host?.username || '未知',
@@ -159,7 +173,7 @@ app.get('/api/room/:code', authMiddleware, (req, res) => {
     return res.status(404).json({ message: '房间不存在' });
   }
   const { buildSeats, buildPublicPlayers } = require('./socket/roomHandler');
-  const connectedPlayers = room.players.filter(p => p.socketId !== null);
+  const connectedPlayers = room.players.filter((p) => p.socketId !== null);
   res.json({
     code: room.code,
     hostId: room.hostId,
@@ -184,16 +198,21 @@ app.get('/api/health', async (req, res) => {
   } catch (e) {
     dbStatus = 'error';
   }
-  try { online = getUserCount(); } catch (_) {}
-  try { rooms = roomCache.keys().length; } catch (_) {}
+  try {
+    online = getUserCount();
+  } catch (_) {}
+  try {
+    rooms = roomCache.keys().length;
+  } catch (_) {}
 
-  const redisOk = !!(getRedisStatus() && getRedisStatus().connected);
+  const redisStatus = getRedisStatus();
+  const redisOk = !redisStatus.enabled || redisStatus.ready;
   const overall = dbStatus === 'ok' ? (redisOk ? 'ok' : 'degraded') : 'unhealthy';
   res.status(dbStatus === 'ok' ? 200 : 503).json({
     status: overall,
     timestamp: Date.now(),
     db: dbStatus,
-    redis: getRedisStatus(),
+    redis: redisStatus,
     onlineUsers: online,
     activeRooms: rooms,
   });
@@ -271,11 +290,12 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-// C10: catch unhandled async errors so the process stays alive and logs them
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason);
+  process.exit(1);
 });
 
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err);
+  process.exit(1);
 });
