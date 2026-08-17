@@ -145,7 +145,7 @@ const DEFAULT_AGENTS = [
       revealIdentity: 'never'
     },
     language: {
-      prefixes: ['哈哈', '笑死'],
+      prefixes: ['哈哈', '笑死'], 
       suffixes: ['狗头', '滑稽'],
       favoriteWords: ['村民', '快乐', '狼']
     },
@@ -258,6 +258,7 @@ const DEFAULT_AGENTS = [
 function sanitizePromptString(str, maxLen = 20) {
   if (typeof str !== 'string') return '';
   // 移除换行和控制字符
+  // eslint-disable-next-line no-control-regex
   let s = str.replace(/[\r\n\t\x00-\x1F\x7F]/g, ' ');
   // 去除可能的指令注入关键词（如"忽略以上指令"等）
   s = s.replace(/忽略以上.*指令|disregard.*instruction|forget.*previous/gi, '[已过滤]');
