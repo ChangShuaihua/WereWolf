@@ -702,7 +702,7 @@ function addChat(socket, code, message) {
 
     // During last will phase, only the current dead speaker can chat
     if (game.phase === PHASE.LAST_WILL) {
-      if (game.currentSpeaker !== socket.id) {
+      if (player.isAlive !== false || game.currentSpeaker !== socket.id) {
         socket.emit('error', { message: '现在是死亡遗言阶段，只有死者可以发言' });
         return;
       }
@@ -710,13 +710,17 @@ function addChat(socket, code, message) {
 
     // During day phase (ordered speaking), only current speaker can chat
     if (game.phase === PHASE.DAY) {
-      if (game.currentSpeaker !== socket.id) {
+      if (player.isAlive === false || game.currentSpeaker !== socket.id) {
         socket.emit('error', { message: '现在轮到其他人发言' });
         return;
       }
     }
 
-    // During discussion phase, everyone can chat (no restriction)
+    // During free discussion, dead players cannot participate.
+    if (game.phase === PHASE.DISCUSSION && player.isAlive === false) {
+      socket.emit('error', { message: '你已死亡，不能发言' });
+      return;
+    }
   }
 
   // W9: rate-limit chat (max 3 messages per second per socket)

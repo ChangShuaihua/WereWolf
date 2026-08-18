@@ -1,7 +1,8 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const RefreshToken = require('../models/RefreshToken');
 const authMiddleware = require('../middleware/auth');
+const { issueTokens } = require('../utils/token');
 require('dotenv').config();
 
 const router = express.Router();
@@ -42,13 +43,11 @@ router.post('/register', async (req, res) => {
     }
 
     const user = await User.create(username, password);
-    const token = jwt.sign(
-      { id: user.id, username: user.username },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
-    );
+    // 单设备登录：撤销该用户旧会话
+    await RefreshToken.revokeAllForUser(user.id);
+    const { accessToken, refreshToken } = await issueTokens(user);
 
-    res.json({ token, user: { id: user.id, username: user.username, aiFallbackEnabled: true } });
+    res.json({ accessToken, refreshToken, user: { id: user.id, username: user.username, aiFallbackEnabled: true } });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ message: '注册失败，请稍后重试' });
@@ -73,14 +72,13 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: '用户名或密码错误' });
     }
 
-    const token = jwt.sign(
-      { id: user.id, username: user.username },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
-    );
+    // 单设备登录：撤销该用户旧会话
+    await RefreshToken.revokeAllForUser(user.id);
+    const { accessToken, refreshToken } = await issueTokens(user);
 
     res.json({
-      token,
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         username: user.username,
@@ -163,6 +161,60 @@ router.put('/me', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Update profile error:', err);
     res.status(500).json({ message: '更新失败，请稍后重试' });
+  }
+});
+
+// POST /api/auth/refresh - 用 refresh token 换新双 token（轮换 + 滑动续期）
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      return res.status(400).json({ message: '缺少 refresh token' });
+    }
+
+    const tokenHash = RefreshToken.hashToken(refreshToken);
+    const record = await RefreshToken.findByHash(tokenHash);
+
+    if (!record) {
+      return res.status(401).json({ message: '登录已过期，请重新登录' });
+    }
+
+    if (record.revoked_at) {
+      // 复用检测：已撤销的 token 被重放，视为泄露，撤销该用户全部会话
+      await RefreshToken.revokeAllForUser(record.user_id);
+      return res.status(401).json({ message: '登录已过期，请重新登录' });
+    }
+
+    if (new Date(record.expires_at).getTime() <= Date.now()) {
+      return res.status(401).json({ message: '登录已过期，请重新登录' });
+    }
+
+    // 轮换：撤销旧 token，签发新双 token
+    await RefreshToken.revokeByHash(tokenHash);
+    const user = await User.findById(record.user_id);
+    if (!user) {
+      return res.status(401).json({ message: '用户不存在' });
+    }
+
+    const tokens = await issueTokens(user);
+    res.json(tokens);
+  } catch (err) {
+    console.error('Refresh error:', err);
+    res.status(500).json({ message: '刷新失败，请稍后重试' });
+  }
+});
+
+// POST /api/auth/logout - 撤销当前 refresh token（凭 refresh token 即可撤销，无需 access token）
+router.post('/logout', async (req, res) => {
+  try {
+    const { refreshToken } = req.body || {};
+    if (refreshToken && typeof refreshToken === 'string') {
+      await RefreshToken.revokeByHash(RefreshToken.hashToken(refreshToken));
+    }
+    res.json({ message: '已退出登录' });
+  } catch (err) {
+    console.error('Logout error:', err);
+    res.status(500).json({ message: '退出失败，请稍后重试' });
   }
 });
 

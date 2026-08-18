@@ -169,6 +169,25 @@ const MIGRATIONS = [
       await conn.query('ALTER TABLE users MODIFY COLUMN api_key TEXT NULL');
     },
   },
+  {
+    version: 9,
+    description: '双 token 登录：refresh_tokens 表（refresh token 哈希存储）',
+    up: async (conn) => {
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS refresh_tokens (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          token_hash CHAR(64) NOT NULL,
+          expires_at DATETIME NOT NULL,
+          revoked_at DATETIME NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uk_token_hash (token_hash),
+          KEY idx_refresh_user (user_id),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+    },
+  },
 ];
 
 async function ensureTableExists(conn) {

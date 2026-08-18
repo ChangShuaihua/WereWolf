@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getAccessToken, getRefreshToken, refreshAccessToken, clearTokens } from '../utils/auth'
 const LoginView = () => import('../views/LoginView.vue')
 const LobbyView = () => import('../views/LobbyView.vue')
 const RoomView = () => import('../views/RoomView.vue')
@@ -49,15 +50,37 @@ function isTokenExpired(token) {
 }
 
 // Auth guard
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('werewolf_token')
+router.beforeEach(async (to, from, next) => {
+  const token = getAccessToken()
+  const refreshToken = getRefreshToken()
   const expired = isTokenExpired(token)
+
+  // 有 refresh token 但 access 已过期/缺失：先尝试无感恢复会话
+  if (refreshToken && (!token || expired)) {
+    try {
+      await refreshAccessToken()
+      if (to.meta.requiresAuth) {
+        next()
+      } else if (to.path === '/login') {
+        // 恢复成功后自动进入大厅/回房
+        const savedRoomCode = localStorage.getItem('werewolf_room_code')
+        next(savedRoomCode ? `/room/${savedRoomCode}` : '/lobby')
+      } else {
+        next()
+      }
+    } catch (e) {
+      clearTokens()
+      if (to.meta.requiresAuth) {
+        next('/login')
+      } else {
+        next()
+      }
+    }
+    return
+  }
+
   // W24: token 过期视为未登录
   if (to.meta.requiresAuth && (!token || expired)) {
-    if (expired && token) {
-      localStorage.removeItem('werewolf_token')
-      localStorage.removeItem('werewolf_user')
-    }
     next('/login')
   } else if (to.path === '/login' && token && !expired) {
     // Check for saved room code to auto-rejoin after refresh

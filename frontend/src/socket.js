@@ -1,5 +1,6 @@
 // 引入Socket.io客户端
 import { io } from 'socket.io-client'
+import { getAccessToken, refreshAccessToken, clearTokens } from './utils/auth'
 
 // 创建socket实例
 // W22: 显式配置重连参数，避免默认值不适用生产环境
@@ -16,7 +17,7 @@ const socket = io('/', {
 // 添加自定义的connect方法
 const origConnect = socket.connect.bind(socket) //bind的作用是将connect方法绑定到socket实例上。
 socket.connect = () => {// 重写connect方法
-  const token = localStorage.getItem('werewolf_token')// 获取token
+  const token = getAccessToken()// 获取最新 access token
   socket.auth = token ? { token } : {}// 设置socket.auth属性为token  socket.auth是Socket.IO 支持在连接阶段携带认证信息。
   return origConnect()// 调用原connect方法
 }
@@ -25,9 +26,16 @@ socket.connect = () => {// 重写connect方法
 socket.on('connect_error', (err) => {
   if (err.message === 'AUTH_REQUIRED' || err.message === 'AUTH_FAILED') {
     console.error('[socket] Authentication failed:', err.message)
-    localStorage.removeItem('werewolf_token')
-    localStorage.removeItem('werewolf_user')
-    window.location.href = '/login'
+    // 先尝试刷新 access token 再重连，失败才跳登录
+    refreshAccessToken()
+      .then(() => {
+        socket.auth = { token: getAccessToken() }
+        socket.connect()
+      })
+      .catch(() => {
+        clearTokens()
+        window.location.href = '/login'
+      })
   }
 })
 
@@ -38,8 +46,7 @@ socket.on('error', (err) => {
 // 监听强制登出事件
 socket.on('force_logout', (data) => {
   console.warn('[socket] Force logout:', data.message)
-  localStorage.removeItem('werewolf_token')
-  localStorage.removeItem('werewolf_user')
+  clearTokens()
   const params = new URLSearchParams({
     forceLogout: '1',
     reason: data.reason || '',
