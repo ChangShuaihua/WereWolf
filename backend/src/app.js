@@ -64,7 +64,7 @@ const server = http.createServer(app);
 // CORS configuration
 const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  : ['http://localhost:5172', 'http://127.0.0.1:5172'];
 
 app.use(
   cors({
