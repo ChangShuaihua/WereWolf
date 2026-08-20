@@ -1,6 +1,6 @@
 # 🐺 狼人杀 (Werewolf)
 
-一款基于 WebSocket 的多人实时狼人杀游戏，支持 AI 智能体，可在 AI 工坊中创建自定义 AI 角色。
+一款基于 WebSocket 的多人实时狼人杀游戏，支持 AI 智能体、规则问答、战绩统计与游戏复盘。玩家可以在 AI 工坊创建自定义 AI 角色，并在设置页配置自己的大模型 API。
 
 ## �️ 界面展示
 
@@ -137,6 +137,17 @@ Newwerewolf/
 ```
 
 ## 🚀 快速开始
+
+### Docker 部署（推荐）
+
+复制 `.env.production.example` 为 `.env`，填写数据库密码、JWT 密钥、LLM 配置加密密钥和允许的 API 主机后启动：
+
+```bash
+cp .env.production.example .env
+docker compose up -d --build
+```
+
+启动后访问 `http://localhost`。开发环境可使用 `docker compose -f docker-compose.dev.yml up --build`，前端访问 `http://localhost:5172`。
 
 ### 方式一：Docker 一键部署（推荐）
 
@@ -320,6 +331,8 @@ npm run dev
 | ---- | ---------------------- | ---------------- |
 | POST | `/api/auth/register`   | 用户注册         |
 | POST | `/api/auth/login`      | 用户登录         |
+| POST | `/api/auth/refresh`    | 刷新 Access Token |
+| POST | `/api/auth/logout`     | 撤销 Refresh Token |
 | GET  | `/api/auth/me`         | 获取当前用户信息 |
 | PUT  | `/api/auth/me`         | 更新用户资料     |
 | GET  | `/api/auth/api-config` | 获取 API 配置    |
@@ -333,6 +346,16 @@ npm run dev
 | POST   | `/api/ai-agents`     | 创建智能体     |
 | PUT    | `/api/ai-agents/:id` | 更新智能体     |
 | DELETE | `/api/ai-agents/:id` | 删除智能体     |
+
+### 设置、统计与复盘
+| 方法 | 路径 | 说明 |
+| ---- | ---- | ---- |
+| GET/PUT/DELETE | `/api/settings/llm` | 查看、保存或清除当前用户的 LLM 配置 |
+| POST | `/api/settings/llm/test` | 测试 LLM 连接 |
+| GET | `/api/stats/me` | 当前用户统计 |
+| GET | `/api/stats/history` | 游戏历史 |
+| GET | `/api/stats/leaderboard` | 排行榜 |
+| GET | `/api/replays/:id` | 获取游戏复盘 |
 
 ### 房间
 | 方法 | 路径              | 说明                      |
