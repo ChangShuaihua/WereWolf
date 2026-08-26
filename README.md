@@ -1,8 +1,8 @@
 # 🐺 狼人杀 (Werewolf)
 
-一款基于 WebSocket 的多人实时狼人杀游戏，支持 AI 智能体、规则问答、战绩统计与游戏复盘。玩家可以在 AI 工坊创建自定义 AI 角色，并在设置页配置自己的大模型 API。
+基于 Vue 3、Node.js 与 Socket.IO 构建的多人实时狼人杀平台。项目引入 LangChain 与 RAG，实现 AI 玩家决策、规则智能问答和自动游戏复盘；使用 Redis 与进程内缓存支撑在线状态和热点数据，支持多人房间同步、断线重连、自定义 AI 角色及用户级大模型配置。
 
-## �️ 界面展示
+## 🖼️ 界面展示
 
 ### 登录页
 ![登录页](pic/login.png)
@@ -22,7 +22,7 @@
 ### AI 工坊
 ![AI 工坊](pic/AI.png)
 
-## �🛠️ 技术栈
+## 🛠️ 技术栈
 
 ### 后端
 - **Node.js** + **Express** - Web 服务
@@ -138,42 +138,44 @@ Newwerewolf/
 
 ## 🚀 快速开始
 
-### Docker 部署（推荐）
-
-复制 `.env.production.example` 为 `.env`，填写数据库密码、JWT 密钥、LLM 配置加密密钥和允许的 API 主机后启动：
-
-```bash
-cp .env.production.example .env
-docker compose up -d --build
-```
-
-启动后访问 `http://localhost`。开发环境可使用 `docker compose -f docker-compose.dev.yml up --build`，前端访问 `http://localhost:5172`。
-
 ### 方式一：Docker 一键部署（推荐）
 
 > 环境要求：[Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 ```bash
 # 克隆项目
-git clone <your-repo-url>
+git clone https://github.com/ChangShuaihua/WereWolf.git
 cd Newwerewolf
 
+# 复制并修改生产配置
+cp .env.production.example .env
+
 # 一键启动（前端 + 后端 + MySQL + Redis）
-docker-compose up -d --build
+docker compose up -d --build
 ```
+
+启动前必须修改 `.env` 中的 `MYSQL_ROOT_PASSWORD`、`JWT_SECRET`、`LLM_CONFIG_ENCRYPTION_KEY`、`LLM_ALLOWED_HOSTS` 和 `CORS_ORIGINS`。密钥应使用不同的、长度不少于 32 个字符的随机值。
 
 启动后访问 **http://localhost** 即可开始游戏。
 
 ```bash
 # 查看日志
-docker-compose logs -f
+docker compose logs -f
 
 # 停止服务
-docker-compose down
+docker compose down
 
 # 停止并清空数据库与 Redis 数据
-docker-compose down -v
+docker compose down -v
 ```
+
+开发容器模式使用：
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+前端地址为 `http://localhost:5172`，后端地址为 `http://localhost:3001`。
 
 #### Docker 架构
 
