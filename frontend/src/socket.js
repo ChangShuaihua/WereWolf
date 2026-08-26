@@ -4,7 +4,7 @@ import { getAccessToken, refreshAccessToken, clearTokens } from './utils/auth'
 
 // 创建socket实例
 // W22: 显式配置重连参数，避免默认值不适用生产环境
-const socket = io('/', {
+const socket = io(import.meta.env.VITE_API_URL || '/', {
   autoConnect: false,// 禁止自动连接，在socket实例上添加了connect方法，用于手动连接
   transports: ['websocket', 'polling'], // 优先使用websocket
   path: '/socket.io', // socket.io服务器地址

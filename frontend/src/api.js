@@ -3,7 +3,10 @@ import router from './router'
 import { getAccessToken, refreshAccessToken, clearTokens } from './utils/auth'
 
 const api = axios.create({
-  baseURL: '/api',
+  // In production the Express API is deployed separately from the Vite app.
+  baseURL: import.meta.env.VITE_API_URL
+    ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
+    : '/api',
   timeout: 10000,
 })
 
