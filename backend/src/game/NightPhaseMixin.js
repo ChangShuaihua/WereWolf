@@ -54,14 +54,9 @@ const NightPhaseMixin = {
   async _runNightSequenceInner() {
     const alive = this.alivePlayers;
 
-    // 等待AI玩家提交夜行动
-    const aiPlayers = alive.filter(p => p.isAI);
-    if (aiPlayers.length > 0) {
-      await this._waitForAINightActions(aiPlayers);
-    }
-
-    // 1. 守卫行动（30秒）
+    // 1. 守卫行动（30秒）。AI 在本角色阶段再决策，才能用到上一夜的守护记录。
     const guards = alive.filter(p => this.roles[p.socketId] === ROLE.GUARD);
+    await this._waitForAINightActions(guards.filter(p => p.isAI));
     if (guards.length > 0) {
       this.broadcast('night_role_turn', {
         role: 'guard',
@@ -90,6 +85,7 @@ const NightPhaseMixin = {
 
     // 2. 狼人行动（30秒）
     const werewolves = alive.filter(p => this.roles[p.socketId] === ROLE.WEREWOLF);
+    await this._waitForAINightActions(werewolves.filter(p => p.isAI));
     const targets = alive.filter(p => this.roles[p.socketId] !== ROLE.WEREWOLF)
       .map(p => ({ id: p.socketId, username: this.getSeatNum(p.socketId) }));
 
@@ -137,6 +133,7 @@ const NightPhaseMixin = {
 
     // 3. 预言家行动（30秒）
     const seers = alive.filter(p => this.roles[p.socketId] === ROLE.SEER);
+    await this._waitForAINightActions(seers.filter(p => p.isAI));
     if (seers.length > 0) {
       this.broadcast('night_role_turn', {
         role: 'seer',
@@ -165,6 +162,7 @@ const NightPhaseMixin = {
 
     // 4. 女巫行动（30秒）
     const witches = alive.filter(p => this.roles[p.socketId] === ROLE.WITCH);
+    await this._waitForAINightActions(witches.filter(p => p.isAI));
     if (witches.length > 0) {
       this.broadcast('night_role_turn', {
         role: 'witch',
@@ -315,13 +313,17 @@ const NightPhaseMixin = {
       detail = `${this.getSeatNum(socketId)} (${getRoleName(this.roles[socketId])}) 选择了${target ? this.getSeatNum(targetId) : '未知'}`;
     }
 
-    this.gameHistory.push({
+    const historyEntry = {
       night: this.nightCount,
       action,
       actor: { id: socketId, username: this.getSeatNum(socketId), role: this.roles[socketId] },
       target: target ? { id: targetId, username: this.getSeatNum(targetId) } : null,
       detail,
-    });
+    };
+    if (action === 'check' && targetId) {
+      historyEntry.result = this.roles[targetId] === ROLE.WEREWOLF ? 'werewolf' : 'good';
+    }
+    this.gameHistory.push(historyEntry);
 
     this.emit('night_action', socketId, { action, targetId });
 

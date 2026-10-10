@@ -485,11 +485,33 @@ class GameRetriever {
    * 从问题中提取关键词
    */
   _extractKeywords(question) {
-    // 移除常见停用词
-    const stopWords = ['的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '上', '也', '很', '到', '说', '要', '去', '会', '着', '没有', '看', '好', '自己', '这', '那'];
-    let words = question.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, ' ').split(/\s+/);
-    words = words.filter(w => w.length > 0 && !stopWords.includes(w));
-    return words;
+    const stopWords = new Set(['的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '上', '也', '很', '到', '说', '要', '去', '会', '着', '没有', '看', '好', '自己', '这', '那', '吗', '呢', '啊', '什么', '怎么', '如何', '可以', '能不能', '能否']);
+    const domainTerms = [
+      '预言家', '女巫', '守卫', '猎人', '狼人', '村民', '平民', '好人',
+      '解药', '毒药', '守护', '开枪', '查验', '金水', '查杀', '投票', '放逐',
+      '平票', '遗言', '平安夜', '同守同救', '自爆', '悍跳', '夜晚', '白天',
+      '自救', '连守', '身份', '阵营', '规则', '毒人', '救人', '守人',
+    ].sort((a, b) => b.length - a.length);
+
+    const text = String(question || '');
+    const found = [];
+    for (const term of domainTerms) {
+      if (text.includes(term)) found.push(term);
+    }
+
+    let rest = text.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '');
+    for (const term of found) rest = rest.split(term).join('');
+    const latin = rest.match(/[a-zA-Z0-9]{2,}/g) || [];
+    found.push(...latin);
+    rest = rest.replace(/[a-zA-Z0-9]/g, '');
+
+    for (let i = 0; i < rest.length - 1 && found.length < 16; i += 1) {
+      const bigram = rest.slice(i, i + 2);
+      if ([...bigram].some(char => stopWords.has(char)) || stopWords.has(bigram)) continue;
+      if (!found.includes(bigram)) found.push(bigram);
+    }
+
+    return found;
   }
 
   /**

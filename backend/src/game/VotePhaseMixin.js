@@ -38,7 +38,7 @@ const VotePhaseMixin = {
       try {
         const voteTarget = await Promise.race([
           aiGameHandler._decideVote(this, aiPlayer),
-          timeoutPromise(3000)
+          timeoutPromise(10000)
         ]);
 
         if (voteTarget) {
