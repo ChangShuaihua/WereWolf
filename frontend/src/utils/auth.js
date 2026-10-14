@@ -32,7 +32,10 @@ export function refreshAccessToken() {
       if (!refreshToken) {
         throw new Error('NO_REFRESH_TOKEN')
       }
-      const { data } = await axios.post('/api/auth/refresh', { refreshToken })
+      const apiRoot = import.meta.env.VITE_API_URL
+        ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
+        : '/api'
+      const { data } = await axios.post(`${apiRoot}/auth/refresh`, { refreshToken })
       setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken })
       return data.accessToken
     })().finally(() => {
