@@ -500,8 +500,8 @@ function confirmSkip() {
 .witch-hint {
   text-align: center;
   padding: 10px 14px;
-  background: rgba(155, 109, 255, 0.1);
-  border: 1px solid rgba(155, 109, 255, 0.3);
+  background: var(--ai-glow);
+  border: 1px solid color-mix(in srgb, var(--ai-primary) 35%, transparent);
   border-radius: 10px;
   color: var(--ai-light);
   font-size: 0.85rem;

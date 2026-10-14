@@ -404,7 +404,7 @@ onMounted(async () => {
 
 <style scoped>
 .workshop-page {
-  min-height: calc(100vh - 76px);
+  min-height: calc(100vh - var(--header-h));
   background: var(--bg-primary);
   padding: 32px;
   position: relative;
@@ -414,9 +414,9 @@ onMounted(async () => {
   content: '';
   position: fixed;
   inset: 0;
-  background: 
-    radial-gradient(ellipse at 20% 0%, rgba(20, 184, 166, 0.1) 0%, transparent 40%),
-    radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.08) 0%, transparent 40%);
+  background:
+    radial-gradient(ellipse at 12% -8%, var(--atmosphere-a) 0%, transparent 46%),
+    radial-gradient(ellipse at 100% 100%, var(--atmosphere-b) 0%, transparent 42%);
   pointer-events: none;
   z-index: 0;
 }
@@ -458,15 +458,16 @@ onMounted(async () => {
 
 .btn-create {
   padding: 10px 20px;
-  background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
+  background: var(--ai-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: white;
+  color: var(--on-accent);
   font-weight: 600;
   font-size: 0.9rem;
+  letter-spacing: 0.06em;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px var(--ai-glow);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .btn-create:hover {
@@ -503,9 +504,9 @@ onMounted(async () => {
 }
 
 .agent-card.active {
-  background: rgba(20, 184, 166, 0.12);
+  background: var(--ai-glow);
   border-color: var(--ai-primary);
-  box-shadow: 0 0 20px rgba(20, 184, 166, 0.15);
+  box-shadow: none;
 }
 
 .agent-avatar {
@@ -547,7 +548,7 @@ onMounted(async () => {
 
 .tag.aggressive { background: rgba(229, 57, 53, 0.15); color: #FF5A5A; }
 .tag.cautious { background: rgba(79, 140, 255, 0.15); color: #78A9FF; }
-.tag.cunning { background: rgba(20, 184, 166, 0.15); color: var(--ai-secondary); }
+.tag.cunning { background: var(--ai-glow); color: var(--ai-secondary); }
 .tag.honest { background: rgba(54, 211, 153, 0.15); color: var(--status-success); }
 .tag.talkative { background: rgba(245, 185, 66, 0.15); color: var(--status-warning); }
 
@@ -573,7 +574,7 @@ onMounted(async () => {
 }
 
 .btn-edit:hover {
-  background: rgba(20, 184, 166, 0.15);
+  background: var(--ai-glow);
   border-color: var(--ai-primary);
   color: var(--ai-primary);
 }
@@ -833,9 +834,9 @@ onMounted(async () => {
 }
 
 .avatar-option.selected {
-  background: rgba(20, 184, 166, 0.2);
+  background: var(--ai-glow);
   border-color: var(--ai-primary);
-  box-shadow: 0 0 12px var(--ai-glow);
+  box-shadow: none;
 }
 
 .personality-form {
@@ -869,10 +870,10 @@ onMounted(async () => {
   -webkit-appearance: none;
   width: 18px;
   height: 18px;
-  background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
+  background: var(--ai-primary);
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: 0 0 8px var(--ai-glow);
+  box-shadow: none;
 }
 
 .style-selector {
@@ -898,7 +899,7 @@ onMounted(async () => {
 }
 
 .style-btn.active {
-  background: rgba(20, 184, 166, 0.2);
+  background: var(--ai-glow);
   border-color: var(--ai-primary);
   color: var(--ai-secondary);
 }
@@ -957,14 +958,15 @@ onMounted(async () => {
 
 .btn-save {
   padding: 10px 24px;
-  background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
+  background: var(--ai-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: white;
+  color: var(--on-accent);
   font-weight: 600;
+  letter-spacing: 0.06em;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 14px var(--ai-glow);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .btn-save:hover {

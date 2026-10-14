@@ -482,7 +482,7 @@ function returnToRoom() {
   align-items: center;
   justify-content: space-between;
   padding: 18px 22px;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(20, 184, 166, 0.08));
+  background: linear-gradient(160deg, var(--ai-glow), transparent 70%);
   border-bottom: var(--border-thin);
 }
 
@@ -618,7 +618,7 @@ function returnToRoom() {
   margin: 10px 0 6px;
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--ai-secondary, #22c55e);
+  color: var(--ai-secondary);
   line-height: 1.4;
 }
 
@@ -627,7 +627,7 @@ function returnToRoom() {
 .qa-text :deep(h4) { font-size: 0.9rem; }
 
 .qa-text :deep(strong) {
-  color: var(--ai-primary, #14b8a6);
+  color: var(--ai-primary);
   font-weight: 700;
 }
 
@@ -657,7 +657,7 @@ function returnToRoom() {
   background: var(--bg-tertiary);
   border-radius: 4px;
   font-size: 0.85em;
-  color: var(--ai-secondary, #22c55e);
+  color: var(--ai-secondary);
 }
 
 .rule-qa-loading .qa-text {
@@ -701,8 +701,8 @@ function returnToRoom() {
 
 .rule-quick-btn:hover:not(:disabled) {
   background: rgba(34, 197, 94, 0.15);
-  border-color: var(--ai-secondary, #22c55e);
-  color: var(--ai-secondary, #22c55e);
+  border-color: var(--ai-secondary);
+  color: var(--ai-secondary);
 }
 
 .rule-quick-btn:disabled {
@@ -736,7 +736,7 @@ function returnToRoom() {
 }
 
 .rule-input:focus {
-  border-color: var(--ai-secondary, #22c55e);
+  border-color: var(--ai-secondary);
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
 }
 
@@ -748,10 +748,10 @@ function returnToRoom() {
   padding: 10px 20px;
   flex-shrink: 0;
   white-space: nowrap;
-  background: linear-gradient(135deg, var(--ai-primary, #14b8a6), var(--ai-secondary, #22c55e));
+  background: var(--ai-primary);
   border: none;
   border-radius: var(--radius-md, 8px);
-  color: white;
+  color: var(--on-accent);
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
@@ -761,7 +761,7 @@ function returnToRoom() {
 
 .rule-submit-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+  box-shadow: var(--shadow-glow-ai);
 }
 
 .rule-submit-btn:disabled {

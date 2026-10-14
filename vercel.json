@@ -5,6 +5,9 @@
   "installCommand": "cd frontend && npm install",
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
+  "env": {
+    "VITE_API_URL": "https://item-press-solutions-beast.trycloudflare.com"
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

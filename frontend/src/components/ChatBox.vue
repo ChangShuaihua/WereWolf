@@ -218,8 +218,8 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-msg.ai-msg {
-  background: rgba(20, 184, 166, 0.08);
-  border-color: rgba(20, 184, 166, 0.2);
+  background: var(--ai-glow);
+  border-color: color-mix(in srgb, var(--ai-primary) 28%, transparent);
 }
 
 .chat-user {

@@ -376,10 +376,9 @@ async function handleSearchJoin() {
 .bg-gradient {
   position: absolute;
   inset: 0;
-  background: 
-    radial-gradient(ellipse at 20% 0%, rgba(155, 109, 255, 0.12) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 100%, rgba(229, 57, 53, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 50%, rgba(79, 140, 255, 0.05) 0%, transparent 60%);
+  background:
+    radial-gradient(ellipse at 12% -8%, var(--atmosphere-a) 0%, transparent 52%),
+    radial-gradient(ellipse at 100% 100%, var(--werewolf-glow) 0%, transparent 46%);
 }
 
 .bg-pattern {
@@ -406,25 +405,27 @@ async function handleSearchJoin() {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 40px 0;
-  gap: 40px;
+  padding: 28px 0 8px;
+  gap: 32px;
 }
 
 .hero-text {
-  flex: 1;
+  flex: 1 1 520px;
+  min-width: 0;
 }
 
 .hero-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
-  background: rgba(20, 184, 166, 0.1);
-  border: 1px solid rgba(20, 184, 166, 0.25);
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--ai-primary) 35%, transparent);
   border-radius: var(--radius-full);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   color: var(--ai-secondary);
   font-weight: 500;
+  letter-spacing: 0.12em;
   margin-bottom: 20px;
 }
 
@@ -443,18 +444,17 @@ async function handleSearchJoin() {
 }
 
 .hero-title {
-  font-size: 3.5rem;
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: clamp(2.15rem, 3.2vw, 2.85rem);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: 0.03em;
   margin: 0 0 16px;
+  color: var(--text-primary);
 }
 
 .title-gradient {
-  background: linear-gradient(135deg, var(--text-primary) 0%, var(--ai-light) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--ai-secondary);
 }
 
 .hero-desc {
@@ -466,7 +466,8 @@ async function handleSearchJoin() {
 
 .hero-stats {
   display: flex;
-  gap: 16px;
+  gap: 12px;
+  flex: 0 0 auto;
 }
 
 .stat-card {
@@ -481,8 +482,8 @@ async function handleSearchJoin() {
 }
 
 .stat-ai {
-  border-color: rgba(20, 184, 166, 0.3);
-  background: rgba(20, 184, 166, 0.08);
+  border-color: color-mix(in srgb, var(--ai-primary) 35%, transparent);
+  background: var(--ai-glow);
 }
 
 .stat-werewolf {
@@ -491,26 +492,19 @@ async function handleSearchJoin() {
 }
 
 .stat-value {
-  font-size: 2rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
 }
 
 .stat-ai .stat-value {
-  background: linear-gradient(135deg, var(--ai-light), var(--ai-primary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--ai-secondary);
 }
 
 .stat-werewolf .stat-value {
-  background: linear-gradient(135deg, var(--werewolf-light), var(--werewolf-primary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--werewolf-primary);
 }
 
 .stat-label {
@@ -525,8 +519,10 @@ async function handleSearchJoin() {
 }
 
 .section-title {
-  font-size: 1.8rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   color: var(--text-primary);
   margin: 0 0 8px;
 }
@@ -618,8 +614,10 @@ async function handleSearchJoin() {
 .mode-12 .mode-badge { background: rgba(239, 68, 68, 0.15); color: var(--werewolf-secondary); }
 
 .mode-title {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: var(--text-primary);
   margin: 0 0 8px;
 }
@@ -676,8 +674,8 @@ async function handleSearchJoin() {
 }
 
 .search-input-wrapper:focus-within {
-  border-color: rgba(155, 109, 255, 0.5);
-  box-shadow: 0 0 0 3px rgba(155, 109, 255, 0.1);
+  border-color: var(--ai-primary);
+  box-shadow: 0 0 0 3px var(--ai-glow);
 }
 
 .search-icon {
@@ -781,7 +779,7 @@ async function handleSearchJoin() {
 
 .room-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(155, 109, 255, 0.4);
+  border-color: color-mix(in srgb, var(--ai-primary) 45%, transparent);
   box-shadow: var(--shadow-md);
 }
 
@@ -802,8 +800,8 @@ async function handleSearchJoin() {
 
 .room-badge {
   padding: 3px 10px;
-  background: rgba(155, 109, 255, 0.15);
-  color: var(--ai-light);
+  background: var(--ai-glow);
+  color: var(--ai-secondary);
   border-radius: var(--radius-full);
   font-size: 0.78rem;
   font-weight: 500;
@@ -901,11 +899,12 @@ async function handleSearchJoin() {
   align-items: center;
   gap: 48px;
   padding: 48px;
-  background: linear-gradient(135deg, rgba(155, 109, 255, 0.1), rgba(109, 92, 231, 0.05));
+  background: linear-gradient(160deg, var(--ai-glow), transparent 62%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(155, 109, 255, 0.25);
+  border: 1px solid color-mix(in srgb, var(--ai-primary) 28%, transparent);
   border-radius: var(--radius-xl);
+  box-shadow: inset 0 1px 0 var(--hairline);
   position: relative;
   overflow: hidden;
 }
@@ -972,18 +971,20 @@ async function handleSearchJoin() {
 .workshop-label {
   display: inline-block;
   padding: 4px 12px;
-  background: rgba(155, 109, 255, 0.2);
-  color: var(--ai-light);
+  background: var(--ai-glow);
+  color: var(--ai-secondary);
   border-radius: var(--radius-full);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.16em;
   margin-bottom: 12px;
 }
 
 .workshop-title {
-  font-size: 1.8rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   color: var(--text-primary);
   margin: 0 0 8px;
 }

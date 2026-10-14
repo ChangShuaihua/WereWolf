@@ -69,6 +69,16 @@ services:
     depends_on:
       - backend
 
+  # 把本机后端暴露成公网 HTTPS，供 Vercel 上的前端连接。
+  # 地址在容器日志里，形如 https://xxxx.trycloudflare.com，容器重建后会变。
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: werewolf-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --protocol http2 --url http://backend:3001
+    depends_on:
+      - backend
+
 volumes:
   mysql_data:
   redis_data:

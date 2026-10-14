@@ -393,9 +393,9 @@ function handleLeave() {
   content: '';
   position: fixed;
   inset: 0;
-  background: 
-    radial-gradient(ellipse at 15% 0%, rgba(20, 184, 166, 0.1) 0%, transparent 45%),
-    radial-gradient(ellipse at 85% 100%, rgba(59, 130, 246, 0.08) 0%, transparent 45%);
+  background:
+    radial-gradient(ellipse at 12% -8%, var(--atmosphere-a) 0%, transparent 46%),
+    radial-gradient(ellipse at 100% 100%, var(--atmosphere-b) 0%, transparent 42%);
   pointer-events: none;
   z-index: 0;
 }
@@ -471,7 +471,7 @@ function handleLeave() {
 
 .room-code {
   font-family: var(--font-mono);
-  background: rgba(20, 184, 166, 0.1);
+  background: var(--ai-glow);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   color: var(--ai-secondary);
@@ -487,7 +487,7 @@ function handleLeave() {
 
 .room-mode-badge {
   padding: 2px 10px;
-  background: rgba(20, 184, 166, 0.1);
+  background: var(--ai-glow);
   color: var(--ai-secondary);
   border-radius: var(--radius-full);
   font-weight: 600;
@@ -646,8 +646,8 @@ function handleLeave() {
 
 .seat-me {
   border-color: var(--ai-primary);
-  background: rgba(20, 184, 166, 0.08);
-  box-shadow: 0 0 20px rgba(20, 184, 166, 0.1);
+  background: var(--ai-glow);
+  box-shadow: none;
 }
 
 .seat-host {
@@ -659,7 +659,7 @@ function handleLeave() {
 }
 
 .seat-ai {
-  border-color: rgba(20, 184, 166, 0.4);
+  border-color: color-mix(in srgb, var(--ai-primary) 45%, transparent);
 }
 
 .seat-index {
@@ -912,7 +912,7 @@ function handleLeave() {
   align-items: center;
   justify-content: space-between;
   padding: 18px 22px;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(20, 184, 166, 0.08));
+  background: linear-gradient(160deg, var(--ai-glow), transparent 70%);
   border-bottom: var(--border-thin);
 }
 

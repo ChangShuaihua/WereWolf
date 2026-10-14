@@ -249,10 +249,12 @@ onMounted(() => {
 }
 
 .score-value {
-  font-size: 3rem;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: 3.4rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--text-primary);
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 .score-rank {
@@ -317,7 +319,7 @@ onMounted(() => {
 
 .tab-btn.active {
   background: var(--ai-primary);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--ai-primary);
 }
 

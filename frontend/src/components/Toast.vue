@@ -61,7 +61,7 @@ function icon(type) {
 .toast-success { border-color: rgba(54, 211, 153, 0.4); }
 .toast-error { border-color: rgba(229, 57, 53, 0.4); }
 .toast-warning { border-color: rgba(245, 185, 66, 0.4); }
-.toast-info { border-color: rgba(155, 109, 255, 0.4); }
+.toast-info { border-color: color-mix(in srgb, var(--ai-primary) 45%, transparent); }
 
 .toast-icon {
   font-size: 1.1rem;
