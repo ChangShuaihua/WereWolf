@@ -10,6 +10,10 @@
     <!-- Role Reveal Overlay -->
     <RoleReveal v-if="showRoleReveal" :role="gameStore.myRole" :roleName="gameStore.myRoleName" @close="showRoleReveal = false" />
 
+    <div class="game-spectator-strip">
+      <SpectatorBar :spectators="roomStore.spectators" :watching="roomStore.isSpectator" />
+    </div>
+
     <!-- Top Bar -->
     <header class="game-header">
       <div class="game-header-left">
@@ -21,9 +25,13 @@
       </div>
 
       <div class="game-header-center">
+        <div class="my-role spectator-role" v-if="roomStore.isSpectator">
+          <span class="role-emoji">👁️</span>
+          <span class="role-name">观众</span>
+        </div>
         <div
           class="my-role"
-          v-if="gameStore.myRole"
+          v-else-if="gameStore.myRole"
           @click="showRoleReveal = true"
           title="点击查看角色详情"
         >
@@ -64,8 +72,8 @@
               <PlayerList
                 :players="gameStore.players"
                 :myId="mySocketId"
-                :showRoles="gameStore.isEnd"
-                :roles="gameOverRoles"
+                :showRoles="gameStore.isEnd || roomStore.isSpectator"
+                :roles="displayRoles"
                 :maxPlayers="roomStore.maxPlayers"
                 :candidates="gameStore.candidates"
                 :currentSpeaker="gameStore.currentSpeaker"
@@ -75,9 +83,26 @@
 
         <!-- Action Panels -->
         <section class="game-section action-section">
-          <div v-if="!hasAction" class="action-empty">当前没有需要你操作的内容</div>
+          <div v-if="roomStore.isSpectator" class="spectator-insight">
+            <div class="insight-title">全知视角</div>
+            <p v-if="gameStore.currentNightRole?.message" class="insight-now">{{ gameStore.currentNightRole.message }}</p>
+            <div v-if="gameStore.spectatorVotes.length" class="insight-block">
+              <div class="insight-label">本轮投票</div>
+              <p v-for="(vote, index) in gameStore.spectatorVotes" :key="`${vote.voterName}-${index}`">
+                {{ vote.voterName }} → {{ vote.targetName }}
+              </p>
+            </div>
+            <div class="insight-block">
+              <div class="insight-label">行动记录</div>
+              <p v-if="!gameStore.spectatorHistory.length" class="insight-empty">对局开始后，这里会显示全部身份行动</p>
+              <p v-for="(item, index) in gameStore.spectatorHistory" :key="`${item.night}-${index}`">
+                <span v-if="item.night">第{{ item.night }}夜 · </span>{{ item.detail }}
+              </p>
+            </div>
+          </div>
+          <div v-else-if="!hasAction" class="action-empty">当前没有需要你操作的内容</div>
           <NightPanel
-            v-if="gameStore.isNight && gameStore.myPlayer?.isAlive"
+            v-if="!roomStore.isSpectator && gameStore.isNight && gameStore.myPlayer?.isAlive"
             :prompt="gameStore.nightActionPrompt"
             :seerResult="gameStore.seerResult"
             :currentNightRole="gameStore.currentNightRole"
@@ -86,13 +111,13 @@
           />
 
           <HunterPanel
-            v-if="gameStore.hunterPrompt"
+            v-if="!roomStore.isSpectator && gameStore.hunterPrompt"
             :prompt="gameStore.hunterPrompt"
             @shoot="gameStore.submitHunterShoot"
           />
 
           <DayPanel
-            v-if="gameStore.isDay"
+            v-if="!roomStore.isSpectator && gameStore.isDay"
             :message="gameStore.message"
             :isAlive="gameStore.myPlayer?.isAlive"
             :currentSpeaker="gameStore.currentSpeaker"
@@ -104,7 +129,7 @@
           />
 
           <VotePanel
-            v-if="gameStore.isVote && gameStore.myPlayer?.isAlive"
+            v-if="!roomStore.isSpectator && gameStore.isVote && gameStore.myPlayer?.isAlive"
             :candidates="gameStore.candidates"
             :votedCount="gameStore.votedCount"
             :totalVoters="gameStore.totalVoters"
@@ -128,6 +153,7 @@
             :phase="gameStore.phase"
             :current-speaker="gameStore.currentSpeaker"
             :is-alive="gameStore.myPlayer?.isAlive ?? true"
+            :observer="roomStore.isSpectator"
             @send="handleChat" 
           />
         </section>
@@ -224,6 +250,7 @@ import { useUserStore } from '../stores/user'
 import socket, { authenticate } from '../socket'
 import PlayerList from '../components/PlayerList.vue'
 import ChatBox from '../components/ChatBox.vue'
+import SpectatorBar from '../components/SpectatorBar.vue'
 import RoleReveal from '../components/RoleReveal.vue'
 import Countdown from '../components/Countdown.vue'
 import NightPanel from '../components/NightPanel.vue'
@@ -363,6 +390,11 @@ const gameOverRoles = computed(() => {
   return map
 })
 
+const displayRoles = computed(() => {
+  if (roomStore.isSpectator) return gameStore.spectatorRoles
+  return gameOverRoles.value
+})
+
 async function reconnectToRoom() {
   const code = route.params.code
   if (!code) {
@@ -405,7 +437,8 @@ async function reconnectToRoom() {
     socket.once('room_joined', onJoined)
 
     // Now safe to emit — listener is registered
-    roomStore.joinRoom(code)
+    if (roomStore.isSpectator) roomStore.joinAsSpectator(code)
+    else roomStore.joinRoom(code)
   })
 
   if (roomStore.roomCode) {
@@ -424,7 +457,7 @@ onMounted(async () => {
     return
   }
 
-  if (!gameStore.roleRevealed && gameStore.myRole) {
+  if (!roomStore.isSpectator && !gameStore.roleRevealed && gameStore.myRole) {
     showRoleReveal.value = true
     gameStore.markRoleRevealed()
     setTimeout(() => { showRoleReveal.value = false }, 5000)
@@ -442,12 +475,12 @@ function handleChat(message) {
 }
 
 function goToLobby() {
-  socket.emit('leave_room', { roomCode: roomStore.roomCode })
+  roomStore.leaveRoom()
   router.push('/lobby')
 }
 
 function returnToRoom() {
-  socket.emit('reset_game')
+  if (!roomStore.isSpectator) socket.emit('reset_game')
   router.push(`/room/${roomStore.roomCode}`)
 }
 </script>
@@ -456,6 +489,60 @@ function returnToRoom() {
 /* C13: indicate the role badge is clickable to re-view role details */
 .my-role {
   cursor: pointer;
+}
+
+.spectator-role {
+  cursor: default;
+}
+
+.game-spectator-strip {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 24px 0;
+}
+
+.game-spectator-strip :deep(.spectator-bar) {
+  margin-bottom: 0;
+}
+
+.spectator-insight {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.insight-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.insight-now {
+  margin: 0;
+  color: #7dd3fc;
+  font-size: 0.86rem;
+}
+
+.insight-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.insight-block p {
+  margin: 0 0 4px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.insight-empty {
+  color: var(--text-secondary);
 }
 
 /* 游戏规则按钮 */

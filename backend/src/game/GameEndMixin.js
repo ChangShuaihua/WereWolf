@@ -43,12 +43,15 @@ const GameEndMixin = {
       seatIndex: p.seatIndex,
     }));
 
-    this.broadcast('game_over', {
+    this.lastResult = {
       winner,
       message,
       duration,
       players: result,
-    });
+    };
+
+    this.broadcast('game_over', this.lastResult);
+    this.pushSpectatorView();
 
     // Return game result for persistence
     this.emit(this.roomCode, '__game_result', {

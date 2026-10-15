@@ -115,8 +115,76 @@ const CoreMixin = {
       isSystem: true,
     });
 
+    this.notifySpectatorsOfStart();
+
     // 开始第一夜
     setTimeout(() => this.startNight(), 3000);
+  },
+
+  // 观众全知视角：身份、行动记录、当前投票
+  buildSpectatorView() {
+    const players = this.players.map(pl => ({
+      id: pl.socketId,
+      username: pl.username,
+      seatNum: this.getSeatNum(pl.socketId),
+      seatIndex: pl.seatIndex,
+      isAlive: pl.isAlive,
+      role: this.roles[pl.socketId] || '',
+      roleName: getRoleName(this.roles[pl.socketId] || ''),
+    }));
+
+    const history = (this.gameHistory || []).map(entry => {
+      if (!entry?.detail) return null;
+      let detail = entry.detail;
+      if (entry.action === 'check' && entry.result) {
+        detail += entry.result === 'werewolf' ? '，查验结果是狼人' : '，查验结果是好人';
+      }
+      return { night: entry.night || 0, detail };
+    }).filter(Boolean);
+
+    const votes = Object.entries(this.votes || {}).map(([voterId, targetId]) => ({
+      voterName: this.getSeatNum(voterId),
+      targetName: this.getSeatNum(targetId),
+    }));
+
+    return {
+      phase: this.phase,
+      nightCount: this.nightCount,
+      message: this.lastPhaseMessage || '',
+      players,
+      roles: Object.fromEntries(players.filter(p => p.id).map(p => [p.id, p.role])),
+      history,
+      votes,
+    };
+  },
+
+  pushSpectatorView() {
+    const { roomCache } = require('../utils/cache');
+    const room = roomCache.get(this.roomCode);
+    const spectators = (room?.spectators || []).filter(s => s.socketId);
+    if (!spectators.length) return;
+    const view = this.buildSpectatorView();
+    for (const spectator of spectators) {
+      this.emit(spectator.socketId, 'spectator_view', view);
+    }
+  },
+
+  notifySpectatorsOfStart() {
+    const { roomCache } = require('../utils/cache');
+    const room = roomCache.get(this.roomCode);
+    const spectators = (room?.spectators || []).filter(s => s.socketId);
+    if (!spectators.length) return;
+    const view = this.buildSpectatorView();
+    for (const spectator of spectators) {
+      this.emit(spectator.socketId, 'game_started', {
+        spectator: true,
+        role: '',
+        roleName: '',
+        players: view.players,
+        phase: this.phase === 'WAITING' ? 'NIGHT' : this.phase,
+      });
+      this.emit(spectator.socketId, 'spectator_view', view);
+    }
   },
 };
 

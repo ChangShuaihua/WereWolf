@@ -25,6 +25,9 @@ export const useGameStore = defineStore('game', () => {
   const currentNightRole = ref(null)
   const werewolfVoteState = ref(null)
   const roleRevealed = ref(sessionStorage.getItem('werewolf_role_revealed') === 'true')
+  const spectatorRoles = ref({})
+  const spectatorHistory = ref([])
+  const spectatorVotes = ref([])
 
   const isNight = computed(() => phase.value === 'NIGHT')
   const isDay = computed(() => phase.value === 'DAY')
@@ -42,13 +45,36 @@ export const useGameStore = defineStore('game', () => {
   // ---- named handlers ----
   function _onGameStarted(data) {
     console.log('[gameStore] game_started', data)
-    myRole.value = data.role
-    myRoleName.value = data.roleName
+    if (data.spectator) {
+      myRole.value = ''
+      myRoleName.value = ''
+      const roles = {}
+      ;(data.players || []).forEach(player => {
+        if (player.role) roles[player.id] = player.role
+      })
+      spectatorRoles.value = roles
+    } else {
+      myRole.value = data.role
+      myRoleName.value = data.roleName
+      spectatorRoles.value = {}
+      spectatorHistory.value = []
+      spectatorVotes.value = []
+    }
     players.value = data.players
     phase.value = data.phase || 'NIGHT'
     gameOver.value = null
     replayGameId.value = null
     myVote.value = ''
+  }
+
+  function _onSpectatorView(data) {
+    spectatorRoles.value = data.roles || {}
+    spectatorHistory.value = data.history || []
+    spectatorVotes.value = data.votes || []
+    if (data.players?.length) players.value = data.players
+    if (data.phase && data.phase !== 'WAITING') phase.value = data.phase
+    if (data.nightCount) nightCount.value = data.nightCount
+    if (data.message) message.value = data.message
   }
 
   function markRoleRevealed() {
@@ -184,6 +210,7 @@ export const useGameStore = defineStore('game', () => {
   // ---- bind / unbind ----
   function bindEvents() {
     socket.off('game_started', _onGameStarted)
+    socket.off('spectator_view', _onSpectatorView)
     socket.off('phase_change', _onPhaseChange)
     socket.off('night_action_prompt', _onNightActionPrompt)
     socket.off('seer_result', _onSeerResult)
@@ -199,6 +226,7 @@ export const useGameStore = defineStore('game', () => {
     socket.off('speaker_change', _onSpeakerChange)
 
     socket.on('game_started', _onGameStarted)
+    socket.on('spectator_view', _onSpectatorView)
     socket.on('phase_change', _onPhaseChange)
     socket.on('night_action_prompt', _onNightActionPrompt)
     socket.on('night_role_turn', _onNightRoleTurn)
@@ -220,6 +248,7 @@ export const useGameStore = defineStore('game', () => {
 
   function unbindEvents() {
     socket.off('game_started', _onGameStarted)
+    socket.off('spectator_view', _onSpectatorView)
     socket.off('phase_change', _onPhaseChange)
     socket.off('night_action_prompt', _onNightActionPrompt)
     socket.off('night_role_turn', _onNightRoleTurn)
@@ -273,6 +302,7 @@ export const useGameStore = defineStore('game', () => {
     phase, myRole, myRoleName, players, timeout, message, nightCount,
     candidates, myVote, votedCount, totalVoters, gameOver, replayGameId, seerResult, nightActionPrompt, hunterPrompt,
     currentSpeaker, speakerName, currentNightRole, werewolfVoteState, roleRevealed,
+    spectatorRoles, spectatorHistory, spectatorVotes,
     isNight, isDay, isVote, isEnd, myPlayer, alivePlayers,
     bindEvents, unbindEvents,
     submitNightAction, submitHunterShoot, submitVote, skipDay, sendChat,

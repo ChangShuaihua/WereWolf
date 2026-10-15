@@ -85,6 +85,7 @@ const VotePhaseMixin = {
       votedCount: Object.keys(this.votes).length,
       totalCount: this.alivePlayers.length,
     });
+    this.pushSpectatorView();
   },
 
   resolveVote() {
@@ -141,6 +142,7 @@ const VotePhaseMixin = {
     };
 
     this.broadcast('vote_result', result);
+    this.pushSpectatorView();
 
     this.broadcast('chat_message', {
       username: '系统',
@@ -211,6 +213,7 @@ const VotePhaseMixin = {
 
     this.clearTimer();
     this.phaseTimer = setTimeout(() => this.resolveVote(), 30000);
+    this.pushSpectatorView();
   },
 };
 

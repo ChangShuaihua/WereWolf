@@ -94,6 +94,83 @@ function buildSeats(room) {
   return seats;
 }
 
+const MAX_SPECTATORS = 30;
+
+function ensureSpectators(room) {
+  if (!room.spectators) room.spectators = [];
+  return room.spectators;
+}
+
+function buildPublicSpectators(room) {
+  return ensureSpectators(room)
+    .filter(spectator => spectator.socketId)
+    .map(spectator => ({
+      socketId: spectator.socketId,
+      userId: spectator.userId,
+      username: spectator.username,
+    }));
+}
+
+function removeSpectator(socket, code) {
+  const room = roomCache.get(code);
+  if (!room) return;
+  const before = ensureSpectators(room).length;
+  room.spectators = room.spectators.filter(spectator => spectator.socketId !== socket.id);
+  if (room.spectators.length !== before) {
+    roomCache.set(code, room);
+    broadcastRoomUpdate(code, room);
+  }
+  socket.leave(code);
+  const info = socketCache.get(socket.id);
+  if (info?.isSpectator && !room.players.some(player => player.socketId === socket.id)) {
+    socketCache.del(socket.id);
+  }
+}
+
+function phaseTimeoutSeconds(game) {
+  if (!game?.phaseTimer?._idleStart) return 0;
+  const remaining = Math.ceil((game.phaseTimer._idleEnd - Date.now()) / 1000);
+  return remaining > 0 ? remaining : 0;
+}
+
+function sendSpectatorCatchup(socket, game) {
+  if (!game || typeof game.buildSpectatorView !== 'function') return;
+  const view = game.buildSpectatorView();
+  socket.emit('game_started', {
+    spectator: true,
+    role: '',
+    roleName: '',
+    players: view.players,
+    phase: game.phase,
+  });
+  socket.emit('spectator_view', view);
+  socket.emit('phase_change', {
+    phase: game.phase,
+    timeout: phaseTimeoutSeconds(game),
+    message: game.lastPhaseMessage || '',
+    nightCount: game.nightCount,
+    candidates: game.candidates || [],
+    currentSpeaker: game.currentSpeaker || null,
+    speakerName: game.currentSpeaker ? game.getSeatNum(game.currentSpeaker) : '',
+  });
+  if (game.phase === 'VOTE') {
+    socket.emit('vote_update', {
+      votedCount: Object.keys(game.votes || {}).length,
+      totalCount: game.alivePlayers.length,
+    });
+  }
+  if (game.phase === 'DAY' && game.currentSpeaker) {
+    socket.emit('speaker_change', {
+      currentSpeaker: game.currentSpeaker,
+      speakerName: game.getSeatNum(game.currentSpeaker),
+      hasSpoken: Array.from(game.hasSpoken || []),
+    });
+  }
+  if (game.phase === 'END' && game.lastResult) {
+    socket.emit('game_over', game.lastResult);
+  }
+}
+
 function buildPublicPlayers(players) {
   return players.map(player => ({
     socketId: player.socketId,
@@ -136,6 +213,7 @@ function createRoom(socket, username, userId, maxPlayers = 6) {
     hostId: socket.id,
     hostUserId: userId,
     players: [],
+    spectators: [],
     chat: [],
     maxPlayers,
     createdAt: Date.now(),
@@ -477,7 +555,16 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     }
     
     broadcastRoomUpdate(code);
-    socket.emit('room_joined', { code, players: buildPublicPlayers(room.players), seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers, chat: room.chat || [] });
+    socket.emit('room_joined', {
+      code,
+      players: buildPublicPlayers(room.players),
+      seats: buildSeats(room),
+      spectators: buildPublicSpectators(room),
+      hostId: room.hostId,
+      maxPlayers: room.maxPlayers,
+      chat: room.chat || [],
+      isSpectator: false,
+    });
     console.log(`[roomHandler] ${username} reconnected to room ${code}`);
     return room;
   }
@@ -524,6 +611,9 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
   }
   player.seatIndex = seatIndex;
 
+  ensureSpectators(room);
+  room.spectators = room.spectators.filter(spectator => spectator.userId !== userId && spectator.socketId !== socket.id);
+
   room.players.push(player);
   socket.join(code);
 
@@ -541,12 +631,106 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
 
   console.log(`[roomHandler] ${username} joined room ${code}, players=${room.players.length}`);
 
-  socket.emit('room_joined', { code, players: buildPublicPlayers(room.players), seats: buildSeats(room), hostId: room.hostId, maxPlayers: room.maxPlayers });
+  socket.emit('room_joined', {
+    code,
+    players: buildPublicPlayers(room.players),
+    seats: buildSeats(room),
+    spectators: buildPublicSpectators(room),
+    hostId: room.hostId,
+    maxPlayers: room.maxPlayers,
+    isSpectator: false,
+  });
   broadcastRoomUpdate(code, room);
   
   const io = require('../app').getIO();
   io.to(code).emit('chat_message', welcomeMsg);
 
+  return room;
+}
+
+/**
+ * Join a room as a spectator. Spectators do not take a seat and can watch an in-progress game.
+ */
+function joinAsSpectator(socket, code, username, userId) {
+  const room = roomCache.get(code);
+  if (!room) {
+    socket.emit('error', { message: '房间不存在或已过期' });
+    return null;
+  }
+
+  const game = gameCache.get(code);
+  const gameActive = Boolean(game && game.phase && game.phase !== 'WAITING');
+  const seated = room.players.find(player => player.userId === userId || player.socketId === socket.id);
+  if (seated && game && game.phase !== 'WAITING' && game.phase !== 'END') {
+    socket.emit('error', { message: '对局进行中，无法加入观众席' });
+    return null;
+  }
+
+  ensureSpectators(room);
+  if (seated) {
+    if (room.spectators.filter(item => item.socketId).length >= MAX_SPECTATORS) {
+      socket.emit('error', { message: '观众席已满' });
+      return null;
+    }
+    const wasHost = room.hostId === seated.socketId || room.hostUserId === seated.userId;
+    room.players = room.players.filter(player => player !== seated);
+    if (wasHost) {
+      const nextHuman = room.players.find(player => !player.isAI && player.socketId);
+      if (nextHuman) {
+        room.hostId = nextHuman.socketId;
+        room.hostUserId = nextHuman.userId;
+      }
+    }
+  }
+
+  let spectator = room.spectators.find(item => item.userId === userId);
+  const isReconnect = Boolean(spectator);
+  if (spectator) {
+    spectator.socketId = socket.id;
+    spectator.username = username;
+  } else {
+    if (room.spectators.filter(item => item.socketId).length >= MAX_SPECTATORS) {
+      socket.emit('error', { message: '观众席已满' });
+      return null;
+    }
+    spectator = { socketId: socket.id, userId, username };
+    room.spectators.push(spectator);
+  }
+
+  socket.join(code);
+  socketCache.set(socket.id, { userId, username, roomCode: code, isSpectator: true });
+  roomCache.set(code, room);
+
+  socket.emit('room_joined', {
+    code,
+    players: buildPublicPlayers(room.players),
+    seats: buildSeats(room),
+    spectators: buildPublicSpectators(room),
+    hostId: room.hostId,
+    maxPlayers: room.maxPlayers,
+    chat: room.chat || [],
+    isSpectator: true,
+    gameActive,
+  });
+  broadcastRoomUpdate(code, room);
+
+  if (!isReconnect) {
+    const welcomeMsg = {
+      username: '系统',
+      message: `👁️ ${username} 进入了观众席`,
+      timestamp: Date.now(),
+      isSystem: true,
+    };
+    room.chat.push(welcomeMsg);
+    if (room.chat.length > 100) room.chat = room.chat.slice(-100);
+    roomCache.set(code, room);
+    const io = require('../app').getIO();
+    io.to(code).emit('chat_message', welcomeMsg);
+  }
+
+  if (gameActive) sendSpectatorCatchup(socket, game);
+
+  console.log(`[roomHandler] ${username} spectating room ${code}`);
   return room;
 }
 
@@ -597,7 +781,13 @@ function leaveRoom(socket, code, isDisconnect = false) {
   const room = roomCache.get(code);
   if (!room) return;
 
+  const spectator = ensureSpectators(room).find(item => item.socketId === socket.id);
   const player = room.players.find(p => p.socketId === socket.id);
+  if (spectator && !player) {
+    removeSpectator(socket, code);
+    return;
+  }
+
   const leavingUserId = player?.userId;
 
   if (isDisconnect && player) {
@@ -687,6 +877,29 @@ function addChat(socket, code, message) {
   if (!room) { console.log('[roomHandler] addChat: room not found', code); return; }
 
   const player = room.players.find(p => p.socketId === socket.id);
+  const spectator = ensureSpectators(room).find(item => item.socketId === socket.id);
+  if (!player && spectator) {
+    const game = gameCache.get(code);
+    if (game && game.phase !== 'WAITING') {
+      socket.emit('error', { message: '观战中不能发言' });
+      return;
+    }
+    if (isChatRateLimited(socket.id)) {
+      socket.emit('error', { message: '发言过快，请稍后再试' });
+      return;
+    }
+    const chatMsg = {
+      username: `观众·${spectator.username}`,
+      message,
+      timestamp: Date.now(),
+    };
+    room.chat.push(chatMsg);
+    if (room.chat.length > 100) room.chat = room.chat.slice(-100);
+    roomCache.set(code, room);
+    const io = require('../app').getIO();
+    io.to(code).emit('chat_message', chatMsg);
+    return;
+  }
   if (!player) { console.log('[roomHandler] addChat: player not found, socketId=', socket.id); return; }
 
   // Check chat permissions based on game phase
@@ -802,6 +1015,7 @@ function broadcastRoomUpdate(code, room = null) {
       seatIndex: s.seatIndex,
     })),
     seats,
+    spectators: buildPublicSpectators(room),
     hostId: room.hostId,
     maxPlayers: room.maxPlayers,
   });
@@ -816,6 +1030,15 @@ function handleDisconnect(socket) {
 
   const code = info.roomCode;
   const userId = info.userId;
+  const room = roomCache.get(code);
+
+  if (room && ensureSpectators(room).some(item => item.socketId === socket.id)) {
+    const stillPlayer = room.players.some(player => player.socketId === socket.id);
+    if (!stillPlayer) {
+      removeSpectator(socket, code);
+      return;
+    }
+  }
 
   // Check if there's an active game
   const game = gameCache.get(code);
@@ -823,7 +1046,6 @@ function handleDisconnect(socket) {
 
   if (isGameActive) {
     // Game in progress: give player time to reconnect (60 seconds)
-    const room = roomCache.get(code);
     if (room) {
       const player = room.players.find(p => p.socketId === socket.id);
       if (player) {
@@ -882,4 +1104,4 @@ function handleDisconnect(socket) {
   }
 }
 
-module.exports = { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits };
+module.exports = { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits };

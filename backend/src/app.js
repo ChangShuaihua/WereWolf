@@ -8,7 +8,7 @@ require('dotenv').config();
 const { initDB } = require('./config/db');
 const { initRedis, getRedisStatus, shutdownRedis } = require('./config/redis');
 const { syncAllUsersToRedis } = require('./services/statsService');
-const { roomCache } = require('./utils/cache');
+const { roomCache, gameCache } = require('./utils/cache');
 const { getUserCount } = require('./utils/userSocketMap');
 const aiAgentManager = require('./ai/AIAgentManager');
 const authRoutes = require('./routes/auth');
@@ -153,11 +153,14 @@ app.get('/api/rooms', authMiddleware, (req, res) => {
         const host =
           connectedPlayers.find((p) => p.socketId === room.hostId) ||
           connectedPlayers.find((p) => Number(p.userId) === Number(room.hostUserId));
+        const game = gameCache.get(room.code);
         rooms.push({
           code: room.code,
           hostUsername: host?.username || '未知',
           playerCount: connectedPlayers.length,
           maxPlayers: Number(room.maxPlayers) || 6,
+          spectatorCount: (room.spectators || []).filter(s => s.socketId).length,
+          inGame: Boolean(game && game.phase && game.phase !== 'WAITING'),
         });
       }
     }
@@ -172,15 +175,18 @@ app.get('/api/room/:code', authMiddleware, (req, res) => {
   if (!room) {
     return res.status(404).json({ message: '房间不存在' });
   }
-  const { buildSeats, buildPublicPlayers } = require('./socket/roomHandler');
+  const { buildSeats, buildPublicPlayers, buildPublicSpectators } = require('./socket/roomHandler');
   const connectedPlayers = room.players.filter((p) => p.socketId !== null);
+  const game = gameCache.get(room.code);
   res.json({
     code: room.code,
     hostId: room.hostId,
     players: buildPublicPlayers(connectedPlayers),
     seats: buildSeats(room),
+    spectators: buildPublicSpectators(room),
     chat: room.chat,
     maxPlayers: Number(room.maxPlayers) || 6,
+    inGame: Boolean(game && game.phase && game.phase !== 'WAITING'),
   });
 });
 

@@ -93,6 +93,7 @@ const props = defineProps({
   phase: { type: String, default: 'WAITING' },
   currentSpeaker: { type: String, default: null },
   isAlive: { type: Boolean, default: true },
+  observer: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['send'])
@@ -115,6 +116,8 @@ const PHASE_LABELS = {
 const canSpeak = computed(() => {
   const phase = props.phase
   const mySocketId = socket.id
+
+  if (props.observer && phase !== 'WAITING') return false
   
   // Waiting phase: everyone can speak
   if (phase === 'WAITING') return true
@@ -144,6 +147,8 @@ const canSpeak = computed(() => {
 // Hint message when chat is disabled
 const disabledHint = computed(() => {
   const phase = props.phase
+
+  if (props.observer && phase !== 'WAITING') return '👁️ 观战中不能发言'
   
   if (phase === 'WAITING') return ''
   if (phase === 'NIGHT') return '🌙 夜晚阶段不能发言'

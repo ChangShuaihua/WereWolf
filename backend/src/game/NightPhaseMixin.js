@@ -359,6 +359,8 @@ const NightPhaseMixin = {
         this.witchPoisonUsed = true;
         break;
     }
+
+    this.pushSpectatorView();
   },
 
   // ==================== Resolve Night ====================
@@ -458,6 +460,8 @@ const NightPhaseMixin = {
       detail: nightDetail,
     });
 
+    this.pushSpectatorView();
+
     // Check for hunter death trigger
     let hunterDeath = null;
     let hunterKilledByPoison = false;
@@ -534,6 +538,7 @@ const NightPhaseMixin = {
       message: `${this.getSeatNum(hunterId)}开枪带走了${this.getSeatNum(randomTarget.socketId)}`,
     });
 
+    this.pushSpectatorView();
     this._continueAfterHunter();
   },
 

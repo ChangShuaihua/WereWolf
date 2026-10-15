@@ -120,7 +120,7 @@
             v-for="room in filteredRooms"
             :key="room.code"
             class="room-card"
-            @click="handleJoinRoom(room.code)"
+            @click="room.inGame ? undefined : handleJoinRoom(room.code)"
           >
             <div class="room-header">
               <div class="room-code">{{ room.code }}</div>
@@ -142,11 +142,13 @@
                   ></div>
                 </div>
                 <span class="players-count">{{ room.playerCount }}/{{ room.maxPlayers }}</span>
+                <span v-if="room.spectatorCount" class="spectator-count">👁️ {{ room.spectatorCount }}</span>
               </div>
             </div>
             <div class="room-footer">
+              <span v-if="room.inGame" class="room-status playing">对局中</span>
               <span 
-                v-if="room.playerCount >= room.maxPlayers" 
+                v-else-if="room.playerCount >= room.maxPlayers" 
                 class="room-status full"
               >
                 已满员
@@ -155,13 +157,24 @@
                 <span class="status-dot"></span>
                 等待中
               </span>
-              <button 
-                class="btn btn-sm" 
-                :class="room.playerCount >= room.maxPlayers ? 'btn-secondary' : 'btn-primary'"
-                :disabled="room.playerCount >= room.maxPlayers"
-              >
-                {{ room.playerCount >= room.maxPlayers ? '已满' : '加入' }}
-              </button>
+              <div class="room-card-actions">
+                <button
+                  class="btn btn-sm btn-secondary"
+                  type="button"
+                  @click.stop="handleSpectate(room.code)"
+                >
+                  观战
+                </button>
+                <button 
+                  class="btn btn-sm" 
+                  type="button"
+                  :class="room.playerCount >= room.maxPlayers || room.inGame ? 'btn-secondary' : 'btn-primary'"
+                  :disabled="room.playerCount >= room.maxPlayers || room.inGame"
+                  @click.stop="handleJoinRoom(room.code)"
+                >
+                  {{ room.inGame ? '对局中' : room.playerCount >= room.maxPlayers ? '已满' : '加入' }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -236,7 +249,10 @@ function getZoneRooms(mode) {
   return rooms.value.filter(r => Number(r.maxPlayers) === Number(mode))
 }
 
-function _onRoomJoined(data) { router.push(`/room/${data.code}`) }
+function _onRoomJoined(data) {
+  if (data.isSpectator && data.gameActive) router.push(`/game/${data.code}`)
+  else router.push(`/room/${data.code}`)
+}
 function _onRoomCreated(data) { rooms.value.unshift(data) }
 function _onRoomDeleted(data) { rooms.value = rooms.value.filter(r => r.code !== data.code) }
 
@@ -349,6 +365,11 @@ async function handleCreateRoom(mode) {
 async function handleJoinRoom(code) {
   if (!code) return
   roomStore.joinRoom(code)
+}
+
+function handleSpectate(code) {
+  if (!code) return
+  roomStore.joinAsSpectator(code)
 }
 
 async function handleSearchJoin() {
@@ -863,6 +884,23 @@ async function handleSearchJoin() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+}
+
+.room-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.spectator-count {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.room-status.playing {
+  color: #7dd3fc;
 }
 
 .room-status {

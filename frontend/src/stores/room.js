@@ -6,14 +6,23 @@ import { useGameStore } from './game'
 
 export const useRoomStore = defineStore('room', () => {
   const ROOM_CODE_KEY = 'werewolf_room_code'
+  const SPECTATOR_KEY = 'werewolf_is_spectator'
 
   const roomCode = ref(localStorage.getItem(ROOM_CODE_KEY) || '')
   const players = ref([])
   const seats = ref([])
+  const spectators = ref([])
   const hostId = ref('')
   const chat = ref([])
   const maxPlayers = ref(6)
+  const isSpectator = ref(localStorage.getItem(SPECTATOR_KEY) === '1')
   const isInRoom = computed(() => !!roomCode.value)
+
+  function setSpectatorFlag(on) {
+    isSpectator.value = Boolean(on)
+    if (isSpectator.value) localStorage.setItem(SPECTATOR_KEY, '1')
+    else localStorage.removeItem(SPECTATOR_KEY)
+  }
 
   const userStore = useUserStore()
 
@@ -30,8 +39,10 @@ export const useRoomStore = defineStore('room', () => {
     players.value = data.players
     const mp = Number(data.maxPlayers) || 6
     seats.value = data.seats || buildDefaultSeats(mp)
+    spectators.value = data.spectators || []
     hostId.value = data.hostId
     maxPlayers.value = mp
+    setSpectatorFlag(data.isSpectator === true)
     if (data.chat) {
       chat.value = data.chat
     }
@@ -42,6 +53,7 @@ export const useRoomStore = defineStore('room', () => {
     players.value = [...data.players]
     const mp = Number(data.maxPlayers) || maxPlayers.value
     seats.value = data.seats || buildDefaultSeats(mp)
+    if (data.spectators) spectators.value = data.spectators
     hostId.value = data.hostId
     if (data.maxPlayers) maxPlayers.value = mp
   }
@@ -107,15 +119,26 @@ export const useRoomStore = defineStore('room', () => {
     })
   }
 
+  function joinAsSpectator(code) {
+    console.log('[roomStore] joinAsSpectator', code)
+    socket.emit('join_as_spectator', {
+      roomCode: code,
+      username: userStore.user?.username,
+      userId: userStore.user?.id,
+    })
+  }
+
   function leaveRoom() {
     socket.emit('leave_room', { roomCode: roomCode.value })
     roomCode.value = ''
     localStorage.removeItem(ROOM_CODE_KEY)
     players.value = []
     seats.value = []
+    spectators.value = []
     hostId.value = ''
     chat.value = []
     maxPlayers.value = 6
+    setSpectatorFlag(false)
   }
 
   function toggleReady() {
@@ -184,12 +207,12 @@ export const useRoomStore = defineStore('room', () => {
   })
 
   return {
-    roomCode, players, seats, hostId, chat, maxPlayers, isInRoom,
+    roomCode, players, seats, spectators, hostId, chat, maxPlayers, isInRoom, isSpectator,
     mySeat, myPlayer,
     bindEvents, unbindEvents,
-    createRoom, joinRoom, leaveRoom,
+    createRoom, joinRoom, joinAsSpectator, leaveRoom,
     toggleReady, startGame, sendChat, addAIPlayer, removeAIPlayer, isHost, allReady,
-    clearRoomCode: () => { roomCode.value = ''; localStorage.removeItem(ROOM_CODE_KEY) },
+    clearRoomCode: () => { roomCode.value = ''; localStorage.removeItem(ROOM_CODE_KEY); setSpectatorFlag(false) },
     getSavedRoomCode: () => localStorage.getItem(ROOM_CODE_KEY),
   }
 })

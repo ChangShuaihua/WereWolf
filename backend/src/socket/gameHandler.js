@@ -192,7 +192,9 @@ function handleHunterShoot(socket, code, { targetId }) {
     timestamp: Date.now(),
     isSystem: true,
   });
-  
+
+  game.pushSpectatorView();
+
   // Continue game
   game._continueAfterHunter();
 }

@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { createRoom, joinRoom, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
+const { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
 const { kickOldSocket, removeUserSocket, getUserBySocket } = require('../utils/userSocketMap');
@@ -83,6 +83,18 @@ function initSocket(io) {
       }
       console.log(`[socket] join_room ${roomCode} from ${finalUsername} (${socket.id})`);
       joinRoom(socket, roomCode, finalUsername, finalUserId);
+    });
+
+    socket.on('join_as_spectator', ({ roomCode, username, userId } = {}) => {
+      if (socket.kicked) return;
+      const finalUsername = socket.username || username;
+      const finalUserId = socket.userId || userId;
+      if (!finalUsername || !finalUserId) {
+        socket.emit('error', { message: '用户未认证，无法观战' });
+        return;
+      }
+      console.log(`[socket] join_as_spectator ${roomCode} from ${finalUsername} (${socket.id})`);
+      joinAsSpectator(socket, roomCode, finalUsername, finalUserId);
     });
 
     // Leave room
@@ -253,6 +265,10 @@ function initSocket(io) {
     socket.on('reset_game', () => {
       const info = socketCache.get(socket.id);
       if (!info?.roomCode) return;
+      if (info.isSpectator) {
+        socket.emit('error', { message: '观众不能重置对局' });
+        return;
+      }
       const game = gameCache.get(info.roomCode);
       if (game?.phase === PHASE.END) resetGame(info.roomCode);
     });

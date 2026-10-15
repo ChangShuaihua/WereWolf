@@ -26,6 +26,7 @@
             <span class="btn-label">游戏规则</span>
           </button>
           <button
+            v-if="!roomStore.isSpectator"
             class="btn"
             :class="myIsReady ? 'btn-ready' : 'btn-secondary'"
             @click="roomStore.toggleReady()"
@@ -37,6 +38,17 @@
 
       <div class="room-content">
         <div class="room-players-panel">
+          <div class="spectator-row">
+            <SpectatorBar :spectators="roomStore.spectators" :watching="roomStore.isSpectator" />
+            <button
+              v-if="!roomStore.isSpectator"
+              class="btn btn-secondary spectator-join-btn"
+              type="button"
+              @click="handleJoinSpectator"
+            >
+              加入观众席
+            </button>
+          </div>
           <div class="panel-title">
             <span class="panel-title-icon">👥</span>
             <span>玩家列表</span>
@@ -132,7 +144,7 @@
         <span class="panel-title-icon">💬</span>
         <span>房间聊天</span>
       </div>
-      <ChatBox :messages="roomStore.chat" @send="roomStore.sendChat" />
+      <ChatBox :messages="roomStore.chat" :observer="roomStore.isSpectator" @send="roomStore.sendChat" />
     </div>
 
     <!-- 游戏规则问答弹窗卡片 -->
@@ -214,6 +226,7 @@ import { useUserStore } from '../stores/user'
 import socket, { authenticate } from '../socket'
 import api from '../api'
 import ChatBox from '../components/ChatBox.vue'
+import SpectatorBar from '../components/SpectatorBar.vue'
 import { renderMarkdown } from '../utils/markdown'
 
 const router = useRouter()
@@ -296,7 +309,14 @@ const allSeats = computed(() => {
   return result
 })
 
-function _onGameStarted() { router.push(`/game/${roomStore.roomCode}`) }
+function _onGameStarted(data) {
+  if (data?.phase === 'END') return
+  router.push(`/game/${roomStore.roomCode}`)
+}
+
+function handleJoinSpectator() {
+  roomStore.joinAsSpectator(roomStore.roomCode)
+}
 
 function handleAddAI() {
   roomStore.addAIPlayer(selectedAgentId.value)
@@ -320,6 +340,7 @@ async function fetchRoomInfo() {
     roomStore.hostId = data.hostId
     roomStore.players = data.players
     roomStore.seats = data.seats || []
+    roomStore.spectators = data.spectators || []
     roomStore.chat = data.chat || []
     roomStore.maxPlayers = Number(data.maxPlayers) || 6
   } catch (e) {
@@ -367,7 +388,8 @@ onMounted(async () => {
       resolve()
     }
     socket.once('room_joined', onJoined)
-    roomStore.joinRoom(roomStore.roomCode)
+    if (roomStore.isSpectator) roomStore.joinAsSpectator(roomStore.roomCode)
+    else roomStore.joinRoom(roomStore.roomCode)
   })
 })
 
@@ -529,6 +551,26 @@ function handleLeave() {
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
+}
+
+.spectator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.spectator-row :deep(.spectator-bar) {
+  margin-bottom: 0;
+}
+
+.spectator-join-btn {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 0.84rem;
 }
 
 .room-players-panel {
