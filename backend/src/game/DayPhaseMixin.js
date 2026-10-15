@@ -1,4 +1,4 @@
-const { PHASE, ROLE, TIMERS } = require('./constants');
+const { PHASE, TIMERS } = require('./constants');
 
 const DayPhaseMixin = {
   // ==================== Discussion Phase ====================
@@ -68,12 +68,6 @@ const DayPhaseMixin = {
           console.log(`[GameEngine] AI ${aiPlayer.username} generating first message...`);
           let message = await aiGameHandler._generateChatMessage(this, aiPlayer);
 
-          // Fallback to template message if empty
-          if (!message || !message.trim()) {
-            console.warn(`[GameEngine] AI ${aiPlayer.username} generated empty message, using fallback`);
-            message = aiGameHandler._getFallbackChatMessage(this, aiPlayer);
-          }
-
           if (message && message.trim()) {
             const finalMessage = this._ensureMessageLength(message, aiPlayer);
             console.log(`[GameEngine] AI ${aiPlayer.username} broadcasting: "${finalMessage?.substring(0, 50)}..."`);
@@ -100,12 +94,6 @@ const DayPhaseMixin = {
           console.log(`[GameEngine] AI ${aiPlayer.username} generating second message...`);
           let message2 = await aiGameHandler._generateChatMessage(this, aiPlayer);
 
-          // Fallback to template message if empty
-          if (!message2 || !message2.trim()) {
-            console.warn(`[GameEngine] AI ${aiPlayer.username} generated empty second message, using fallback`);
-            message2 = aiGameHandler._getFallbackChatMessage(this, aiPlayer);
-          }
-
           if (message2 && message2.trim()) {
             const finalMessage2 = this._ensureMessageLength(message2, aiPlayer);
             console.log(`[GameEngine] AI ${aiPlayer.username} broadcasting second: "${finalMessage2?.substring(0, 50)}..."`);
@@ -117,20 +105,6 @@ const DayPhaseMixin = {
           }
         } catch (error) {
           console.error(`[GameEngine] AI discussion error for ${aiPlayer.username}:`, error);
-
-          // Emergency fallback: send a basic message
-          try {
-            const fallbackMessage = aiGameHandler._getFallbackChatMessage(this, aiPlayer);
-            if (fallbackMessage) {
-              this.broadcast('chat_message', {
-                username: this.getSeatNum(aiPlayer.socketId),
-                message: fallbackMessage,
-                timestamp: Date.now(),
-              });
-            }
-          } catch (e) {
-            console.error(`[GameEngine] Emergency fallback failed for ${aiPlayer.username}:`, e);
-          }
         }
         resolve();
       });
@@ -141,41 +115,6 @@ const DayPhaseMixin = {
       console.log('[GameEngine] All AI free discussion promises resolved');
     });
 
-    // Interrupt mechanism: 30% chance each AI sends a short reaction during discussion
-    aiPlayers.forEach((aiPlayer) => {
-      if (Math.random() < 0.3) {
-        const reactionDelay = 8000 + Math.random() * 20000;
-        setTimeout(async () => {
-          if (this.phase !== PHASE.DISCUSSION || !aiPlayer.isAlive) return;
-
-          const seatNum = this.getSeatNum(aiPlayer.socketId);
-          const reactions = [
-            '对！',
-            '胡说！',
-            '我不同意',
-            '等一下',
-            '有道理',
-            '不一定吧',
-            '嗯嗯',
-            '我觉得不是',
-            '他说的不对',
-            '哈哈',
-            '这也行？',
-            '我不信',
-            '有可能',
-            '别装了',
-            '你确定？',
-          ];
-          const reaction = reactions[Math.floor(Math.random() * reactions.length)];
-
-          this.broadcast('chat_message', {
-            username: seatNum,
-            message: reaction,
-            timestamp: Date.now(),
-          });
-        }, reactionDelay);
-      }
-    });
   },
 
   startOrderedSpeaking() {
@@ -307,12 +246,6 @@ const DayPhaseMixin = {
       }
     } catch (error) {
       console.error(`[GameEngine] AI last will error for ${player.username}:`, error);
-      const fallbackMessage = `我是${this.getSeatNum(socketId)}，希望好人阵营能赢。`;
-      this.broadcast('chat_message', {
-        username: this.getSeatNum(socketId),
-        message: fallbackMessage,
-        timestamp: Date.now(),
-      });
     }
   },
 
@@ -343,142 +276,28 @@ const DayPhaseMixin = {
     if (!player || !player.isAI) return;
 
     try {
-      const timeoutPromise = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-      let message = await Promise.race([
-        aiGameHandler._generateChatMessage(this, player),
-        timeoutPromise(5000)
-      ]);
-
-      if (!message || !message.trim()) {
-        message = aiGameHandler._getFallbackChatMessage(this, player);
+      const message = await aiGameHandler._generateChatMessage(this, player);
+      const finalMessage = this._ensureMessageLength(message, player);
+      if (finalMessage) {
+        this.broadcast('chat_message', {
+          username: this.getSeatNum(socketId),
+          message: finalMessage,
+          timestamp: Date.now(),
+        });
       }
-
-      message = this._ensureMessageLength(message, player);
-
-      this.broadcast('chat_message', {
-        username: this.getSeatNum(socketId),
-        message: message,
-        timestamp: Date.now(),
-      });
 
       setTimeout(() => this.nextSpeaker(), 5000);
     } catch (error) {
       console.error(`[GameEngine] AI speaking error for ${player.username}:`, error);
-      const fallbackMessage = aiGameHandler._getFallbackChatMessage(this, player);
-      const finalMessage = this._ensureMessageLength(fallbackMessage, player);
-
-      this.broadcast('chat_message', {
-        username: this.getSeatNum(socketId),
-        message: finalMessage,
-        timestamp: Date.now(),
-      });
-
       setTimeout(() => this.nextSpeaker(), 5000);
     }
   },
 
-  _ensureMessageLength(message, player) {
-    if (!message) message = '';
-
-    const trimmed = message.trim();
-    if (trimmed.length === 0) return '...';
-
-    const agentConfig = player.agentConfig || null;
-    const talkativeness = agentConfig?.personality?.talkativeness ?? 50;
-
-    let minLen, maxLen;
-    if (talkativeness > 70) {
-      minLen = 40; maxLen = 70;
-    } else if (talkativeness < 30) {
-      minLen = 5; maxLen = 20;
-    } else {
-      minLen = 15; maxLen = 55;
-    }
-
-    minLen = Math.max(3, minLen + Math.floor(Math.random() * 10) - 5);
-    maxLen = minLen + 15 + Math.floor(Math.random() * 15);
-
-    if (trimmed.length >= minLen && trimmed.length <= maxLen) {
-      return trimmed;
-    }
-
-    if (trimmed.length > maxLen) {
-      let truncated = trimmed.substring(0, maxLen);
-      truncated = truncated.replace(/[，,！!呀啊嘛呢呗啦咯哈。…]+$/g, '');
-      if (trimmed.endsWith('...')) truncated += '...';
-      else truncated += '。';
-      return truncated;
-    }
-
-    const role = this.getRole(player.socketId);
-
-    const extensions = {
-      [ROLE.WEREWOLF]: [
-        ' 大家仔细分析一下局势',
-        ' 我觉着得谨慎点投票',
-        ' 希望好人做出正确判断',
-        ' 狼人肯定会伪装',
-        ' 别被表面迷惑',
-      ],
-      [ROLE.SEER]: [
-        ' 相信我的查验结果',
-        ' 今晚继续验人',
-        ' 好人需要我的信息',
-        ' 狼人会质疑我，别上当',
-        ' 大家跟我一起投票',
-      ],
-      [ROLE.WITCH]: [
-        ' 我手里还有毒药',
-        ' 小心狼人乱跳',
-        ' 我会谨慎用药',
-        ' 好人保护好自己',
-        ' 今晚看情况',
-      ],
-      [ROLE.GUARD]: [
-        ' 今晚守关键人物',
-        ' 大家放心',
-        ' 狼人别想得手',
-        ' 看局势决定守护',
-        ' 好人需要我',
-      ],
-      [ROLE.HUNTER]: [
-        ' 有枪在手',
-        ' 谁敢出我就带走谁',
-        ' 身份硬得很',
-        ' 狼人别想轻易投我',
-        ' 看情况开枪',
-      ],
-      [ROLE.VILLAGER]: [
-        ' 希望预言家给信息',
-        ' 跟着大家走',
-        ' 好人带领我们',
-        ' 相信好人阵营',
-        ' 一起加油',
-      ],
-    };
-
-    const roleExtensions = extensions[role] || extensions[ROLE.VILLAGER];
-    let result = trimmed;
-
-    let iterations = 0;
-    const maxIterations = 5;
-    while (result.length < minLen && iterations < maxIterations) {
-      iterations++;
-      const extension = roleExtensions[Math.floor(Math.random() * roleExtensions.length)];
-      if (!result.endsWith(extension)) {
-        if (!result.endsWith('。') && !result.endsWith('，')) {
-          result += '，';
-        }
-        result += extension;
-      }
-    }
-
-    if (result.length > maxLen) {
-      result = result.substring(0, maxLen).replace(/[，,！!呀啊嘛呢呗啦咯哈。]+$/g, '') + '。';
-    }
-
-    return result;
+  _ensureMessageLength(message) {
+    const trimmed = String(message || '').trim();
+    if (!trimmed) return '';
+    if (trimmed.length <= 180) return trimmed;
+    return `${trimmed.slice(0, 180).replace(/[，,！!。…]+$/g, '')}。`;
   },
 
   skipToVote() {

@@ -59,6 +59,7 @@ class GameEngine extends EventEmitter {
 
     // Game history for replay
     this.gameHistory = [];
+    this.aiThoughts = [];
   }
 }
 

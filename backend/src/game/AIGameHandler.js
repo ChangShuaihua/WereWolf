@@ -66,13 +66,18 @@ class AIGameHandler {
     return this.decisionLogs;
   }
 
+  _rememberThought(game, aiPlayer, { kind, summary, reasoning }) {
+    if (!game || typeof game.recordAiThought !== 'function') return;
+    game.recordAiThought({ player: aiPlayer, kind, summary, reasoning });
+  }
+
   /**
    * 解析某房间应使用的 LLM 模型。
    * 仅使用房主自己的 Key；无 Key 时返回 null（走 fallback 逻辑）。
    * @param {string} roomCode
    * @returns {Promise<import('@langchain/openai').ChatOpenAI|null>}
    */
-  async _getModelForRoom(roomCode) {
+  async _getModelForRoom(roomCode, opts = {}) {
     const room = roomCache.get(roomCode);
     const hostUserId = room && room.hostUserId;
 
@@ -85,7 +90,7 @@ class AIGameHandler {
       }
     }
 
-    return llmConfig.buildModel(cfg);
+    return llmConfig.buildModel(cfg, opts);
   }
 
   async createAIPlayer(roomCode, agentId = null, fallbackEnabled = true) {
@@ -140,10 +145,6 @@ class AIGameHandler {
         }
       } catch (error) {
         console.error(`[AIGameHandler] Night action error for ${aiPlayer.username}:`, error);
-        const fallbackAction = this._getFallbackNightAction(game, aiPlayer, role);
-        if (fallbackAction) {
-          game.submitNightAction(aiPlayer.socketId, fallbackAction.action, fallbackAction.targetId);
-        }
       }
     })));
   }
@@ -362,40 +363,77 @@ class AIGameHandler {
 
     const chain = prompt.pipe(model).pipe(outputParser);
 
-    try {
-      const result = await chain.invoke({
-        roleName,
-        roleAbility,
-        alivePlayers: alivePlayersStr,
-        teammates: teammatesStr,
-        teammateChoice: teammateChoiceStr,
-        seatOptions: seatOptions.join('、') || '无',
-        roleState,
-        decisionBrief: this._buildDecisionBrief(game, aiPlayer),
-        strategyDesc,
-        ragStrategy: ragStrategyText,
-        formatInstructions
-      });
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const result = await Promise.race([
+          chain.invoke({
+            roleName,
+            roleAbility,
+            alivePlayers: alivePlayersStr,
+            teammates: teammatesStr,
+            teammateChoice: teammateChoiceStr,
+            seatOptions: seatOptions.join('、') || '无',
+            roleState,
+            decisionBrief: this._buildDecisionBrief(game, aiPlayer),
+            strategyDesc,
+            ragStrategy: ragStrategyText,
+            formatInstructions
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('LLM timeout')), 20000)),
+        ]);
 
-      if (result.action === 'skip') {
-        console.log(`[AIGameHandler] LLM night action for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): skip`);
-        this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'NIGHT', ragStrategyText, 'skip');
-        return role === ROLE.WITCH ? { action: 'skip', targetId: null } : null;
+        if (result.action === 'skip') {
+          console.log(`[AIGameHandler] LLM night action for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): skip`);
+          this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'NIGHT', ragStrategyText, 'skip');
+          this._rememberThought(game, aiPlayer, {
+            kind: '夜间行动',
+            summary: '跳过',
+            reasoning: result.reasoning,
+          });
+          return role === ROLE.WITCH ? { action: 'skip', targetId: null } : null;
+        }
+
+        const targetId = this._parseSeatChoice(game, result.targetSeat ?? result.targetId);
+        if (this._isLegalNightAction(game, aiPlayer, role, result.action, targetId)) {
+          console.log(`[AIGameHandler] LLM night action for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): ${result.action} -> ${game.getSeatNum(targetId)}`);
+          this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'NIGHT', ragStrategyText, `${result.action} -> ${game.getSeatNum(targetId)}`);
+          this._rememberThought(game, aiPlayer, {
+            kind: '夜间行动',
+            summary: `${result.action} → ${game.getSeatNum(targetId)}`,
+            reasoning: result.reasoning,
+          });
+          return { action: result.action, targetId };
+        }
+
+        console.warn(`[AIGameHandler] LLM returned invalid night target for ${aiPlayer.username} (attempt ${attempt})`);
+      } catch (error) {
+        console.error(`[AIGameHandler] LLM night action failed for ${aiPlayer.username} (attempt ${attempt}):`, error.message);
       }
-
-      const targetId = this._parseSeatChoice(game, result.targetSeat ?? result.targetId);
-      if (this._isLegalNightAction(game, aiPlayer, role, result.action, targetId)) {
-        console.log(`[AIGameHandler] LLM night action for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): ${result.action} -> ${game.getSeatNum(targetId)}`);
-        this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'NIGHT', ragStrategyText, `${result.action} -> ${game.getSeatNum(targetId)}`);
-        return { action: result.action, targetId };
-      }
-
-      console.warn(`[AIGameHandler] LLM returned invalid target, using fallback for ${aiPlayer.username}`);
-      return this._getFallbackNightAction(game, aiPlayer, role);
-    } catch (error) {
-      console.error(`[AIGameHandler] LLM night action failed for ${aiPlayer.username}, using fallback:`, error.message);
-      return this._getFallbackNightAction(game, aiPlayer, role);
     }
+
+    return this._emergencyNightAction(game, aiPlayer, role);
+  }
+
+  _emergencyNightAction(game, aiPlayer, role) {
+    const candidates = this._legalNightTargets(game, aiPlayer, role);
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    let action = null;
+    if (role === ROLE.WEREWOLF && pick) action = { action: 'kill', targetId: pick.socketId };
+    else if (role === ROLE.SEER && pick) action = { action: 'check', targetId: pick.socketId };
+    else if (role === ROLE.GUARD && pick) action = { action: 'guard', targetId: pick.socketId };
+    else if (role === ROLE.WITCH) action = { action: 'skip', targetId: null };
+
+    if (action) {
+      const summary = action.action === 'skip'
+        ? '跳过'
+        : `${action.action} → ${game.getSeatNum(action.targetId)}`;
+      this._rememberThought(game, aiPlayer, {
+        kind: '夜间行动',
+        summary,
+        reasoning: '模型两次都没有给出合法行动，随机选了一个合法目标。',
+      });
+    }
+    return action;
   }
 
   _legalNightTargets(game, aiPlayer, role) {
@@ -446,6 +484,19 @@ class AIGameHandler {
   }
 
   _getFallbackNightAction(game, aiPlayer, role) {
+    const finish = (action) => {
+      if (action) {
+        const summary = action.action === 'skip'
+          ? '跳过'
+          : `${action.action} → ${action.targetId ? game.getSeatNum(action.targetId) : '无'}`;
+        this._rememberThought(game, aiPlayer, {
+          kind: '夜间行动',
+          summary,
+          reasoning: '按本地策略选择，没有大模型推理。',
+        });
+      }
+      return action;
+    };
     if (!this._isFallbackEnabled(aiPlayer)) return null;
     const strategy = this._nightStrategy(aiPlayer);
     const candidates = this._legalNightTargets(game, aiPlayer, role);
@@ -454,10 +505,10 @@ class AIGameHandler {
     if (role === ROLE.WEREWOLF) {
       const consensus = this._werewolfConsensusTarget(game, aiPlayer);
       if (consensus && candidates.some(player => player.socketId === consensus)) {
-        return { action: 'kill', targetId: consensus };
+        return finish({ action: 'kill', targetId: consensus });
       }
       const target = this._pickByNightStrategy(game, candidates, strategy);
-      return target ? { action: 'kill', targetId: target.socketId } : null;
+      return finish(target ? { action: 'kill', targetId: target.socketId } : null);
     }
 
     if (role === ROLE.SEER) {
@@ -468,30 +519,30 @@ class AIGameHandler {
       );
       const unseen = candidates.filter(player => !checked.has(player.socketId));
       const target = this._pickByNightStrategy(game, unseen.length ? unseen : candidates, strategy);
-      return target ? { action: 'check', targetId: target.socketId } : null;
+      return finish(target ? { action: 'check', targetId: target.socketId } : null);
     }
 
     if (role === ROLE.GUARD) {
       const target = this._pickByNightStrategy(game, candidates, strategy === 'follow_teammate' ? 'target_strong' : strategy);
-      return target ? { action: 'guard', targetId: target.socketId } : null;
+      return finish(target ? { action: 'guard', targetId: target.socketId } : null);
     }
 
     if (role === ROLE.WITCH) {
       const accused = this._accusationCounts(game, candidates);
       const top = accused[0];
       if (!game.witchPoisonUsed && top && top.count >= 2) {
-        return { action: 'poison', targetId: top.player.socketId };
+        return finish({ action: 'poison', targetId: top.player.socketId });
       }
       if (!game.witchSaveUsed && game.killedByWerewolves && game.killedByWerewolves !== aiPlayer.socketId) {
-        return { action: 'save', targetId: game.killedByWerewolves };
+        return finish({ action: 'save', targetId: game.killedByWerewolves });
       }
       if (!game.witchPoisonUsed && top && top.count >= 1 && (game.nightCount || 1) >= 2) {
-        return { action: 'poison', targetId: top.player.socketId };
+        return finish({ action: 'poison', targetId: top.player.socketId });
       }
-      return { action: 'skip', targetId: null };
+      return finish({ action: 'skip', targetId: null });
     }
 
-    return null;
+    return finish(null);
   }
 
   _getRoleAbility(role) {
@@ -540,10 +591,6 @@ class AIGameHandler {
         }
       } catch (error) {
         console.error(`[AIGameHandler] Vote error for ${aiPlayer.username}:`, error);
-        const fallbackTarget = this._getFallbackVote(game, aiPlayer);
-        if (fallbackTarget) {
-          game.submitVote(aiPlayer.socketId, fallbackTarget);
-        }
       }
     })));
   }
@@ -617,32 +664,50 @@ targetSeat 必须从可选座位里选，写成“3号”。不要投票给自�
 
     const chain = prompt.pipe(model).pipe(outputParser);
 
-    try {
-      const result = await chain.invoke({
-        roleName,
-        teamName,
-        aliveOthers: aliveOthersStr,
-        goal,
-        decisionBrief: this._buildDecisionBrief(game, aiPlayer),
-        strategyDesc,
-        ragStrategy: ragStrategyText,
-        formatInstructions,
-      });
-      const targetId = this._parseSeatChoice(game, result.targetSeat ?? result.targetId);
-      const allowed = new Set(candidates.map(player => player.socketId));
-      if (targetId && allowed.has(targetId) && targetId !== aiPlayer.socketId) {
-        console.log(`[AIGameHandler] LLM vote for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): -> ${game.getSeatNum(targetId)}`);
-        this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, `vote -> ${game.getSeatNum(targetId)}`);
-        return targetId;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const result = await Promise.race([
+          chain.invoke({
+            roleName,
+            teamName,
+            aliveOthers: aliveOthersStr,
+            goal,
+            decisionBrief: this._buildDecisionBrief(game, aiPlayer),
+            strategyDesc,
+            ragStrategy: ragStrategyText,
+            formatInstructions,
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('LLM timeout')), 20000)),
+        ]);
+        const targetId = this._parseSeatChoice(game, result.targetSeat ?? result.targetId);
+        const allowed = new Set(candidates.map(player => player.socketId));
+        if (targetId && allowed.has(targetId) && targetId !== aiPlayer.socketId) {
+          console.log(`[AIGameHandler] LLM vote for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): -> ${game.getSeatNum(targetId)}`);
+          this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, `vote -> ${game.getSeatNum(targetId)}`);
+          this._rememberThought(game, aiPlayer, {
+            kind: '投票',
+            summary: `投票给 ${game.getSeatNum(targetId)}`,
+            reasoning: result.reasoning,
+          });
+          return targetId;
+        }
+        console.warn(`[AIGameHandler] LLM vote invalid target for ${aiPlayer.username} (attempt ${attempt})`);
+        this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, 'invalid target');
+      } catch (error) {
+        console.error(`[AIGameHandler] LLM vote failed for ${aiPlayer.username} (attempt ${attempt}):`, error.message);
+        this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, `error: ${error.message}`);
       }
-      console.warn(`[AIGameHandler] LLM vote invalid target for ${aiPlayer.username}, using fallback`);
-      this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, 'fallback (invalid target)');
-      return this._getFallbackVote(game, aiPlayer);
-    } catch (error) {
-      console.error(`[AIGameHandler] LLM vote failed for ${aiPlayer.username}, using fallback:`, error.message);
-      this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'VOTE', ragStrategyText, `error: ${error.message}`);
-      return this._getFallbackVote(game, aiPlayer);
     }
+
+    const emergency = this._voteCandidates(game, aiPlayer);
+    const picked = emergency[Math.floor(Math.random() * emergency.length)];
+    if (!picked) return null;
+    this._rememberThought(game, aiPlayer, {
+      kind: '投票',
+      summary: `投票给 ${game.getSeatNum(picked.socketId)}`,
+      reasoning: '模型两次都没有给出合法投票，随机投了一票。',
+    });
+    return picked.socketId;
   }
 
   _voteCandidates(game, aiPlayer) {
@@ -658,6 +723,16 @@ targetSeat 必须从可选座位里选，写成“3号”。不要投票给自�
   }
 
   _getFallbackVote(game, aiPlayer) {
+    const finish = (targetId) => {
+      if (targetId) {
+        this._rememberThought(game, aiPlayer, {
+          kind: '投票',
+          summary: `投票给 ${game.getSeatNum(targetId)}`,
+          reasoning: '按本地策略投票，没有大模型推理。',
+        });
+      }
+      return targetId;
+    };
     if (!this._isFallbackEnabled(aiPlayer)) return null;
     const candidates = this._voteCandidates(game, aiPlayer);
     if (candidates.length === 0) return null;
@@ -671,17 +746,17 @@ targetSeat 必须从可选座位里选，写成“3号”。不要投票给自�
         }
       }
       const leading = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
-      if (leading) return leading[0];
+      if (leading) return finish(leading[0]);
     }
 
     const accused = this._accusationCounts(game, candidates).filter(item => item.count > 0);
     if (accused.length > 0) {
-      return accused[0].player.socketId;
+      return finish(accused[0].player.socketId);
     }
 
     const strategy = dayStrategy === 'leader' || dayStrategy === 'active' ? 'target_strong' : 'random';
     const target = this._pickByNightStrategy(game, candidates, strategy);
-    return target ? target.socketId : null;
+    return finish(target ? target.socketId : null);
   }
 
   _startDayChat(game, aiPlayers) {
@@ -718,11 +793,6 @@ targetSeat 必须从可选座位里选，写成“3号”。不要投票给自�
         }
       } catch (error) {
         console.error(`[AIGameHandler] Chat error for ${speakerPlayer.username}:`, error);
-        const fallbackMessage = this._getFallbackChatMessage(currentGame, speakerPlayer);
-        if (fallbackMessage) {
-          this._sendChatMessage(roomCode, speakerPlayer, fallbackMessage);
-        }
-        
         setTimeout(() => {
           const gameStill = gameCache.get(roomCode);
           if (gameStill && gameStill.phase === PHASE.DAY) {
@@ -918,7 +988,8 @@ targetSeat 必须从可选座位里选，写成“3号”。不要投票给自�
     }
 
     const outputParser = StructuredOutputParser.fromNamesAndDescriptions({
-      message: '你要说的话，符合你的角色、性格和游戏状态',
+      reasoning: '内心推理，说明你为什么这样说。不要写进发言里',
+      message: '你要说出口的话，符合你的角色、性格和游戏状态',
     });
 
     const formatInstructions = outputParser.getFormatInstructions();
@@ -1002,7 +1073,7 @@ targetSeat 必须从可选座位里选，写成“3号”。不要投票给自�
     });
 
     const personalityTemp = this._getTemperatureForPersonality(agentConfig);
-    const chatModel = model.bind({ temperature: personalityTemp });
+    const chatModel = await this._getModelForRoom(game.roomCode, { temperature: personalityTemp }) || model;
 
     const chain = prompt.pipe(chatModel).pipe(outputParser);
 
@@ -1024,22 +1095,44 @@ targetSeat 必须从可选座位里选，写成“3号”。不要投票给自�
           emotionDesc,
           formatInstructions
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('LLM timeout')), 12000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('LLM timeout')), 20000))
       ]);
       let message = result.message;
       message = this._postProcessMessage(message, aiPlayer);
       message = replaceNames(message);
       console.log(`[AIGameHandler] LLM chat generated for ${game.getSeatNum(aiPlayer.socketId)} (${getRoleName(role)}): ${message.substring(0, 60)}...`);
       this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'DAY', ragStrategyText, message);
+      this._rememberThought(game, aiPlayer, {
+        kind: '发言',
+        summary: String(message || '').slice(0, 80),
+        reasoning: result.reasoning || '模型没有单独写出推理。',
+      });
       return message;
     } catch (error) {
-      console.error(`[AIGameHandler] LLM chat failed for ${aiPlayer.username}, using fallback:`, error.message);
+      console.error(`[AIGameHandler] LLM chat failed for ${aiPlayer.username}:`, error.message);
       this._logDecision(game.roomCode, game.getSeatNum(aiPlayer.socketId), role, 'DAY', ragStrategyText, `LLM error: ${error.message}`);
-      return this._getFallbackChatMessage(game, aiPlayer);
+      this._rememberThought(game, aiPlayer, {
+        kind: '发言',
+        summary: '模型没有生成发言',
+        reasoning: error.message || '大模型调用失败',
+      });
+      return '';
     }
   }
 
   _getFallbackChatMessage(game, aiPlayer) {
+    const message = this._fallbackChatBody(game, aiPlayer);
+    if (message && String(message).trim()) {
+      this._rememberThought(game, aiPlayer, {
+        kind: '发言',
+        summary: String(message).trim().slice(0, 80),
+        reasoning: '按本地发言模板生成，没有大模型推理。',
+      });
+    }
+    return message;
+  }
+
+  _fallbackChatBody(game, aiPlayer) {
     if (!this._isFallbackEnabled(aiPlayer)) return '';
     const role = game.getRole(aiPlayer.socketId);
     const mySeat = game.getSeatNum(aiPlayer.socketId);
@@ -1502,10 +1595,11 @@ ${recentChat || '（无）'}
         return text.trim();
       }
     } catch (error) {
-      console.error(`[AIGameHandler] LLM last will failed for ${aiPlayer.username}, using fallback:`, error.message);
+      console.error(`[AIGameHandler] LLM last will failed for ${aiPlayer.username}:`, error.message);
+      return '';
     }
 
-    return this._getFallbackLastWillMessage(game, aiPlayer);
+    return '';
   }
 
   _getFallbackLastWillMessage(game, aiPlayer) {

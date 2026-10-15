@@ -77,6 +77,8 @@
                 :maxPlayers="roomStore.maxPlayers"
                 :candidates="gameStore.candidates"
                 :currentSpeaker="gameStore.currentSpeaker"
+                :inspect-ai="roomStore.isSpectator"
+                @select-ai="openAiThought"
               />
             </div>
           </section>
@@ -237,6 +239,19 @@
         </div>
       </div>
     </div>
+    <div v-if="thoughtPlayer" class="thought-mask" @click.self="thoughtPlayer = null">
+      <div class="thought-card">
+        <div class="thought-head">
+          <h3>{{ thoughtPlayer.username }} 的思考</h3>
+          <button type="button" @click="thoughtPlayer = null">关闭</button>
+        </div>
+        <p v-if="!playerThoughts.length" class="thought-empty">还没有思考记录。等这名 AI 行动或发言后，这里会显示推理过程。</p>
+        <article v-for="item in playerThoughts" :key="item.id" class="thought-item">
+          <span>第 {{ item.night || 1 }} 夜 · {{ item.kind }}<template v-if="item.summary"> · {{ item.summary }}</template></span>
+          <p>{{ item.reasoning }}</p>
+        </article>
+      </div>
+    </div>
     </template>
   </div>
 </template>
@@ -268,6 +283,7 @@ const userStore = useUserStore()
 
 const showRoleReveal = ref(false)
 const loading = ref(true)
+const thoughtPlayer = ref(null)
 const mobilePane = ref('players')
 
 // 规则问答面板
@@ -394,6 +410,16 @@ const displayRoles = computed(() => {
   if (roomStore.isSpectator) return gameStore.spectatorRoles
   return gameOverRoles.value
 })
+
+const playerThoughts = computed(() => {
+  if (!thoughtPlayer.value) return []
+  const id = thoughtPlayer.value.id || thoughtPlayer.value.socketId
+  return gameStore.spectatorThoughts.filter(item => item.playerId === id)
+})
+
+function openAiThought(player) {
+  thoughtPlayer.value = player
+}
 
 async function reconnectToRoom() {
   const code = route.params.code
@@ -543,6 +569,67 @@ function returnToRoom() {
 
 .insight-empty {
   color: var(--text-secondary);
+}
+
+.thought-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.thought-card {
+  width: min(560px, 100%);
+  max-height: 75vh;
+  overflow: auto;
+  background: var(--bg-card);
+  border: var(--border-thin);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+}
+
+.thought-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.thought-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.thought-head button {
+  border: var(--border-thin);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.thought-item {
+  padding: 10px 0;
+  border-top: var(--border-thin);
+}
+
+.thought-item span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.thought-item p,
+.thought-empty {
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* 游戏规则按钮 */

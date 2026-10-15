@@ -129,6 +129,7 @@ const CoreMixin = {
       seatNum: this.getSeatNum(pl.socketId),
       seatIndex: pl.seatIndex,
       isAlive: pl.isAlive,
+      isAI: Boolean(pl.isAI),
       role: this.roles[pl.socketId] || '',
       roleName: getRoleName(this.roles[pl.socketId] || ''),
     }));
@@ -155,7 +156,29 @@ const CoreMixin = {
       roles: Object.fromEntries(players.filter(p => p.id).map(p => [p.id, p.role])),
       history,
       votes,
+      aiThoughts: this.aiThoughts || [],
     };
+  },
+
+  recordAiThought({ player, kind, summary, reasoning }) {
+    if (!player?.isAI) return;
+    const text = String(reasoning || '').trim();
+    if (!text) return;
+    if (!this.aiThoughts) this.aiThoughts = [];
+    this.aiThoughts.push({
+      id: `${player.socketId}-${this.aiThoughts.length}`,
+      playerId: player.socketId,
+      username: player.username,
+      seat: this.getSeatNum(player.socketId),
+      night: this.nightCount || 0,
+      phase: this.phase,
+      kind: kind || '决策',
+      summary: String(summary || '').slice(0, 160),
+      reasoning: text.slice(0, 800),
+      at: Date.now(),
+    });
+    if (this.aiThoughts.length > 200) this.aiThoughts = this.aiThoughts.slice(-200);
+    this.pushSpectatorView();
   },
 
   pushSpectatorView() {

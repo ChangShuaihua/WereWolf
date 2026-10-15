@@ -238,22 +238,15 @@ const NightPhaseMixin = {
   async _waitForAINightActions(aiPlayers) {
     const aiGameHandler = require('./AIGameHandler');
 
-    const timeoutPromise = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
     for (const aiPlayer of aiPlayers) {
       const role = this.getRole(aiPlayer.socketId);
       if (!role) continue;
 
       try {
-        const action = await Promise.race([
-          aiGameHandler._decideNightAction(this, aiPlayer, role),
-          timeoutPromise(15000)
-        ]);
-
+        const action = await aiGameHandler._decideNightAction(this, aiPlayer, role);
         if (action) {
           this.submitNightAction(aiPlayer.socketId, action.action, action.targetId);
-        } else {
-          console.warn(`[GameEngine] AI night action timeout for ${aiPlayer.username}, using fallback`);
+        } else if (!(await aiGameHandler._getModelForRoom(this.roomCode))) {
           const fallbackAction = aiGameHandler._getFallbackNightAction(this, aiPlayer, role);
           if (fallbackAction) {
             this.submitNightAction(aiPlayer.socketId, fallbackAction.action, fallbackAction.targetId);
@@ -261,10 +254,6 @@ const NightPhaseMixin = {
         }
       } catch (error) {
         console.error(`[GameEngine] AI night action error for ${aiPlayer.username}:`, error);
-        const fallbackAction = aiGameHandler._getFallbackNightAction(this, aiPlayer, role);
-        if (fallbackAction) {
-          this.submitNightAction(aiPlayer.socketId, fallbackAction.action, fallbackAction.targetId);
-        }
       }
     }
   },

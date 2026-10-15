@@ -27,6 +27,14 @@
           </button>
           <button
             v-if="!roomStore.isSpectator"
+            class="btn btn-secondary"
+            type="button"
+            @click="handleJoinSpectator"
+          >
+            加入观众席
+          </button>
+          <button
+            v-if="!roomStore.isSpectator"
             class="btn"
             :class="myIsReady ? 'btn-ready' : 'btn-secondary'"
             @click="roomStore.toggleReady()"
@@ -38,17 +46,7 @@
 
       <div class="room-content">
         <div class="room-players-panel">
-          <div class="spectator-row">
-            <SpectatorBar :spectators="roomStore.spectators" :watching="roomStore.isSpectator" />
-            <button
-              v-if="!roomStore.isSpectator"
-              class="btn btn-secondary spectator-join-btn"
-              type="button"
-              @click="handleJoinSpectator"
-            >
-              加入观众席
-            </button>
-          </div>
+          <SpectatorBar :spectators="roomStore.spectators" :watching="roomStore.isSpectator" />
           <div class="panel-title">
             <span class="panel-title-icon">👥</span>
             <span>玩家列表</span>
@@ -551,26 +549,6 @@ function handleLeave() {
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
-}
-
-.spectator-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.spectator-row :deep(.spectator-bar) {
-  margin-bottom: 0;
-}
-
-.spectator-join-btn {
-  flex-shrink: 0;
-  height: 34px;
-  padding: 0 12px;
-  font-size: 0.84rem;
 }
 
 .room-players-panel {

@@ -28,6 +28,7 @@ export const useGameStore = defineStore('game', () => {
   const spectatorRoles = ref({})
   const spectatorHistory = ref([])
   const spectatorVotes = ref([])
+  const spectatorThoughts = ref([])
 
   const isNight = computed(() => phase.value === 'NIGHT')
   const isDay = computed(() => phase.value === 'DAY')
@@ -59,6 +60,7 @@ export const useGameStore = defineStore('game', () => {
       spectatorRoles.value = {}
       spectatorHistory.value = []
       spectatorVotes.value = []
+      spectatorThoughts.value = []
     }
     players.value = data.players
     phase.value = data.phase || 'NIGHT'
@@ -71,6 +73,7 @@ export const useGameStore = defineStore('game', () => {
     spectatorRoles.value = data.roles || {}
     spectatorHistory.value = data.history || []
     spectatorVotes.value = data.votes || []
+    spectatorThoughts.value = data.aiThoughts || []
     if (data.players?.length) players.value = data.players
     if (data.phase && data.phase !== 'WAITING') phase.value = data.phase
     if (data.nightCount) nightCount.value = data.nightCount
@@ -302,7 +305,7 @@ export const useGameStore = defineStore('game', () => {
     phase, myRole, myRoleName, players, timeout, message, nightCount,
     candidates, myVote, votedCount, totalVoters, gameOver, replayGameId, seerResult, nightActionPrompt, hunterPrompt,
     currentSpeaker, speakerName, currentNightRole, werewolfVoteState, roleRevealed,
-    spectatorRoles, spectatorHistory, spectatorVotes,
+    spectatorRoles, spectatorHistory, spectatorVotes, spectatorThoughts,
     isNight, isDay, isVote, isEnd, myPlayer, alivePlayers,
     bindEvents, unbindEvents,
     submitNightAction, submitHunterShoot, submitVote, skipDay, sendChat,

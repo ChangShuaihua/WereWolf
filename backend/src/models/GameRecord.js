@@ -65,17 +65,18 @@ const GameRecord = {
        LIMIT 1`,
       [gameId, userId]
     );
-    if (!rows[0]) return null;
-    return {
-      id: rows[0].id,
-      roomCode: rows[0].room_code,
-      winner: rows[0].winner,
-      playerCount: rows[0].player_count,
-      duration: rows[0].duration,
-      createdAt: rows[0].created_at,
-      replay: parseJson(rows[0].replay_data, {}),
-      analysis: parseJson(rows[0].analysis, {}),
-    };
+    if (rows[0]) return formatReplayRow(rows[0]);
+
+    const [records] = await pool.query(
+      `SELECT id, room_code, winner, player_count, duration, replay_data, analysis, created_at
+       FROM game_records WHERE id = ? LIMIT 1`,
+      [gameId]
+    );
+    if (!records[0]) return null;
+    const replay = parseJson(records[0].replay_data, {});
+    const spectatorIds = Array.isArray(replay.spectatorIds) ? replay.spectatorIds.map(Number) : [];
+    if (!spectatorIds.includes(Number(userId))) return null;
+    return formatReplayRow(records[0]);
   },
 
   // 根据真实 game_players 重算战绩；积分始终等于累计胜场数。
@@ -97,6 +98,19 @@ const GameRecord = {
     return { totalGames, totalWins, totalLosses, score };
   },
 };
+
+function formatReplayRow(row) {
+  return {
+    id: row.id,
+    roomCode: row.room_code,
+    winner: row.winner,
+    playerCount: row.player_count,
+    duration: row.duration,
+    createdAt: row.created_at,
+    replay: parseJson(row.replay_data, {}),
+    analysis: parseJson(row.analysis, {}),
+  };
+}
 
 function parseJson(value, fallback) {
   if (value === null || value === undefined) return fallback;

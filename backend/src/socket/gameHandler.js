@@ -236,7 +236,12 @@ async function handleGameResult(data) {
         data.winner,
         data.playerCount,
         data.duration,
-        { players: data.players, history: data.history },
+        {
+          players: data.players,
+          history: data.history,
+          aiThoughts: data.aiThoughts || [],
+          spectatorIds: data.spectatorIds || [],
+        },
         await analyzeReplay(data, await aiGameHandler._getModelForRoom(data.roomCode))
       );
 

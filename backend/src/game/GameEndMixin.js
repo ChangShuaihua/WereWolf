@@ -1,6 +1,16 @@
 const { PHASE, ROLE, TEAM } = require('./constants');
 const { getRoleName } = require('./RoleConfig');
 
+function spectatorIdsForReplay(roomCode) {
+  try {
+    const { roomCache } = require('../utils/cache');
+    const room = roomCache.get(roomCode);
+    return (room?.spectators || []).map(spectator => spectator.userId).filter(Boolean);
+  } catch (err) {
+    return [];
+  }
+}
+
 const GameEndMixin = {
   // ==================== Win Condition ====================
   checkWinCondition() {
@@ -39,6 +49,7 @@ const GameEndMixin = {
       role: this.roles[p.socketId],
       roleName: getRoleName(this.roles[p.socketId]),
       isAlive: p.isAlive,
+      isAI: Boolean(p.isAI),
       isWinner: TEAM[this.roles[p.socketId]] === winner,
       seatIndex: p.seatIndex,
     }));
@@ -61,6 +72,8 @@ const GameEndMixin = {
       duration,
       players: result,
       history: this.gameHistory,
+      aiThoughts: this.aiThoughts || [],
+      spectatorIds: spectatorIdsForReplay(this.roomCode),
     });
 
     // Generate replay message

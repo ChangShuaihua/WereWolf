@@ -12,7 +12,10 @@
           host: (seat.player.socketId || seat.player.id) === hostId,
           targetable: seat.targetable,
           current: seat.current,
+          'ai-inspectable': inspectAi && isAiPlayer(seat.player),
         }"
+        :title="inspectAi && isAiPlayer(seat.player) ? '查看思考过程' : undefined"
+        @click="selectAi(seat.player)"
       >
         <div class="seat-num-badge">
           {{ seat.seatNum }}号
@@ -25,7 +28,7 @@
         <div class="player-name" :class="{ 'is-dead-name': seat.player.isAlive === false }">{{ seat.player.username }}</div>
         <div class="player-badges">
           <span v-if="(seat.player.socketId || seat.player.id) === hostId" class="badge badge-host">👑</span>
-          <span v-if="seat.player.isAI" class="badge badge-ai">🤖</span>
+          <span v-if="isAiPlayer(seat.player)" class="badge badge-ai">🤖</span>
           <span v-if="showReady && seat.player.isReady" class="badge badge-ready">✅</span>
           <span v-if="seat.player.isAlive === false" class="badge badge-dead">💀 已淘汰</span>
           <span v-if="showRoles && roles[seat.player.id || seat.player.socketId]" class="badge badge-role">
@@ -56,9 +59,19 @@ const props = defineProps({
   maxPlayers: { type: Number, default: 6 },
   candidates: { type: Array, default: () => [] },
   currentSpeaker: { type: String, default: '' },
+  inspectAi: { type: Boolean, default: false },
 })
 
-defineEmits(['removeAI'])
+const emit = defineEmits(['removeAI', 'select-ai'])
+
+function isAiPlayer(player) {
+  return Boolean(player?.isAI)
+}
+
+function selectAi(player) {
+  if (!props.inspectAi || !isAiPlayer(player)) return
+  emit('select-ai', player)
+}
 
 const gridClass = computed(() => {
   return `grid-${props.maxPlayers}`
@@ -107,6 +120,14 @@ const roleNames = {
 .player-grid {
   display: grid;
   gap: 12px;
+}
+
+.player-card.ai-inspectable {
+  cursor: pointer;
+}
+
+.player-card.ai-inspectable:hover {
+  outline: 1px solid rgba(125, 211, 252, 0.7);
 }
 
 .player-grid.grid-6 {

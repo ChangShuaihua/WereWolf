@@ -37,8 +37,14 @@
           <div><span class="section-index">01</span><h2>身份与结果</h2></div>
         </div>
         <div class="player-table">
-          <div v-for="player in replayPlayers" :key="player.id" class="player-row">
-            <span class="seat">{{ player.username }}</span>
+          <div
+            v-for="player in replayPlayers"
+            :key="playerKey(player)"
+            class="player-row"
+            :class="{ 'has-thoughts': isAiPlayer(player), selected: selectedAiId === playerKey(player) }"
+            @click="selectAi(player)"
+          >
+            <span class="seat">{{ player.username }} <em v-if="isAiPlayer(player)">AI</em></span>
             <span class="role" :class="player.role">{{ player.roleName }}</span>
             <span>{{ player.isAlive ? '存活' : '出局' }}</span>
             <strong :class="player.isWinner ? 'won' : 'lost'">{{ player.isWinner ? '胜利' : '失败' }}</strong>
@@ -63,16 +69,31 @@
         <div v-else class="empty-inline">本局没有有效投票记录</div>
       </section>
 
+      <section class="section-block">
+        <div class="section-heading">
+          <div><span class="section-index">03</span><h2>{{ selectedPlayer ? `${selectedPlayer.username} 的思考` : 'AI 思考过程' }}</h2></div>
+          <span class="section-note">{{ selectedPlayer ? '再点一次可收起' : '点击上面的 AI 玩家' }}</span>
+        </div>
+        <div v-if="visibleThoughts.length" class="thought-list">
+          <article v-for="item in visibleThoughts" :key="item.id" class="thought-row">
+            <span>{{ item.seat || item.username }} · 第 {{ item.night || 1 }} 夜 · {{ item.kind }}</span>
+            <p v-if="item.summary">{{ item.summary }}</p>
+            <p>{{ item.reasoning }}</p>
+          </article>
+        </div>
+        <div v-else class="empty-inline">{{ selectedPlayer ? '这名 AI 还没有思考记录' : '点击上方某名 AI 玩家，这里只显示他的思考过程' }}</div>
+      </section>
+
       <section class="analysis-grid">
         <div class="section-block highlights">
-          <div class="section-heading"><div><span class="section-index">03</span><h2>关键发现</h2></div></div>
+          <div class="section-heading"><div><span class="section-index">04</span><h2>关键发现</h2></div></div>
           <ol>
             <li v-for="item in replay.analysis.highlights" :key="item">{{ item }}</li>
           </ol>
         </div>
 
         <div class="section-block timeline-block">
-          <div class="section-heading"><div><span class="section-index">04</span><h2>行动时间线</h2></div></div>
+          <div class="section-heading"><div><span class="section-index">05</span><h2>行动时间线</h2></div></div>
           <div class="timeline">
             <article v-for="event in replay.analysis.timeline" :key="event.id" class="timeline-event">
               <div class="timeline-dot"></div>
@@ -98,9 +119,38 @@ const router = useRouter()
 const replay = ref(null)
 const loading = ref(true)
 const error = ref('')
+const selectedAiId = ref('')
 
 const voteEdges = computed(() => replay.value?.analysis?.voteGraph?.edges || [])
 const replayPlayers = computed(() => replay.value?.replay?.players || [])
+const aiThoughts = computed(() => replay.value?.replay?.aiThoughts || [])
+const selectedPlayer = computed(() => replayPlayers.value.find(player => playerKey(player) === selectedAiId.value) || null)
+const visibleThoughts = computed(() => selectedPlayer.value ? thoughtsFor(selectedPlayer.value) : [])
+
+function playerKey(player) {
+  return String(player?.id || player?.socketId || player?.username || '')
+}
+
+function isAiPlayer(player) {
+  return Boolean(player?.isAI)
+}
+
+function thoughtBelongsTo(item, player) {
+  const keys = [player?.id, player?.socketId].filter(value => value != null && value !== '').map(String)
+  const itemKeys = [item?.playerId, item?.socketId].filter(value => value != null && value !== '').map(String)
+  if (keys.some(key => itemKeys.includes(key))) return true
+  return keys.some(key => String(item?.id || '').startsWith(`${key}-`))
+}
+
+function thoughtsFor(player) {
+  return aiThoughts.value.filter(item => thoughtBelongsTo(item, player))
+}
+
+function selectAi(player) {
+  if (!isAiPlayer(player)) return
+  const key = playerKey(player)
+  selectedAiId.value = selectedAiId.value === key ? '' : key
+}
 
 onMounted(async () => {
   try {
@@ -162,5 +212,12 @@ function returnToRoom() {
 .analysis-grid { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.6fr); gap: 40px; }
 .highlights ol { list-style: none; counter-reset: insight; display: grid; gap: 14px; }.highlights li { counter-increment: insight; padding: 14px 0 14px 42px; border-bottom: var(--border-thin); position: relative; }.highlights li::before { content: counter(insight, decimal-leading-zero); position: absolute; left: 0; color: var(--ai-primary); font-family: var(--font-mono); font-weight: 800; }
 .timeline { max-height: 440px; overflow-y: auto; padding-left: 10px; }.timeline-event { display: grid; grid-template-columns: 16px 1fr; gap: 12px; min-height: 72px; position: relative; }.timeline-event::before { content: ''; position: absolute; left: 5px; top: 13px; bottom: -4px; width: 1px; background: var(--glass-border); }.timeline-event:last-child::before { display: none; }.timeline-dot { width: 11px; height: 11px; margin-top: 5px; border-radius: 50%; background: var(--ai-primary); box-shadow: 0 0 0 4px var(--ai-glow); z-index: 1; }.event-meta { color: var(--ai-light); font-size: 12px; font-weight: 700; }.timeline-event p { margin-top: 4px; color: var(--text-secondary); font-size: 14px; }
+.player-row.has-thoughts { cursor: pointer; }
+.player-row.selected { background: rgba(125, 211, 252, 0.08); }
+.player-row em { font-style: normal; color: #7dd3fc; font-size: 12px; }
+.thought-list { display: flex; flex-direction: column; gap: 12px; }
+.thought-row { padding-bottom: 12px; border-bottom: var(--border-thin); }
+.thought-row span { display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 13px; }
+.thought-row p { margin: 0 0 4px; line-height: 1.5; }
 @media (max-width: 760px) { .replay-page { padding: 20px 14px 36px; }.replay-header { grid-template-columns: 40px minmax(0, 1fr); gap: 10px; }.replay-header h1 { font-size: 22px; }.result-mark { grid-column: 2; justify-self: start; }.summary-band, .analysis-grid { grid-template-columns: 1fr; gap: 20px; }.player-table, .vote-board { grid-template-columns: 1fr; }.player-row { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 42px 36px; gap: 6px; padding: 12px 4px; }.section-note { display: none; }.vote-edge { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); }.edge-line { display: none; }.vote-count { grid-column: 1 / -1; } }
 </style>

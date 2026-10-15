@@ -32,19 +32,12 @@ const VotePhaseMixin = {
   async _waitForAIVotes(aiPlayers) {
     const aiGameHandler = require('./AIGameHandler');
 
-    const timeoutPromise = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
     for (const aiPlayer of aiPlayers) {
       try {
-        const voteTarget = await Promise.race([
-          aiGameHandler._decideVote(this, aiPlayer),
-          timeoutPromise(10000)
-        ]);
-
+        const voteTarget = await aiGameHandler._decideVote(this, aiPlayer);
         if (voteTarget) {
           this.submitVote(aiPlayer.socketId, voteTarget);
-        } else {
-          console.warn(`[GameEngine] AI vote timeout for ${aiPlayer.username}, using fallback`);
+        } else if (!(await aiGameHandler._getModelForRoom(this.roomCode))) {
           const fallbackTarget = aiGameHandler._getFallbackVote(this, aiPlayer);
           if (fallbackTarget) {
             this.submitVote(aiPlayer.socketId, fallbackTarget);
@@ -52,10 +45,6 @@ const VotePhaseMixin = {
         }
       } catch (error) {
         console.error(`[GameEngine] AI vote error for ${aiPlayer.username}:`, error);
-        const fallbackTarget = aiGameHandler._getFallbackVote(this, aiPlayer);
-        if (fallbackTarget) {
-          this.submitVote(aiPlayer.socketId, fallbackTarget);
-        }
       }
     }
   },
