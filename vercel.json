@@ -6,7 +6,7 @@
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "env": {
-    "VITE_API_URL": "https://item-press-solutions-beast.trycloudflare.com"
+    "VITE_API_URL": "https://nice-talks-securities-fitting.trycloudflare.com"
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
