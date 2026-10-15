@@ -1,10 +1,14 @@
 <template>
-  <div class="room-page">
+  <div class="room-page" :class="`pane-${mobilePane}`">
+    <nav class="room-mobile-tabs" aria-label="房间分区">
+      <button type="button" :class="{ active: mobilePane === 'seats' }" @click="mobilePane = 'seats'">座位</button>
+      <button type="button" :class="{ active: mobilePane === 'chat' }" @click="mobilePane = 'chat'">聊天</button>
+    </nav>
     <div class="room-main">
       <div class="room-header">
         <button class="btn-back" @click="handleLeave">
           <span class="back-icon">←</span>
-          <span>返回大厅</span>
+          <span class="back-label">返回大厅</span>
         </button>
         
         <div class="room-title-area">
@@ -18,7 +22,8 @@
 
         <div class="room-header-right">
           <button class="btn btn-rule" @click="showRulePanel = true" type="button">
-            📖 游戏规则
+            <span>📖</span>
+            <span class="btn-label">游戏规则</span>
           </button>
           <button
             class="btn"
@@ -217,6 +222,7 @@ const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const loading = ref(true)
+const mobilePane = ref('seats')
 const aiAgents = ref([])
 const selectedAgentId = ref('')
 
@@ -383,7 +389,7 @@ function handleLeave() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
-  padding: 20px 24px;
+  padding: calc(20px + env(safe-area-inset-top, 0px)) 24px calc(20px + env(safe-area-inset-bottom, 0px));
   position: relative;
   align-items: stretch;
   overflow: hidden;
@@ -506,6 +512,13 @@ function handleLeave() {
 
 .room-header-right {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-mobile-tabs {
+  display: none;
 }
 
 .room-content {
@@ -830,9 +843,23 @@ function handleLeave() {
   min-height: 0;
 }
 
+@media (hover: none) {
+  .seat-remove {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 900px) {
   .room-page {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(240px, 38vh);
+    overflow: hidden;
+  }
+
+  .room-main {
+    height: auto;
+    max-height: 100%;
+    min-height: 0;
   }
 
   .room-header {
@@ -856,7 +883,94 @@ function handleLeave() {
   }
 
   .room-chat-panel {
-    min-height: 350px;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .room-page {
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .room-mobile-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .room-mobile-tabs button {
+    height: 36px;
+    border: var(--border-medium);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .room-mobile-tabs button.active {
+    background: var(--ai-primary);
+    color: var(--on-accent);
+    border-color: transparent;
+  }
+
+  .pane-seats .room-chat-panel,
+  .pane-chat .room-main {
+    display: none;
+  }
+
+  .room-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "back title"
+      "actions actions";
+    align-items: center;
+    gap: 8px 12px;
+    padding: 10px 12px;
+  }
+
+  .btn-back { grid-area: back; }
+  .back-label { display: none; }
+  .room-title-area {
+    grid-area: title;
+    order: 0;
+    width: auto;
+  }
+  .room-header-right {
+    grid-area: actions;
+    width: 100%;
+  }
+  .room-header-right .btn {
+    flex: 1;
+    height: 40px;
+    padding: 0 10px;
+    font-size: 0.82rem;
+  }
+
+  .room-name {
+    font-size: 1rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .seat-card {
+    min-height: 108px;
+    padding: 28px 6px 10px;
+  }
+
+  .seat-avatar {
+    width: 40px;
+    height: 40px;
   }
 }
 
@@ -1197,5 +1311,22 @@ function handleLeave() {
 .rule-submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .rule-modal-mask {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .rule-modal {
+    max-width: none;
+    max-height: min(92dvh, 100%);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .rule-input-row {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
 }
 </style>

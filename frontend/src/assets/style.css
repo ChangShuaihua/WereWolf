@@ -154,6 +154,8 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -161,6 +163,8 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
   line-height: 1.65;
   letter-spacing: 0.01em;
   background-image:
@@ -200,6 +204,8 @@ h1, h2, h3 {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .app-main {
@@ -368,13 +374,13 @@ h1, h2, h3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 var(--space-8);
+  padding: env(safe-area-inset-top, 0px) var(--space-8) 0;
+  height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border-bottom: var(--border-thin);
   gap: var(--space-6);
-  height: var(--header-h);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -742,7 +748,7 @@ textarea.input-field {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 24px 12px;
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -1288,7 +1294,7 @@ textarea.input-field {
 }
 
 .role-reveal-card {
-  width: 360px;
+  width: min(360px, 100%);
   padding: 40px;
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
@@ -1403,18 +1409,31 @@ textarea.input-field {
 }
 
 @media (max-width: 900px) {
+  .game-page {
+    overflow: auto;
+  }
+
   .game-main {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto minmax(320px, 46vh);
     height: auto;
+    overflow: visible;
   }
   
   .game-right-panel {
     order: -1;
+    min-height: 0;
   }
   
   .chat-section {
-    height: 400px;
+    height: 100%;
+    min-height: 320px;
+  }
+
+  .player-section,
+  .action-section {
+    flex: none;
+    min-height: 280px;
   }
   
   .game-header {
@@ -1428,9 +1447,160 @@ textarea.input-field {
   }
 }
 
+@media (max-width: 768px) {
+  :root {
+    --header-h: 52px;
+  }
+
+  .app-header {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 8px;
+  }
+
+  .header-tabs {
+    display: none;
+  }
+
+  .brand-text {
+    font-size: 1.15rem;
+    letter-spacing: 0.1em;
+  }
+
+  .header-user {
+    gap: 8px;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .user-link {
+    padding: 6px 10px;
+  }
+
+  .game-page {
+    overflow: hidden;
+  }
+
+  .game-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "phase role"
+      "tools tools";
+    align-items: center;
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
+  }
+
+  .game-header-left,
+  .game-header-center,
+  .game-header-right {
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .game-header-left { grid-area: phase; }
+  .game-header-center {
+    grid-area: role;
+    order: 0;
+    width: auto;
+    flex: none;
+    justify-content: flex-end;
+  }
+  .game-header-right { grid-area: tools; }
+
+  .phase-indicator,
+  .my-role {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .phase-text,
+  .role-name {
+    font-size: 0.82rem;
+  }
+
+  .game-message {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .game-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+    padding: 10px;
+    gap: 0;
+  }
+
+  .game-left-panel,
+  .game-right-panel {
+    min-height: 0;
+    overflow: hidden;
+    order: 0;
+  }
+
+  .game-page.pane-players .action-section,
+  .game-page.pane-players .game-right-panel,
+  .game-page.pane-action .player-section,
+  .game-page.pane-action .game-right-panel,
+  .game-page.pane-chat .game-left-panel {
+    display: none;
+  }
+
+  .chat-section {
+    height: auto;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .player-section,
+  .action-section {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .game-panel,
+  .vote-panel {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .vote-options {
+    grid-template-columns: 1fr;
+  }
+
+  .game-result-overlay,
+  .role-reveal-overlay {
+    padding: 16px;
+  }
+
+  .role-reveal-card,
+  .game-result-card {
+    padding: 28px 18px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 @media (max-width: 600px) {
   .game-main {
-    padding: 12px;
-    gap: 12px;
+    padding: 8px;
+  }
+
+  .result-title {
+    font-size: 1.5rem;
   }
 }

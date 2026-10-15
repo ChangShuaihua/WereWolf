@@ -120,6 +120,12 @@ const isMyTurn = computed(() => props.currentSpeaker === props.mySocketId)
   font-size: 13px;
 }
 
+@media (max-width: 600px) {
+  .day-actions .btn {
+    max-width: none;
+  }
+}
+
 .day-dead {
   text-align: center;
   padding: 12px;

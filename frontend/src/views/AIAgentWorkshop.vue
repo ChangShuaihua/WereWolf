@@ -988,4 +988,58 @@ onMounted(async () => {
     max-height: none;
   }
 }
+
+@media (max-width: 600px) {
+  .workshop-page {
+    padding: 16px 12px 24px;
+  }
+
+  .list-header,
+  .detail-actions,
+  .modal-actions,
+  .slider-item,
+  .personality-item,
+  .strategy-select,
+  .info-row {
+    flex-wrap: wrap;
+  }
+
+  .slider-item,
+  .strategy-select {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .slider-label,
+  .item-label,
+  .info-label,
+  .strategy-label,
+  .language-label,
+  .strategy-select span {
+    width: auto;
+  }
+
+  .agent-detail,
+  .modal-content {
+    padding: 20px 16px;
+  }
+
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    max-height: min(88dvh, 100%);
+    border-radius: 16px 16px 8px 8px;
+  }
+
+  .detail-actions .btn-edit,
+  .detail-actions .btn-delete,
+  .modal-actions .btn-cancel,
+  .modal-actions .btn-save {
+    width: 100%;
+  }
+}
 </style>

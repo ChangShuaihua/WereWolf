@@ -1,5 +1,5 @@
 <template>
-  <div class="game-page">
+  <div class="game-page" :class="`pane-${mobilePane}`">
     <!-- Loading overlay -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
@@ -41,6 +41,12 @@
       </div>
     </header>
 
+    <nav class="game-mobile-tabs" aria-label="对局分区">
+      <button type="button" :class="{ active: mobilePane === 'players' }" @click="mobilePane = 'players'">玩家</button>
+      <button type="button" :class="{ active: mobilePane === 'action', alert: actionNeedsYou }" @click="mobilePane = 'action'">操作</button>
+      <button type="button" :class="{ active: mobilePane === 'chat' }" @click="mobilePane = 'chat'">聊天</button>
+    </nav>
+
     <!-- Main Content -->
     <div class="game-main">
       <!-- Left Panel: Player List & Action Panels -->
@@ -69,6 +75,7 @@
 
         <!-- Action Panels -->
         <section class="game-section action-section">
+          <div v-if="!hasAction" class="action-empty">当前没有需要你操作的内容</div>
           <NightPanel
             v-if="gameStore.isNight && gameStore.myPlayer?.isAlive"
             :prompt="gameStore.nightActionPrompt"
@@ -209,7 +216,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { useRoomStore } from '../stores/room'
@@ -234,6 +241,7 @@ const userStore = useUserStore()
 
 const showRoleReveal = ref(false)
 const loading = ref(true)
+const mobilePane = ref('players')
 
 // 规则问答面板
 const showRulePanel = ref(false)
@@ -313,6 +321,32 @@ const roleIcons = {
 const roleIcon = computed(() => roleIcons[gameStore.myRole] || '❓')
 
 const aliveCount = computed(() => gameStore.players.filter(p => p.isAlive).length)
+
+const hasAction = computed(() => {
+  const alive = gameStore.myPlayer?.isAlive
+  return (gameStore.isNight && alive)
+    || !!gameStore.hunterPrompt
+    || gameStore.isDay
+    || (gameStore.isVote && alive)
+})
+
+const actionNeedsYou = computed(() => {
+  const alive = gameStore.myPlayer?.isAlive
+  return mobilePane.value !== 'action' && (
+    (gameStore.isNight && alive && !!gameStore.nightActionPrompt)
+    || !!gameStore.hunterPrompt
+    || (gameStore.isVote && alive && !gameStore.myVote)
+  )
+})
+
+watch(
+  () => [gameStore.phase, !!gameStore.hunterPrompt],
+  ([phase, hunter]) => {
+    if (window.innerWidth > 768) return
+    if (hunter || phase === 'NIGHT' || phase === 'VOTE') mobilePane.value = 'action'
+    else if (phase === 'DISCUSSION' || phase === 'LAST_WILL' || phase === 'DAY') mobilePane.value = 'chat'
+  }
+)
 
 function viewReplay(gameId) {
   router.push({
@@ -767,5 +801,80 @@ function returnToRoom() {
 .rule-submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.game-mobile-tabs {
+  display: none;
+}
+
+.action-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+
+@media (max-width: 768px) {
+  .game-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 8px 10px 0;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+  }
+
+  .game-mobile-tabs button {
+    height: 36px;
+    border: var(--border-medium);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .game-mobile-tabs button.active {
+    background: var(--ai-primary);
+    color: var(--on-accent);
+    border-color: transparent;
+  }
+
+  .game-mobile-tabs button.alert:not(.active) {
+    color: var(--werewolf-primary);
+    border-color: color-mix(in srgb, var(--werewolf-primary) 50%, transparent);
+  }
+
+  .rule-modal-mask {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .rule-modal {
+    max-width: none;
+    max-height: min(92dvh, 100%);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .rule-modal-body {
+    min-height: 140px;
+  }
+
+  .rule-input-row,
+  .rule-quick-row {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .rule-input-row {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
 }
 </style>

@@ -68,6 +68,18 @@ function icon(type) {
   line-height: 1;
 }
 
+@media (max-width: 600px) {
+  .toast-container {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    width: calc(100% - 24px);
+  }
+
+  .toast {
+    width: 100%;
+    max-width: none;
+  }
+}
+
 .toast-text {
   line-height: 1.5;
   word-break: break-word;

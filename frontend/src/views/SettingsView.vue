@@ -510,11 +510,24 @@ onMounted(loadStatus)
 
 @media (max-width: 600px) {
   .settings-page {
-    padding: 24px 16px;
+    padding: 20px 16px 28px;
+  }
+
+  .settings-header h1 {
+    font-size: 1.45rem;
+  }
+
+  .status-card,
+  .edit-card {
+    padding: 20px 16px;
   }
 
   .status-grid {
     grid-template-columns: 1fr;
+  }
+
+  .btn-row .btn {
+    flex: 1;
   }
 }
 </style>

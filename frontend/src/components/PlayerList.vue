@@ -289,4 +289,25 @@ const roleNames = {
   padding: 1px 6px;
   border-radius: var(--radius-sm);
 }
+
+@media (max-width: 480px) {
+  .player-grid {
+    gap: 8px;
+  }
+
+  .player-grid.grid-8,
+  .player-grid.grid-12 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .player-card {
+    padding: 8px 4px;
+    min-height: 76px;
+  }
+
+  .player-avatar {
+    width: 28px;
+    height: 28px;
+  }
+}
 </style>

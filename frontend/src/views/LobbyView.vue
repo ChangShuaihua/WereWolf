@@ -1031,15 +1031,34 @@ async function handleSearchJoin() {
 
 @media (max-width: 768px) {
   .lobby-content {
-    padding: 24px 16px;
+    padding: 20px 16px 28px;
+    gap: 36px;
   }
   
   .modes-grid {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
   
   .hero-title {
-    font-size: 2.5rem;
+    font-size: clamp(1.7rem, 7.5vw, 2.2rem);
+  }
+
+  .hero-desc,
+  .section-desc {
+    font-size: 0.92rem;
+  }
+
+  .section-title {
+    font-size: 1.45rem;
+  }
+
+  .mode-card {
+    padding: 22px 18px;
+  }
+
+  .rooms-empty {
+    padding: 36px 16px;
   }
   
   .hero-stats {
@@ -1049,6 +1068,16 @@ async function handleSearchJoin() {
   .stat-card {
     flex: 1;
     min-width: 0;
+    padding: 14px 8px;
+  }
+
+  .stat-value {
+    font-size: 1.7rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    white-space: nowrap;
   }
 
   .room-search-bar {

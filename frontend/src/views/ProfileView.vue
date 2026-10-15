@@ -506,12 +506,36 @@ async function handleLogout() {
 
 @media (max-width: 600px) {
   .profile-page {
-    padding: 24px 16px;
+    padding: 20px 16px 28px;
+  }
+
+  .profile-header {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .header-spacer {
+    display: none;
+  }
+
+  .profile-header h1 {
+    font-size: 1.4rem;
   }
   
   .profile-card {
     flex-direction: column;
     text-align: center;
+    padding: 24px 16px;
+  }
+
+  .edit-card {
+    padding: 24px 16px;
+  }
+
+  .edit-card .btn {
+    width: 100%;
   }
 }
 </style>

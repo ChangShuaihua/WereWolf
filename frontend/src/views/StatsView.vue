@@ -545,4 +545,54 @@ onMounted(() => {
   min-width: 40px;
   text-align: right;
 }
+
+@media (max-width: 768px) {
+  .stats-page {
+    width: 100%;
+    padding: 16px 12px 24px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .score-value {
+    font-size: 2.6rem;
+  }
+
+  .score-details {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .record-item,
+  .rank-item {
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 8px;
+  }
+
+  .record-item {
+    flex-wrap: wrap;
+  }
+
+  .record-meta {
+    word-break: break-word;
+  }
+
+  .rank-name {
+    min-width: 0;
+  }
+
+  .rank-stats {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .pagination {
+    gap: 8px;
+  }
+}
 </style>

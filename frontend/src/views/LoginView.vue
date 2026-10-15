@@ -692,6 +692,13 @@ async function handleSubmit() {
 }
 
 @media (max-width: 900px) {
+  .login-container {
+    height: 100%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
   .login-content {
     grid-template-columns: 1fr;
     padding: 40px 20px;
@@ -722,6 +729,55 @@ async function handleSubmit() {
     height: 80px;
     top: 8%;
     right: 10%;
+  }
+}
+
+@media (max-width: 600px) {
+  .login-content {
+    padding: calc(72px + env(safe-area-inset-top, 0px)) 16px calc(28px + env(safe-area-inset-bottom, 0px));
+    gap: 20px;
+  }
+
+  .brand-logo {
+    gap: 12px;
+    margin-bottom: 0;
+  }
+
+  .logo-icon {
+    font-size: 2.6rem;
+  }
+
+  .brand-title {
+    font-size: 1.85rem;
+    white-space: normal;
+  }
+
+  .brand-subtitle {
+    letter-spacing: 0.12em;
+    font-size: 0.8rem;
+  }
+
+  .login-form-card {
+    padding: 28px 18px;
+  }
+
+  .card-header {
+    margin-bottom: 24px;
+  }
+
+  .card-header h2 {
+    font-size: 1.6rem;
+  }
+
+  .login-theme-toggle {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: 12px;
+  }
+
+  .moon,
+  .moon-glow,
+  .wolf-silhouette {
+    display: none;
   }
 }
 
