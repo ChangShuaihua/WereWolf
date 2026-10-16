@@ -14,7 +14,7 @@ const User = {
 
   async findByUsername(username) {
     const [rows] = await pool.query(
-      'SELECT id, username, password, ai_fallback_enabled, created_at FROM users WHERE username = ?',
+      'SELECT id, username, password, avatar_url, ai_fallback_enabled, created_at FROM users WHERE username = ?',
       [username]
     );
     return rows[0] || null;
@@ -22,7 +22,7 @@ const User = {
 
   async findById(id) {
     const [rows] = await pool.query(
-      'SELECT id, username, score, total_games, total_wins, total_losses, ai_fallback_enabled, created_at FROM users WHERE id = ?',
+      'SELECT id, username, avatar_url, score, total_games, total_wins, total_losses, ai_fallback_enabled, created_at FROM users WHERE id = ?',
       [id]
     );
     return rows[0] || null;
@@ -104,6 +104,11 @@ const User = {
     values.push(userId);
     await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
 
+    return this.findById(userId);
+  },
+
+  async updateAvatar(userId, avatarUrl) {
+    await pool.query('UPDATE users SET avatar_url = ? WHERE id = ?', [avatarUrl || null, userId]);
     return this.findById(userId);
   },
 

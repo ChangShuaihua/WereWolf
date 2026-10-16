@@ -104,6 +104,7 @@ const CoreMixin = {
           players: this.players.map(pl => ({
             id: pl.socketId,
             username: pl.username,
+            avatarUrl: pl.avatarUrl || '',
             seatNum: this.getSeatNum(pl.socketId),
             seatIndex: pl.seatIndex,
             isAlive: pl.isAlive,
@@ -132,6 +133,7 @@ const CoreMixin = {
     const players = this.players.map(pl => ({
       id: pl.socketId,
       username: pl.username,
+      avatarUrl: pl.avatarUrl || '',
       seatNum: this.getSeatNum(pl.socketId),
       seatIndex: pl.seatIndex,
       isAlive: pl.isAlive,

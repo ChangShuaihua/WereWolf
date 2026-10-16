@@ -69,8 +69,9 @@
             >
               <template v-if="seat.occupied">
                 <div class="seat-index">{{ seat.seatIndex + 1 }}</div>
-                <div class="seat-avatar" :class="{ 'ai-avatar': seat.isAI }">
-                  {{ seat.username?.charAt(0).toUpperCase() || '?' }}
+                <div class="seat-avatar" :class="{ 'ai-avatar': seat.isAI, 'has-photo': seat.avatarUrl }">
+                  <img v-if="seat.avatarUrl" :src="seat.avatarUrl" alt="" class="seat-photo" />
+                  <template v-else>{{ seat.username?.charAt(0).toUpperCase() || '?' }}</template>
                 </div>
                 <div class="seat-name">{{ seat.username }}</div>
                 <div class="seat-badges">
@@ -108,9 +109,21 @@
             <div class="add-ai-row">
               <select v-model="selectedAgentId" class="agent-select">
                 <option value="">选择AI智能体</option>
-                <option v-for="agent in aiAgents" :key="agent.id" :value="agent.id">
-                  {{ agent.avatar }} {{ agent.name }}
-                </option>
+                <optgroup v-if="builtinAgents.length" label="内置">
+                  <option v-for="agent in builtinAgents" :key="agent.id" :value="agent.id">
+                    {{ agent.avatar }} {{ agent.name }}
+                  </option>
+                </optgroup>
+                <optgroup v-if="myAgents.length" label="我的">
+                  <option v-for="agent in myAgents" :key="agent.id" :value="agent.id">
+                    {{ agent.avatar }} {{ agent.name }}
+                  </option>
+                </optgroup>
+                <optgroup v-if="otherAgents.length" label="其他用户">
+                  <option v-for="agent in otherAgents" :key="agent.id" :value="agent.id">
+                    {{ agent.avatar }} {{ agent.name }}
+                  </option>
+                </optgroup>
               </select>
               <button
                 class="btn btn-ai btn-block"
@@ -236,6 +249,9 @@ const loading = ref(true)
 const mobilePane = ref('seats')
 const aiAgents = ref([])
 const selectedAgentId = ref('')
+const builtinAgents = computed(() => aiAgents.value.filter(agent => agent.ownerId == null))
+const myAgents = computed(() => aiAgents.value.filter(agent => agent.ownerId != null && Number(agent.ownerId) === Number(userStore.user?.id)))
+const otherAgents = computed(() => aiAgents.value.filter(agent => agent.ownerId != null && Number(agent.ownerId) !== Number(userStore.user?.id)))
 
 // 规则问答面板
 const showRulePanel = ref(false)
@@ -719,6 +735,13 @@ function handleLeave() {
   font-weight: 600;
   color: var(--text-primary);
   border: 2px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.seat-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .seat-avatar.ai-avatar {

@@ -88,6 +88,7 @@ function startGame(io, socket, code) {
     id: p.userId,
     socketId: p.socketId,
     username: p.username,
+    avatarUrl: p.avatarUrl || '',
     seatIndex: p.seatIndex !== undefined ? p.seatIndex : 0,
     isAlive: true,
     isReady: p.isReady,

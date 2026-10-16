@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 const { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
@@ -15,7 +16,7 @@ const {
  */
 function initSocket(io) {
   // Socket.IO authentication middleware - verify JWT on connection
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
     
     if (!token) {
@@ -27,6 +28,13 @@ function initSocket(io) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       socket.userId = decoded.id;
       socket.username = decoded.username;
+      socket.avatarUrl = '';
+      try {
+        const user = await User.findById(decoded.id);
+        socket.avatarUrl = user?.avatar_url || '';
+      } catch (lookupErr) {
+        console.error('[socket] avatar lookup failed:', lookupErr.message);
+      }
       
       socketCache.set(socket.id, {
         userId: decoded.id,

@@ -20,9 +20,9 @@ const DEFAULT_AGENTS = [
       revealIdentity: 'early'
     },
     language: {
-      prefixes: ['我查的', '昨晚我'],
-      suffixes: ['大家信我', '绝对没错'],
-      favoriteWords: ['查杀', '金水', '铁狼']
+      prefixes: ['听我一句', '这轮我定'],
+      suffixes: ['跟我走', '别犹豫'],
+      favoriteWords: ['拍板', '站边', '带节奏']
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -47,7 +47,7 @@ const DEFAULT_AGENTS = [
     language: {
       prefixes: ['我觉得', '依我看'],
       suffixes: ['对吧', '大家觉得呢'],
-      favoriteWords: ['好人', '平民', '出']
+      favoriteWords: ['旁观', '慢一点', '看票']
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -72,7 +72,7 @@ const DEFAULT_AGENTS = [
     language: {
       prefixes: ['我怀疑', '听我说'],
       suffixes: ['绝对是狼', '票他'],
-      favoriteWords: ['查杀', '狼', '投']
+      favoriteWords: ['跳脸', '狼', '投']
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -95,9 +95,9 @@ const DEFAULT_AGENTS = [
       revealIdentity: 'late'
     },
     language: {
-      prefixes: ['我有药', '昨晚'],
+      prefixes: ['我先留一手', '昨晚的事'],
       suffixes: ['你们懂的', '不多说了'],
-      favoriteWords: ['救', '毒', '药']
+      favoriteWords: ['藏着', '后手', '再看']
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -120,9 +120,9 @@ const DEFAULT_AGENTS = [
       revealIdentity: 'early'
     },
     language: {
-      prefixes: ['谁敢投我', '我是猎人'],
-      suffixes: ['开枪带走你', '不信试试'],
-      favoriteWords: ['枪', '带走', '猎人']
+      prefixes: ['谁敢投我', '听清楚'],
+      suffixes: ['不信试试', '我跟到底'],
+      favoriteWords: ['硬刚', '对着干', '嗓门']
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -147,7 +147,7 @@ const DEFAULT_AGENTS = [
     language: {
       prefixes: ['哈哈', '笑死'], 
       suffixes: ['狗头', '滑稽'],
-      favoriteWords: ['村民', '快乐', '狼']
+      favoriteWords: ['玩笑', '快乐', '狼']
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -222,7 +222,7 @@ const DEFAULT_AGENTS = [
     language: {
       prefixes: ['嗯', '我觉得'],
       suffixes: ['再看看', '继续观察'],
-      favoriteWords: ['守', '保护', '平安']
+      favoriteWords: ['安静', '慢看', '再等等']
     },
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -329,6 +329,69 @@ function normalizeAgent(data = {}, existing = null) {
   };
 }
 
+function samePhraseList(current, expected) {
+  if (!Array.isArray(current) || !Array.isArray(expected) || current.length !== expected.length) return false;
+  return current.every((item, index) => item === expected[index]);
+}
+
+function languageMatches(current, expected) {
+  return samePhraseList(current?.prefixes, expected?.prefixes)
+    && samePhraseList(current?.suffixes, expected?.suffixes)
+    && samePhraseList(current?.favoriteWords, expected?.favoriteWords);
+}
+
+const LEGACY_BUILTIN_LANGUAGE = {
+  'agent-1': {
+    from: {
+      prefixes: ['我查的', '昨晚我'],
+      suffixes: ['大家信我', '绝对没错'],
+      favoriteWords: ['查杀', '金水', '铁狼'],
+    },
+  },
+  'agent-2': {
+    from: {
+      prefixes: ['我觉得', '依我看'],
+      suffixes: ['对吧', '大家觉得呢'],
+      favoriteWords: ['好人', '平民', '出'],
+    },
+  },
+  'agent-3': {
+    from: {
+      prefixes: ['我怀疑', '听我说'],
+      suffixes: ['绝对是狼', '票他'],
+      favoriteWords: ['查杀', '狼', '投'],
+    },
+  },
+  'agent-4': {
+    from: {
+      prefixes: ['我有药', '昨晚'],
+      suffixes: ['你们懂的', '不多说了'],
+      favoriteWords: ['救', '毒', '药'],
+    },
+  },
+  'agent-5': {
+    from: {
+      prefixes: ['谁敢投我', '我是猎人'],
+      suffixes: ['开枪带走你', '不信试试'],
+      favoriteWords: ['枪', '带走', '猎人'],
+    },
+  },
+  'agent-6': {
+    from: {
+      prefixes: ['哈哈', '笑死'],
+      suffixes: ['狗头', '滑稽'],
+      favoriteWords: ['村民', '快乐', '狼'],
+    },
+  },
+  'agent-9': {
+    from: {
+      prefixes: ['嗯', '我觉得'],
+      suffixes: ['再看看', '继续观察'],
+      favoriteWords: ['守', '保护', '平安'],
+    },
+  },
+};
+
 const LEGACY_BUILTIN_NAMES = {
   'agent-1': { from: '精明的预言家', name: '精明的带头人', avatar: '🧠' },
   'agent-2': { from: '冷静的村民', name: '冷静的旁观者', avatar: '😌' },
@@ -351,6 +414,7 @@ class AIAgentManager {
     if (this.initialized) return;
     await AIAgent.bulkInsertIfEmpty(DEFAULT_AGENTS.map(agent => normalizeAgent(agent)));
     await this._renameLegacyBuiltinNames();
+    await this._refreshLegacyBuiltinLanguage();
     await this.resetRandomAgents();
     this.initialized = true;
   }
@@ -368,6 +432,21 @@ class AIAgentManager {
     }
   }
 
+  async _refreshLegacyBuiltinLanguage() {
+    const defaults = new Map(DEFAULT_AGENTS.map(agent => [agent.id, agent]));
+    for (const [id, spec] of Object.entries(LEGACY_BUILTIN_LANGUAGE)) {
+      const existing = await AIAgent.findById(id);
+      const next = defaults.get(id);
+      if (!existing || existing.ownerId !== null || !next) continue;
+      if (!languageMatches(existing.language, spec.from)) continue;
+      await AIAgent.update(id, {
+        ...existing,
+        language: next.language,
+        updatedAt: Date.now(),
+      });
+    }
+  }
+
   async ensureInitialized() {
     if (!this.initialized) {
       await this.init();
@@ -377,6 +456,12 @@ class AIAgentManager {
   async getAllAgents() {
     await this.ensureInitialized();
     return AIAgent.findAll();
+  }
+
+  async getVisibleAgents(userId, admin = false) {
+    const agents = await this.getAllAgents();
+    if (admin) return agents;
+    return agents.filter(agent => agent.ownerId === null || Number(agent.ownerId) === Number(userId));
   }
 
   async getAgentById(id) {
@@ -434,4 +519,6 @@ class AIAgentManager {
   }
 }
 
-module.exports = new AIAgentManager();
+const manager = new AIAgentManager();
+manager.languageMatches = languageMatches;
+module.exports = manager;

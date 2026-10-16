@@ -3,6 +3,7 @@ const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
 const authMiddleware = require('../middleware/auth');
 const { issueTokens } = require('../utils/token');
+const { saveUserAvatar, removeStoredAvatar } = require('../utils/avatarStore');
 require('dotenv').config();
 
 const router = express.Router();
@@ -19,6 +20,32 @@ function validateUsername(username) {
 }
 
 // W16: password must be at least 6 chars and contain both letters and numbers
+function toClientUser(user, full = false) {
+  const clientUser = {
+    id: user.id,
+    username: user.username,
+    avatarUrl: user.avatar_url || '',
+    aiFallbackEnabled: user.ai_fallback_enabled === undefined ? true : Boolean(user.ai_fallback_enabled),
+  };
+  if (!full) return clientUser;
+  return {
+    ...clientUser,
+    score: user.score,
+    total_games: user.total_games,
+    total_wins: user.total_wins,
+    total_losses: user.total_losses,
+    created_at: user.created_at,
+  };
+}
+
+function syncAvatarToRooms(userId, avatarUrl) {
+  try {
+    require('../socket/roomHandler').applyUserAvatar(userId, avatarUrl || '');
+  } catch (err) {
+    console.error('Sync avatar to rooms failed:', err);
+  }
+}
+
 function validatePassword(password) {
   if (!password || typeof password !== 'string') return '密码不能为空';
   if (password.length < 6) return '密码长度不能少于6位';
@@ -47,7 +74,7 @@ router.post('/register', async (req, res) => {
     await RefreshToken.revokeAllForUser(user.id);
     const { accessToken, refreshToken } = await issueTokens(user);
 
-    res.json({ accessToken, refreshToken, user: { id: user.id, username: user.username, aiFallbackEnabled: true } });
+    res.json({ accessToken, refreshToken, user: toClientUser(user) });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ message: '注册失败，请稍后重试' });
@@ -79,11 +106,7 @@ router.post('/login', async (req, res) => {
     res.json({
       accessToken,
       refreshToken,
-      user: {
-        id: user.id,
-        username: user.username,
-        aiFallbackEnabled: Boolean(user.ai_fallback_enabled),
-      },
+      user: toClientUser(user),
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -98,13 +121,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: '用户不存在' });
     }
-    const { ai_fallback_enabled: aiFallbackEnabled, ...publicUser } = user;
-    res.json({
-      user: {
-        ...publicUser,
-        aiFallbackEnabled: Boolean(aiFallbackEnabled),
-      },
-    });
+    res.json({ user: toClientUser(user, true) });
   } catch (err) {
     console.error('Get user error:', err);
     res.status(500).json({ message: '获取用户信息失败' });
@@ -151,16 +168,43 @@ router.put('/me', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: '更新失败' });
     }
 
-    res.json({
-      user: {
-        id: updated.id,
-        username: updated.username,
-        aiFallbackEnabled: Boolean(updated.ai_fallback_enabled),
-      },
-    });
+    res.json({ user: toClientUser(updated, true) });
   } catch (err) {
     console.error('Update profile error:', err);
     res.status(500).json({ message: '更新失败，请稍后重试' });
+  }
+});
+
+// POST /api/auth/me/avatar
+router.post('/me/avatar', authMiddleware, async (req, res) => {
+  try {
+    const current = await User.findById(req.user.id);
+    if (!current) return res.status(404).json({ message: '用户不存在' });
+    const avatarUrl = await saveUserAvatar(req.user.id, req.body?.image);
+    const updated = await User.updateAvatar(req.user.id, avatarUrl);
+    if (!updated) return res.status(404).json({ message: '用户不存在' });
+    await removeStoredAvatar(current.avatar_url);
+    syncAvatarToRooms(req.user.id, avatarUrl);
+    res.json({ user: toClientUser(updated, true) });
+  } catch (err) {
+    const status = err.status || 500;
+    if (!err.status) console.error('Upload avatar error:', err);
+    res.status(status).json({ message: err.status ? err.message : '头像上传失败，请稍后重试' });
+  }
+});
+
+// DELETE /api/auth/me/avatar
+router.delete('/me/avatar', authMiddleware, async (req, res) => {
+  try {
+    const current = await User.findById(req.user.id);
+    if (!current) return res.status(404).json({ message: '用户不存在' });
+    const updated = await User.updateAvatar(req.user.id, null);
+    await removeStoredAvatar(current.avatar_url);
+    syncAvatarToRooms(req.user.id, '');
+    res.json({ user: toClientUser(updated, true) });
+  } catch (err) {
+    console.error('Clear avatar error:', err);
+    res.status(500).json({ message: '头像移除失败，请稍后重试' });
   }
 });
 

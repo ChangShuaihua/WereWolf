@@ -21,6 +21,7 @@ build/
 *.db
 backend/data/
 !backend/data/aiAgents.json
+backend/uploads/
 
 # Logs
 *.log

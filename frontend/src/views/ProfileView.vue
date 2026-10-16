@@ -8,8 +8,23 @@
 
     <div class="profile-content">
       <div class="profile-card">
-        <div class="profile-avatar">
-          <span class="avatar-icon">{{ userStore.user?.username?.charAt(0).toUpperCase() || '?' }}</span>
+        <div class="profile-avatar-wrap">
+          <button type="button" class="profile-avatar" :disabled="uploadingAvatar" @click="pickAvatar">
+            <img v-if="userStore.user?.avatarUrl" :src="userStore.user.avatarUrl" alt="" class="avatar-photo" />
+            <span v-else class="avatar-icon">{{ userStore.user?.username?.charAt(0).toUpperCase() || '?' }}</span>
+            <span class="avatar-edit">{{ uploadingAvatar ? '上传中' : '更换' }}</span>
+          </button>
+          <input
+            ref="avatarInput"
+            class="avatar-file"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            @change="onAvatarFile"
+          />
+          <button v-if="userStore.user?.avatarUrl" type="button" class="avatar-reset" @click="clearAvatar">
+            使用默认头像
+          </button>
+          <p v-if="avatarMessage" class="form-message" :class="avatarMessageType">{{ avatarMessage }}</p>
         </div>
         <div class="profile-info">
           <h2>{{ userStore.user?.username }}</h2>
@@ -112,6 +127,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import api from '../api'
+import { compressAvatar } from '../utils/avatarImage'
 import { useConfirmDialog } from '../composables/useConfirm'
 
 const { showConfirm } = useConfirmDialog()
@@ -133,6 +149,10 @@ const aiFallbackEnabled = ref(true)
 const savingAISettings = ref(false)
 const aiMessage = ref('')
 const aiMessageType = ref('success')
+const avatarInput = ref(null)
+const uploadingAvatar = ref(false)
+const avatarMessage = ref('')
+const avatarMessageType = ref('success')
 
 onMounted(async () => {
   if (userStore.user) {
@@ -142,8 +162,7 @@ onMounted(async () => {
 
   try {
     const { data } = await api.get('/auth/me')
-    userStore.user = data.user
-    localStorage.setItem('werewolf_user', JSON.stringify(data.user))
+    rememberUser(data.user)
     form.value.username = data.user.username
     aiFallbackEnabled.value = data.user.aiFallbackEnabled !== false
   } catch (err) {
@@ -152,6 +171,51 @@ onMounted(async () => {
   }
 })
 
+function rememberUser(user) {
+  userStore.user = { ...userStore.user, ...user }
+  localStorage.setItem('werewolf_user', JSON.stringify(userStore.user))
+}
+
+function pickAvatar() {
+  avatarInput.value?.click()
+}
+
+async function onAvatarFile(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  uploadingAvatar.value = true
+  avatarMessage.value = ''
+  try {
+    const image = await compressAvatar(file)
+    const { data } = await api.post('/auth/me/avatar', { image })
+    rememberUser(data.user)
+    avatarMessage.value = '头像已更新'
+    avatarMessageType.value = 'success'
+  } catch (err) {
+    avatarMessage.value = err.response?.data?.message || err.message || '头像上传失败'
+    avatarMessageType.value = 'error'
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
+
+async function clearAvatar() {
+  uploadingAvatar.value = true
+  avatarMessage.value = ''
+  try {
+    const { data } = await api.delete('/auth/me/avatar')
+    rememberUser(data.user)
+    avatarMessage.value = '已恢复默认头像'
+    avatarMessageType.value = 'success'
+  } catch (err) {
+    avatarMessage.value = err.response?.data?.message || '头像移除失败'
+    avatarMessageType.value = 'error'
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
+
 async function saveAISettings() {
   savingAISettings.value = true
   aiMessage.value = ''
@@ -159,8 +223,7 @@ async function saveAISettings() {
     const { data } = await api.put('/auth/me', {
       aiFallbackEnabled: aiFallbackEnabled.value,
     })
-    userStore.user = { ...userStore.user, ...data.user }
-    localStorage.setItem('werewolf_user', JSON.stringify(userStore.user))
+    rememberUser(data.user)
     aiMessage.value = 'AI 设置已保存，新添加的 AI 玩家将使用该设置。'
     aiMessageType.value = 'success'
   } catch (err) {
@@ -215,8 +278,7 @@ async function handleSave() {
       oldPassword: form.value.oldPassword || undefined,
     })
 
-    userStore.user = data.user
-    localStorage.setItem('werewolf_user', JSON.stringify(data.user))
+    rememberUser(data.user)
 
     message.value = '修改成功！'
     messageType.value = 'success'
@@ -309,16 +371,72 @@ async function handleLogout() {
   gap: 24px;
 }
 
+.profile-avatar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .profile-avatar {
+  position: relative;
   width: 80px;
   height: 80px;
+  padding: 0;
   background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
+  border: none;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 0 24px var(--ai-glow);
-  flex-shrink: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.profile-avatar:disabled {
+  cursor: progress;
+}
+
+.profile-avatar:focus-visible {
+  outline: 2px solid var(--ai-primary);
+  outline-offset: 3px;
+}
+
+.avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-edit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 0 5px;
+  background: rgba(8, 10, 15, 0.62);
+  color: #fff;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
+.avatar-file {
+  display: none;
+}
+
+.avatar-reset {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.avatar-reset:hover {
+  color: var(--text-primary);
 }
 
 .avatar-icon {

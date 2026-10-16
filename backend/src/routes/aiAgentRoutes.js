@@ -58,9 +58,18 @@ function validateAgent(body, partial = false) {
   return errors;
 }
 
+function presentAgent(req, agent) {
+  return {
+    ...agent,
+    builtin: agent.ownerId === null,
+    canModify: canModify(req, agent),
+  };
+}
+
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
-    res.json(await aiAgentManager.getAllAgents());
+    const agents = await aiAgentManager.getVisibleAgents(req.user.id, isAdmin(req.user.id));
+    res.json(agents.map(agent => presentAgent(req, agent)));
   } catch (err) {
     next(err);
   }

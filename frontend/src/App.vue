@@ -29,7 +29,8 @@
           <span v-else class="theme-icon">🌙</span>
         </button>
         <router-link to="/profile" class="user-link">
-          <span class="user-icon">👤</span>
+          <img v-if="userStore.user.avatarUrl" :src="userStore.user.avatarUrl" alt="" class="user-avatar" />
+          <span v-else class="user-icon">👤</span>
           <span class="user-name">{{ userStore.user.username }}</span>
         </router-link>
       </div>
@@ -123,6 +124,13 @@ const showChrome = computed(() => {
 .theme-icon {
   font-size: 1.1rem;
   transition: transform 0.3s ease;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .mobile-tabbar {

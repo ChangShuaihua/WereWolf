@@ -46,6 +46,7 @@ const GameEndMixin = {
       id: p.socketId,
       userId: p.id,
       username: p.username || this.getSeatNum(p.socketId),
+      avatarUrl: p.avatarUrl || '',
       role: this.roles[p.socketId],
       roleName: getRoleName(this.roles[p.socketId]),
       isAlive: p.isAlive,

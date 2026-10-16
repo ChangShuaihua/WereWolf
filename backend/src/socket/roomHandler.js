@@ -80,6 +80,7 @@ function buildSeats(room) {
         socketId: player.socketId,
         userId: player.userId,
         username: player.username,
+        avatarUrl: player.avatarUrl || '',
         isReady: player.isReady,
         isAI: player.isAI || false,
         isHost: player.socketId === room.hostId || player.userId === room.hostUserId,
@@ -108,6 +109,7 @@ function buildPublicSpectators(room) {
       socketId: spectator.socketId,
       userId: spectator.userId,
       username: spectator.username,
+      avatarUrl: spectator.avatarUrl || '',
     }));
 }
 
@@ -176,6 +178,7 @@ function buildPublicPlayers(players) {
     socketId: player.socketId,
     userId: player.userId,
     username: player.username,
+    avatarUrl: player.avatarUrl || '',
     seatIndex: player.seatIndex,
     isReady: Boolean(player.isReady),
     isAlive: Boolean(player.isAlive),
@@ -366,6 +369,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
   
   if (existing) {
     existing.socketId = socket.id;
+    existing.avatarUrl = socket.avatarUrl || '';
     existing.disconnectTime = null;
     if (!existing.userId) existing.userId = userId;
     
@@ -599,6 +603,7 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     socketId: socket.id,
     userId,
     username,
+    avatarUrl: socket.avatarUrl || '',
     isReady: isCreator, // creator auto-ready
     isAlive: true,
   };
@@ -688,12 +693,13 @@ function joinAsSpectator(socket, code, username, userId) {
   if (spectator) {
     spectator.socketId = socket.id;
     spectator.username = username;
+    spectator.avatarUrl = socket.avatarUrl || '';
   } else {
     if (room.spectators.filter(item => item.socketId).length >= MAX_SPECTATORS) {
       socket.emit('error', { message: '观众席已满' });
       return null;
     }
-    spectator = { socketId: socket.id, userId, username };
+    spectator = { socketId: socket.id, userId, username, avatarUrl: socket.avatarUrl || '' };
     room.spectators.push(spectator);
   }
 
@@ -993,6 +999,40 @@ async function ruleQA(socket, question) {
 /**
  * Broadcast updated player list to room
  */
+function applyUserAvatar(userId, avatarUrl) {
+  const next = avatarUrl || '';
+  try {
+    const io = require('../app').getIO();
+    for (const socket of io.sockets.sockets.values()) {
+      if (Number(socket.userId) === Number(userId)) socket.avatarUrl = next;
+    }
+  } catch (err) {
+    console.error('[roomHandler] update socket avatar failed:', err.message);
+  }
+
+  for (const code of roomCache.keys()) {
+    const room = roomCache.get(code);
+    if (!room) continue;
+    let changed = false;
+    for (const player of room.players || []) {
+      if (!player.isAI && Number(player.userId) === Number(userId)) {
+        player.avatarUrl = next;
+        changed = true;
+      }
+    }
+    for (const spectator of room.spectators || []) {
+      if (Number(spectator.userId) === Number(userId)) {
+        spectator.avatarUrl = next;
+        changed = true;
+      }
+    }
+    if (changed) {
+      roomCache.set(code, room);
+      broadcastRoomUpdate(code, room);
+    }
+  }
+}
+
 function broadcastRoomUpdate(code, room = null) {
   if (!room) {
     room = roomCache.get(code);
@@ -1009,6 +1049,7 @@ function broadcastRoomUpdate(code, room = null) {
       socketId: s.socketId,
       userId: s.userId,
       username: s.username,
+      avatarUrl: s.avatarUrl || '',
       isReady: s.isReady,
       isAI: s.isAI,
       isAlive: true,
@@ -1104,4 +1145,4 @@ function handleDisconnect(socket) {
   }
 }
 
-module.exports = { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits };
+module.exports = { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, applyUserAvatar, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits };

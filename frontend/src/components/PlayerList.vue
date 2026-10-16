@@ -22,7 +22,8 @@
         </div>
 
         <div class="player-avatar" :class="{ 'is-dead-avatar': seat.player.isAlive === false }">
-          {{ (seat.player.username || '?')[0] }}
+          <img v-if="seat.player.avatarUrl" :src="seat.player.avatarUrl" alt="" class="avatar-photo" />
+          <template v-else>{{ (seat.player.username || '?')[0] }}</template>
           <span v-if="seat.player.isAlive === false" class="avatar-skull">💀</span>
         </div>
         <div class="player-name" :class="{ 'is-dead-name': seat.player.isAlive === false }">{{ seat.player.username }}</div>
@@ -272,6 +273,13 @@ const roleNames = {
   justify-content: center;
   font-size: 0.95rem;
   position: relative;
+}
+
+.avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .empty-avatar {

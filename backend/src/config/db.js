@@ -188,6 +188,17 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 10,
+    description: 'users 表增加头像地址',
+    up: async (conn) => {
+      const [cols] = await conn.query('SHOW COLUMNS FROM users');
+      const existing = new Set(cols.map((c) => c.Field));
+      if (!existing.has('avatar_url')) {
+        await conn.query('ALTER TABLE users ADD COLUMN avatar_url VARCHAR(255) NULL AFTER username');
+      }
+    },
+  },
 ];
 
 async function ensureTableExists(conn) {
