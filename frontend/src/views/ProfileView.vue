@@ -48,36 +48,32 @@
         </div>
 
         <div class="form-group">
-          <label>旧密码</label>
-          <input
-            v-model="form.oldPassword"
-            type="password"
-            placeholder="输入旧密码（修改密码时必填）"
-            class="form-input"
-          />
-        </div>
-
-        <div class="form-group">
-          <label>新密码</label>
-          <input
-            v-model="form.password"
-            type="password"
-            placeholder="输入新密码（至少6位）"
-            minlength="6"
-            class="form-input"
-          />
-          <span class="form-hint">密码长度至少6位</span>
-        </div>
-
-        <div class="form-group">
-          <label>确认新密码</label>
-          <input
-            v-model="form.confirmPassword"
-            type="password"
-            placeholder="再次输入新密码"
-            minlength="6"
-            class="form-input"
-          />
+          <label :for="passwordFieldId">{{ passwordLabel }}</label>
+          <div class="password-row">
+            <input
+              :id="passwordFieldId"
+              ref="passwordInput"
+              v-model="passwordDraft"
+              type="password"
+              class="form-input"
+              :placeholder="passwordPlaceholder"
+              :autocomplete="passwordStep === 'old' ? 'current-password' : 'new-password'"
+              @keydown.enter.prevent="onPasswordEnter"
+            />
+            <button
+              v-if="passwordStep !== 'confirm'"
+              type="button"
+              class="password-next"
+              @click="advancePassword"
+            >下一步</button>
+          </div>
+          <span class="form-hint">{{ passwordHint }}</span>
+          <button
+            v-if="passwordStep !== 'old'"
+            type="button"
+            class="password-back"
+            @click="retreatPassword"
+          >{{ passwordStep === 'new' ? '重新输入旧密码' : '重新输入新密码' }}</button>
         </div>
 
         <div v-if="message" class="form-message" :class="messageType">
@@ -123,7 +119,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import api from '../api'
@@ -139,8 +135,22 @@ const form = ref({
   username: '',
   oldPassword: '',
   password: '',
-  confirmPassword: '',
 })
+const passwordDraft = ref('')
+const passwordStep = ref('old')
+const passwordInput = ref(null)
+const passwordLabel = computed(() => ({ old: '修改密码', new: '新密码', confirm: '确认新密码' }[passwordStep.value]))
+const passwordPlaceholder = computed(() => ({
+  old: '先输入旧密码',
+  new: '再输入新密码，至少6位',
+  confirm: '再输入一次新密码',
+}[passwordStep.value]))
+const passwordHint = computed(() => ({
+  old: '输完后按回车，或点下一步',
+  new: '密码至少6位，需包含字母和数字。',
+  confirm: '再输入一次新密码，确认没有打错。',
+}[passwordStep.value]))
+const passwordFieldId = computed(() => ({ old: 'old-password', new: 'new-password', confirm: 'confirm-password' }[passwordStep.value]))
 
 const saving = ref(false)
 const message = ref('')
@@ -234,8 +244,109 @@ async function saveAISettings() {
   }
 }
 
+function focusPassword() {
+  nextTick(() => passwordInput.value?.focus())
+}
+
+function advancePassword() {
+  const value = passwordDraft.value
+  if (passwordStep.value === 'old') {
+    if (!value) {
+      message.value = '先输入旧密码'
+      messageType.value = 'error'
+      return false
+    }
+    form.value.oldPassword = value
+    form.value.password = ''
+    passwordDraft.value = ''
+    passwordStep.value = 'new'
+  } else if (passwordStep.value === 'new') {
+    if (!value) {
+      message.value = '请输入新密码'
+      messageType.value = 'error'
+      return false
+    }
+    if (value.length < 6) {
+      message.value = '密码长度至少6位'
+      messageType.value = 'error'
+      return false
+    }
+    if (!/[a-zA-Z]/.test(value) || !/\d/.test(value)) {
+      message.value = '密码必须包含字母和数字'
+      messageType.value = 'error'
+      return false
+    }
+    form.value.password = value
+    passwordDraft.value = ''
+    passwordStep.value = 'confirm'
+  }
+  message.value = ''
+  focusPassword()
+  return true
+}
+
+function resetPasswordStep() {
+  passwordStep.value = 'old'
+  passwordDraft.value = ''
+  form.value.oldPassword = ''
+  form.value.password = ''
+  focusPassword()
+}
+
+function retreatPassword() {
+  if (passwordStep.value === 'confirm') {
+    passwordStep.value = 'new'
+    passwordDraft.value = ''
+    form.value.password = ''
+    message.value = ''
+    focusPassword()
+    return
+  }
+  resetPasswordStep()
+}
+
+function onPasswordEnter() {
+  if (passwordStep.value !== 'confirm') advancePassword()
+}
+
 async function handleSave() {
   message.value = ''
+
+  if (passwordStep.value === 'old' && passwordDraft.value) {
+    if (advancePassword()) {
+      message.value = '请继续输入新密码'
+      messageType.value = 'error'
+    }
+    return
+  }
+
+  if (passwordStep.value === 'new') {
+    if (!passwordDraft.value) {
+      message.value = '请输入新密码'
+      messageType.value = 'error'
+      return
+    }
+    if (advancePassword()) {
+      message.value = '请再确认一次新密码'
+      messageType.value = 'error'
+    }
+    return
+  }
+
+  if (passwordStep.value === 'confirm') {
+    if (!passwordDraft.value) {
+      message.value = '请再输入一次新密码'
+      messageType.value = 'error'
+      return
+    }
+    if (passwordDraft.value !== form.value.password) {
+      message.value = '两次输入的新密码不一致'
+      messageType.value = 'error'
+      passwordDraft.value = ''
+      focusPassword()
+      return
+    }
+  }
   
   if (!form.value.username && !form.value.password) {
     message.value = '请至少修改一项信息'
@@ -243,22 +354,10 @@ async function handleSave() {
     return
   }
 
-  if (form.value.password) {
-    if (!form.value.oldPassword) {
-      message.value = '修改密码需要提供旧密码'
-      messageType.value = 'error'
-      return
-    }
-    if (form.value.password.length < 6) {
-      message.value = '密码长度至少6位'
-      messageType.value = 'error'
-      return
-    }
-    if (form.value.password !== form.value.confirmPassword) {
-      message.value = '两次输入的密码不一致'
-      messageType.value = 'error'
-      return
-    }
+  if (form.value.password && !form.value.oldPassword) {
+    message.value = '修改密码需要提供旧密码'
+    messageType.value = 'error'
+    return
   }
 
   if (form.value.username) {
@@ -283,12 +382,11 @@ async function handleSave() {
     message.value = '修改成功！'
     messageType.value = 'success'
 
-    form.value.oldPassword = ''
-    form.value.password = ''
-    form.value.confirmPassword = ''
+    resetPasswordStep()
   } catch (err) {
     message.value = err.response?.data?.message || '修改失败'
     messageType.value = 'error'
+    if (String(message.value).includes('旧密码')) resetPasswordStep()
   } finally {
     saving.value = false
   }
@@ -530,6 +628,49 @@ async function handleLogout() {
 .form-hint {
   font-size: 0.8rem;
   color: var(--text-tertiary);
+}
+
+.password-row {
+  display: flex;
+  gap: 8px;
+}
+
+.password-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.password-next {
+  flex-shrink: 0;
+  height: 44px;
+  padding: 0 16px;
+  background: var(--bg-secondary);
+  border: var(--border-medium);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.password-next:hover,
+.password-next:focus-visible {
+  border-color: var(--ai-primary);
+  color: var(--ai-secondary);
+}
+
+.password-back {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.password-back:hover,
+.password-back:focus-visible {
+  color: var(--text-primary);
 }
 
 .form-message {
