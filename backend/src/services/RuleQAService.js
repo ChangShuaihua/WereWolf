@@ -1,5 +1,6 @@
-const { PromptTemplate } = require('@langchain/core/prompts');
+const { ChatPromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
+const { RunnableLambda } = require('@langchain/core/runnables');
 const gameRetriever = require('./GameRetriever');
 const llmConfig = require('../config/llmConfig');
 const User = require('../models/User');
@@ -65,9 +66,11 @@ class RuleQAService {
       return '抱歉，我暂时无法回答这个问题。';
     }
 
-    // 使用LLM生成自然语言回答
-    const prompt = new PromptTemplate({
-      template: `你是狼人杀游戏规则助手。请根据下方规则参考内容，准确回答玩家的问题。
+    const retrieveRules = RunnableLambda.from(async (question) => ({
+      question,
+      rulesContext: (await gameRetriever.getRulesContextForPrompt(question)) || rulesContext || '暂无相关规则参考',
+    }));
+    const prompt = ChatPromptTemplate.fromTemplate(`你是狼人杀游戏规则助手。请根据下方规则参考内容，准确回答玩家的问题。
 
 回答原则（按优先级排序）：
 1. **逻辑完整**：回答必须完整，不能中途断掉。先说结论，再解释原因。
@@ -86,20 +89,40 @@ class RuleQAService {
 === 玩家问题 ===
 {question}
 
-请回答：`,
-      inputVariables: ['rulesContext', 'question'],
-    });
+{repairHint}
+请回答：`);
+
+    const answerFrom = async (retrieved, repairHint) => {
+      const text = await prompt.pipe(model).pipe(new StringOutputParser()).invoke({
+        rulesContext: retrieved.rulesContext,
+        question: retrieved.question,
+        repairHint,
+      });
+      return String(text || '').trim();
+    };
+
+    const chain = retrieveRules.pipe(
+      RunnableLambda.from(async (retrieved) => {
+        let answer = await answerFrom(retrieved, '');
+        if (!answer || /参考内容中未提及/.test(answer)) {
+          answer = await answerFrom(retrieved, '上一次回答是空的，或说了参考内容里没有的话。请只根据规则参考重答。');
+        }
+        return answer;
+      }),
+    ).withFallbacks([
+      RunnableLambda.from(async (question) => {
+        const retrieved = await retrieveRules.invoke(question);
+        if (retrieved.rulesContext && retrieved.rulesContext !== '暂无相关规则参考') {
+          return `根据游戏规则：\n${retrieved.rulesContext}`;
+        }
+        return '抱歉，回答问题时出错了，请稍后再试。';
+      }),
+    ]);
 
     try {
-      const chain = prompt.pipe(model).pipe(new StringOutputParser());
-      const answer = await chain.invoke({
-        rulesContext: rulesContext || '暂无相关规则参考',
-        question: cleanQuestion,
-      });
-      return answer.trim();
+      return await chain.invoke(cleanQuestion);
     } catch (err) {
       console.error('[RuleQAService] LLM answer error:', err.message);
-      // 降级：返回检索到的规则片段
       if (rulesContext) {
         return `根据游戏规则：\n${rulesContext}`;
       }

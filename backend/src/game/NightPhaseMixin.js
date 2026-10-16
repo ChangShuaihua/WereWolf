@@ -235,7 +235,63 @@ const NightPhaseMixin = {
     });
   },
 
+  async _waitForAIWerewolfPack(aiPlayers) {
+    const aiGameHandler = require('./AIGameHandler');
+    const coordinator = require('./AITaskCoordinator');
+    const tasks = {};
+    const active = [];
+
+    for (const aiPlayer of aiPlayers) {
+      const opened = coordinator.beginFor(this, aiPlayer.socketId, 'night', 16000);
+      if (!opened.accepted) continue;
+      tasks[aiPlayer.socketId] = opened.task;
+      active.push(aiPlayer);
+    }
+    if (active.length === 0) return;
+
+    let decisions = [];
+    try {
+      decisions = await aiGameHandler.decideWerewolfPack(this, active, tasks);
+    } catch (error) {
+      console.error('[GameEngine] werewolf pack decision failed:', error);
+    }
+
+    for (const aiPlayer of active) {
+      const task = tasks[aiPlayer.socketId];
+      const decision = (decisions || []).find((item) => item.socketId === aiPlayer.socketId);
+      try {
+        if (!coordinator.samePhase(task, this)) {
+          coordinator.expire(task);
+          continue;
+        }
+        let action = decision?.action || null;
+        if (!action) {
+          action = aiGameHandler._getFallbackNightAction(this, aiPlayer, ROLE.WEREWOLF);
+          task.usedFallback = true;
+        }
+        if (!action || !coordinator.samePhase(task, this)) {
+          coordinator.expire(task);
+          continue;
+        }
+        const stored = this.submitNightAction(aiPlayer.socketId, action.action, action.targetId);
+        if (stored) coordinator.finish(task, task.usedFallback ? 'FALLBACK_SUBMITTED' : 'SUBMITTED', this);
+        else coordinator.expire(task);
+      } catch (error) {
+        coordinator.expire(task);
+        console.error(`[GameEngine] AI night action error for ${aiPlayer.username}:`, error);
+      }
+    }
+  },
+
   async _waitForAINightActions(aiPlayers) {
+    if (
+      aiPlayers.length > 1
+      && aiPlayers.every((player) => this.getRole(player.socketId) === ROLE.WEREWOLF)
+    ) {
+      await this._waitForAIWerewolfPack(aiPlayers);
+      return;
+    }
+
     const aiGameHandler = require('./AIGameHandler');
     const coordinator = require('./AITaskCoordinator');
 
