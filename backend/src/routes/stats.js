@@ -124,6 +124,7 @@ router.get('/ai', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     const retrieverStats = gameRetriever.getStats();
     const decisionLogs = aiGameHandler.getDecisionLogs();
+    const taskStats = require('../game/AITaskCoordinator').getStats();
 
     // 聚合统计，不暴露详细日志内容
     const phaseCounts = {};
@@ -135,6 +136,7 @@ router.get('/ai', authMiddleware, requireAdmin, async (req, res, next) => {
 
     res.json({
       retrieverStats,
+      taskStats,
       decisionLogCount: decisionLogs.length,
       phaseBreakdown: phaseCounts,
       roleBreakdown: roleCounts,

@@ -119,7 +119,7 @@ class GameRetriever {
     let failedFiles = 0;
 
     // 辅助方法：安全加载单个目录下的所有 .md 文件
-    const loadDir = (dir, dirName) => {
+    const loadDir = (dir, dirName, kind) => {
       if (!fs.existsSync(dir)) {
         console.warn(`[GameRetriever] ${dirName} directory not found: ${dir}`);
         return;
@@ -142,7 +142,7 @@ class GameRetriever {
           continue;
         }
         try {
-          const chunks = this._chunkDocument(content, file);
+          const chunks = this._chunkDocument(content, file, kind);
           this.docs.push(...chunks);
           totalChunks += chunks.length;
           totalFiles++;
@@ -154,11 +154,11 @@ class GameRetriever {
     };
 
     // 加载策略文档
-    loadDir(strategiesDir, 'Strategies');
+    loadDir(strategiesDir, 'Strategies', 'strategy');
     // 加载游戏规则文档
-    loadDir(rulesDir, 'Rules');
-    // 加载历史对局
-    loadDir(replaysDir, 'Replays');
+    loadDir(rulesDir, 'Rules', 'rules');
+    // 加载历史对局。对局只供赛后查阅，不进入当前局的策略检索。
+    loadDir(replaysDir, 'Replays', 'replay');
 
     this.isLoaded = true;
     const failedInfo = failedFiles > 0 ? `, ${failedFiles} files skipped due to errors` : '';
@@ -168,7 +168,7 @@ class GameRetriever {
   /**
    * 将文档按段落切块，每块不超过MAX_TOKENS字符
    */
-  _chunkDocument(content, fileName) {
+  _chunkDocument(content, fileName, kind = 'strategy') {
     const chunks = [];
     const paragraphs = content.split(/\n\n+/);
     const MAX_TOKENS = 500;
@@ -182,6 +182,7 @@ class GameRetriever {
       if (currentTokens + paraTokens > MAX_TOKENS && currentChunk) {
         chunks.push({
           source: fileName,
+          kind,
           content: currentChunk.trim(),
           tokens: currentTokens,
           _role: this._detectChunkRole(currentChunk),
@@ -197,6 +198,7 @@ class GameRetriever {
     if (currentChunk) {
       chunks.push({
         source: fileName,
+        kind,
         content: currentChunk.trim(),
         tokens: currentTokens,
         _role: this._detectChunkRole(currentChunk),
@@ -263,7 +265,7 @@ class GameRetriever {
     await this.initialize();
     if (this.docs.length === 0) return [];
 
-    const scores = this.docs.map(chunk => {
+    const scores = this.docs.filter(chunk => chunk.kind !== 'replay' && chunk.kind !== 'rules').map(chunk => {
       let score = 0;
       const content = chunk.content;
       const contentLower = content.toLowerCase();
@@ -405,7 +407,7 @@ class GameRetriever {
     // 提取问题关键词
     const keywords = this._extractKeywords(question);
     
-    const scores = this.docs.map(chunk => {
+    const scores = this.docs.filter(chunk => !chunk.kind || chunk.kind === 'rules').map(chunk => {
       let score = 0;
       const content = chunk.content;
       const contentLower = content.toLowerCase();
@@ -562,7 +564,7 @@ class GameRetriever {
       fs.writeFileSync(filePath, content, 'utf-8');
 
       // 将文档切块并加入内存索引
-      const chunks = this._chunkDocument(content, fileName);
+      const chunks = this._chunkDocument(content, fileName, 'replay');
       this.docs.push(...chunks);
 
       // 自动清理：保留最近100场对局

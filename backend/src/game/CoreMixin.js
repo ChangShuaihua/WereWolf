@@ -18,6 +18,12 @@ const CoreMixin = {
     return this.roles[socketId];
   },
 
+  enterPhase(phase) {
+    this.phase = phase;
+    this.phaseVersion = (this.phaseVersion || 0) + 1;
+    require('./AITaskCoordinator').expireRoom(this.roomCode);
+  },
+
   // 获取玩家座位号
   getSeatNum(socketId) {
     const player = this.getPlayer(socketId);

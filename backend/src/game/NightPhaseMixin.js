@@ -6,7 +6,7 @@ const NightPhaseMixin = {
   // 开始夜
   startNight() {
     this.nightCount++;
-    this.phase = PHASE.NIGHT;
+    this.enterPhase(PHASE.NIGHT);
     this.nightActions = {};
     this.killedByWerewolves = null;
     this.killedByWitch = null;
@@ -237,22 +237,41 @@ const NightPhaseMixin = {
 
   async _waitForAINightActions(aiPlayers) {
     const aiGameHandler = require('./AIGameHandler');
+    const coordinator = require('./AITaskCoordinator');
 
     for (const aiPlayer of aiPlayers) {
       const role = this.getRole(aiPlayer.socketId);
       if (!role) continue;
 
+      const opened = coordinator.beginFor(this, aiPlayer.socketId, 'night', 16000);
+      if (!opened.accepted) continue;
+      const task = opened.task;
+
       try {
-        const action = await aiGameHandler._decideNightAction(this, aiPlayer, role);
-        if (action) {
-          this.submitNightAction(aiPlayer.socketId, action.action, action.targetId);
-        } else if (!(await aiGameHandler._getModelForRoom(this.roomCode))) {
-          const fallbackAction = aiGameHandler._getFallbackNightAction(this, aiPlayer, role);
-          if (fallbackAction) {
-            this.submitNightAction(aiPlayer.socketId, fallbackAction.action, fallbackAction.targetId);
-          }
+        const result = await coordinator.withDeadline(
+          aiGameHandler._decideNightAction(this, aiPlayer, role, task),
+          task.deadline - Date.now(),
+        );
+        if (!coordinator.samePhase(task, this)) {
+          coordinator.expire(task);
+          continue;
         }
+
+        let action = result.done ? result.action : null;
+        if (!result.done) {
+          action = aiGameHandler._getFallbackNightAction(this, aiPlayer, role);
+          task.usedFallback = true;
+        }
+        if (!action || !coordinator.samePhase(task, this)) {
+          coordinator.expire(task);
+          continue;
+        }
+
+        const stored = this.submitNightAction(aiPlayer.socketId, action.action, action.targetId);
+        if (stored) coordinator.finish(task, task.usedFallback ? 'FALLBACK_SUBMITTED' : 'SUBMITTED', this);
+        else coordinator.expire(task);
       } catch (error) {
+        coordinator.expire(task);
         console.error(`[GameEngine] AI night action error for ${aiPlayer.username}:`, error);
       }
     }
@@ -260,9 +279,9 @@ const NightPhaseMixin = {
 
   // ==================== Night Actions ====================
   submitNightAction(socketId, action, targetId) {
-    if (this.phase !== PHASE.NIGHT) return;
+    if (this.phase !== PHASE.NIGHT) return false;
     const player = this.getPlayer(socketId);
-    if (!player || !player.isAlive) return;
+    if (!player || !player.isAlive) return false;
 
     const target = this.getPlayer(targetId);
     const role = this.roles[socketId];
@@ -273,23 +292,23 @@ const NightPhaseMixin = {
       [ROLE.WITCH]: ['save', 'poison', 'skip'],
     };
 
-    if (!allowedActions[role]?.includes(action)) return;
-    if (this.nightActions[socketId]) return;
+    if (!allowedActions[role]?.includes(action)) return false;
+    if (this.nightActions[socketId]) return false;
 
     if (['kill', 'check', 'guard', 'poison'].includes(action)) {
-      if (!target || !target.isAlive || target.socketId === socketId) return;
+      if (!target || !target.isAlive || target.socketId === socketId) return false;
     }
 
-    if (action === 'save' && (!this.killedByWerewolves || targetId !== this.killedByWerewolves)) return;
+    if (action === 'save' && (!this.killedByWerewolves || targetId !== this.killedByWerewolves)) return false;
 
     // C1: role-based validation
-    if (action === 'save' && this.witchSaveUsed) return;
-    if (action === 'poison' && this.witchPoisonUsed) return;
+    if (action === 'save' && this.witchSaveUsed) return false;
+    if (action === 'poison' && this.witchPoisonUsed) return false;
     if (action === 'guard' && targetId && targetId === this.guardLastProtected) {
-      return;
+      return false;
     }
     if (action === 'kill' && this.roles[target.socketId] === ROLE.WEREWOLF) {
-      return;
+      return false;
     }
 
     // 每名玩家每夜只接受一次有效行动，避免重复用药或覆盖已确认选择。
@@ -350,12 +369,14 @@ const NightPhaseMixin = {
     }
 
     this.pushSpectatorView();
+    return true;
   },
 
   // ==================== Resolve Night ====================
   resolveNight() {
     this.clearTimer();
     if (this.phase !== PHASE.NIGHT) return;
+    require('./AITaskCoordinator').expireRoom(this.roomCode);
 
     const deaths = new Set();
 

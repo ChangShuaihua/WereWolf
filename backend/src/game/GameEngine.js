@@ -24,6 +24,7 @@ class GameEngine extends EventEmitter {
     this.maxPlayers = maxPlayers;        // 6, 8, or 12
     this.roles = {};
     this.phase = PHASE.WAITING;
+    this.phaseVersion = 0;
     this.phaseTimer = null;              // 游戏阶段计时器
     this.startTime = null;               // 游戏开始时间
 

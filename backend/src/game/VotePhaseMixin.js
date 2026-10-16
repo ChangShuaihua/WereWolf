@@ -3,7 +3,7 @@ const { PHASE, TIMERS } = require('./constants');
 const VotePhaseMixin = {
   // ==================== Vote Phase ====================
   async startVote() {
-    this.phase = PHASE.VOTE;
+    this.enterPhase(PHASE.VOTE);
     this.votes = {};
     this.currentSpeaker = null;
 
@@ -31,33 +31,53 @@ const VotePhaseMixin = {
 
   async _waitForAIVotes(aiPlayers) {
     const aiGameHandler = require('./AIGameHandler');
+    const coordinator = require('./AITaskCoordinator');
 
     for (const aiPlayer of aiPlayers) {
+      const opened = coordinator.beginFor(this, aiPlayer.socketId, 'vote', 12000);
+      if (!opened.accepted) continue;
+      const task = opened.task;
+
       try {
-        const voteTarget = await aiGameHandler._decideVote(this, aiPlayer);
-        if (voteTarget) {
-          this.submitVote(aiPlayer.socketId, voteTarget);
-        } else if (!(await aiGameHandler._getModelForRoom(this.roomCode))) {
-          const fallbackTarget = aiGameHandler._getFallbackVote(this, aiPlayer);
-          if (fallbackTarget) {
-            this.submitVote(aiPlayer.socketId, fallbackTarget);
-          }
+        const result = await coordinator.withDeadline(
+          aiGameHandler._decideVote(this, aiPlayer, task),
+          task.deadline - Date.now(),
+        );
+        if (!coordinator.samePhase(task, this)) {
+          coordinator.expire(task);
+          continue;
         }
+
+        let voteTarget = result.done ? result.action : null;
+        if (!result.done) {
+          voteTarget = aiGameHandler._getFallbackVote(this, aiPlayer);
+          task.usedFallback = true;
+        }
+        if (!voteTarget || !coordinator.samePhase(task, this)) {
+          coordinator.expire(task);
+          continue;
+        }
+
+        const stored = this.submitVote(aiPlayer.socketId, voteTarget);
+        if (stored) coordinator.finish(task, task.usedFallback ? 'FALLBACK_SUBMITTED' : 'SUBMITTED', this);
+        else coordinator.expire(task);
       } catch (error) {
+        coordinator.expire(task);
         console.error(`[GameEngine] AI vote error for ${aiPlayer.username}:`, error);
       }
     }
   },
 
   submitVote(socketId, targetId) {
-    if (this.phase !== PHASE.VOTE) return;
+    if (this.phase !== PHASE.VOTE) return false;
     const voter = this.getPlayer(socketId);
-    if (!voter || !voter.isAlive) return;
+    if (!voter || !voter.isAlive) return false;
 
     // C3: during PK, votes must target one of the PK candidates
-    if (this.pkCandidates.length > 0 && !this.pkCandidates.includes(targetId)) return;
+    if (this.pkCandidates.length > 0 && !this.pkCandidates.includes(targetId)) return false;
 
     const target = this.getPlayer(targetId);
+    if (!target || !target.isAlive) return false;
 
     this.votes[socketId] = targetId;
 
@@ -75,11 +95,13 @@ const VotePhaseMixin = {
       totalCount: this.alivePlayers.length,
     });
     this.pushSpectatorView();
+    return true;
   },
 
   resolveVote() {
     this.clearTimer();
     if (this.phase !== PHASE.VOTE) return;
+    require('./AITaskCoordinator').expireRoom(this.roomCode);
 
     const alive = this.alivePlayers;
     const tally = {};
@@ -175,34 +197,43 @@ const VotePhaseMixin = {
     }
 
     // Reset votes and restrict candidates for the PK round
+    this.enterPhase(PHASE.VOTE);
     this.votes = {};
     this.pkCandidates = pkCandidates;
     this.candidates = pkCandidates;
     this.lastPhaseMessage = `${pkCandidates.map(id => this.getSeatNum(id)).join('、')} 进入PK，请再次投票`;
 
-    // Convert socketId array to {id, username} format for frontend
-    const candidatesForFrontend = pkCandidates.map(id => ({
-      id,
-      username: this.getSeatNum(id),
-    }));
+    const aiPlayers = this.alivePlayers.filter(player => player.isAI);
+    const continuePk = async () => {
+      if (aiPlayers.length > 0) {
+        await this._waitForAIVotes(aiPlayers);
+      }
+      if (this.phase !== PHASE.VOTE) return;
 
-    this.broadcast('phase_change', {
-      phase: PHASE.VOTE,
-      isPK: true,
-      candidates: candidatesForFrontend,
-      timeout: 30,
-      message: this.lastPhaseMessage,
-    });
-    this.broadcast('chat_message', {
-      username: '系统',
-      message: `🗳️ ${this.lastPhaseMessage}`,
-      timestamp: Date.now(),
-      isSystem: true,
-    });
+      const candidatesForFrontend = pkCandidates.map(id => ({
+        id,
+        username: this.getSeatNum(id),
+      }));
 
-    this.clearTimer();
-    this.phaseTimer = setTimeout(() => this.resolveVote(), 30000);
-    this.pushSpectatorView();
+      this.broadcast('phase_change', {
+        phase: PHASE.VOTE,
+        isPK: true,
+        candidates: candidatesForFrontend,
+        timeout: 30,
+        message: this.lastPhaseMessage,
+      });
+      this.broadcast('chat_message', {
+        username: '系统',
+        message: `🗳️ ${this.lastPhaseMessage}`,
+        timestamp: Date.now(),
+        isSystem: true,
+      });
+
+      this.clearTimer();
+      this.phaseTimer = setTimeout(() => this.resolveVote(), 30000);
+      this.pushSpectatorView();
+    };
+    continuePk();
   },
 };
 

@@ -3,7 +3,7 @@ const { PHASE, TIMERS } = require('./constants');
 const DayPhaseMixin = {
   // ==================== Discussion Phase ====================
   startFreeDiscussion() {
-    this.phase = PHASE.DISCUSSION;
+    this.enterPhase(PHASE.DISCUSSION);
     this.lastPhaseMessage = '自由讨论阶段，所有人可以发言';
 
     this.broadcast('phase_change', {
@@ -36,8 +36,6 @@ const DayPhaseMixin = {
   },
 
   _triggerAIFreeDiscussion(aiPlayers) {
-    const aiGameHandler = require('./AIGameHandler');
-
     console.log(`[GameEngine] Starting AI free discussion for ${aiPlayers.length} AI players`);
 
     // Launch all AI players in parallel with independent random delays
@@ -66,7 +64,7 @@ const DayPhaseMixin = {
 
           // Generate first message with fallback
           console.log(`[GameEngine] AI ${aiPlayer.username} generating first message...`);
-          let message = await aiGameHandler._generateChatMessage(this, aiPlayer);
+          let message = await this._takeAiOutput(aiPlayer, 'discuss-1', 15000);
 
           if (message && message.trim()) {
             const finalMessage = this._ensureMessageLength(message, aiPlayer);
@@ -92,7 +90,7 @@ const DayPhaseMixin = {
 
           // Generate second message with different context
           console.log(`[GameEngine] AI ${aiPlayer.username} generating second message...`);
-          let message2 = await aiGameHandler._generateChatMessage(this, aiPlayer);
+          let message2 = await this._takeAiOutput(aiPlayer, 'discuss-2', 15000);
 
           if (message2 && message2.trim()) {
             const finalMessage2 = this._ensureMessageLength(message2, aiPlayer);
@@ -118,7 +116,7 @@ const DayPhaseMixin = {
   },
 
   startOrderedSpeaking() {
-    this.phase = PHASE.DAY;
+    this.enterPhase(PHASE.DAY);
 
     const alive = this.alivePlayers;
     this.speakingOrder = alive.map(p => p.socketId);
@@ -176,7 +174,7 @@ const DayPhaseMixin = {
 
   // ==================== Last Will Phase ====================
   startLastWill(deadPlayers) {
-    this.phase = PHASE.LAST_WILL;
+    this.enterPhase(PHASE.LAST_WILL);
     this.lastWillQueue = [...deadPlayers];
     this.lastWillIndex = 0;
 
@@ -231,12 +229,11 @@ const DayPhaseMixin = {
   },
 
   async _generateAILastWill(socketId) {
-    const aiGameHandler = require('./AIGameHandler');
     const player = this.getPlayer(socketId);
     if (!player) return;
 
     try {
-      const message = await aiGameHandler._generateLastWillMessage(this, player);
+      const message = await this._takeAiOutput(player, 'last-will', 8000);
       if (message && message.trim()) {
         this.broadcast('chat_message', {
           username: this.getSeatNum(socketId),
@@ -271,12 +268,11 @@ const DayPhaseMixin = {
   },
 
   async _triggerAISpeaking(socketId) {
-    const aiGameHandler = require('./AIGameHandler');
     const player = this.getPlayer(socketId);
     if (!player || !player.isAI) return;
 
     try {
-      const message = await aiGameHandler._generateChatMessage(this, player);
+      const message = await this._takeAiOutput(player, 'speak', 15000);
       const finalMessage = this._ensureMessageLength(message, player);
       if (finalMessage) {
         this.broadcast('chat_message', {
@@ -290,6 +286,44 @@ const DayPhaseMixin = {
     } catch (error) {
       console.error(`[GameEngine] AI speaking error for ${player.username}:`, error);
       setTimeout(() => this.nextSpeaker(), 5000);
+    }
+  },
+
+  async _takeAiOutput(player, kind, deadlineMs) {
+    const coordinator = require('./AITaskCoordinator');
+    const aiGameHandler = require('./AIGameHandler');
+    const opened = coordinator.beginFor(this, player.socketId, kind, deadlineMs);
+    if (!opened.accepted) return '';
+    const task = opened.task;
+
+    const generate = kind === 'last-will'
+      ? aiGameHandler._generateLastWillMessage(this, player, task)
+      : aiGameHandler._generateChatMessage(this, player, task);
+
+    try {
+      const result = await coordinator.withDeadline(generate, task.deadline - Date.now());
+      const stillSpeaking = kind !== 'speak' || this.currentSpeaker === player.socketId;
+      if (!coordinator.samePhase(task, this) || !stillSpeaking) {
+        coordinator.expire(task);
+        return '';
+      }
+
+      let output = result.done ? result.action : '';
+      if (!result.done || !String(output || '').trim()) {
+        output = kind === 'last-will'
+          ? aiGameHandler._getFallbackLastWillMessage(this, player)
+          : aiGameHandler._getFallbackChatMessage(this, player);
+        task.usedFallback = true;
+      }
+      if (!coordinator.samePhase(task, this) || !String(output || '').trim()) {
+        coordinator.expire(task);
+        return '';
+      }
+      coordinator.finish(task, task.usedFallback ? 'FALLBACK_SUBMITTED' : 'SUBMITTED', this);
+      return output;
+    } catch (error) {
+      coordinator.expire(task);
+      throw error;
     }
   },
 
@@ -307,6 +341,9 @@ const DayPhaseMixin = {
   },
 
   nextSpeaker() {
+    if (this.currentSpeaker) {
+      require('./AITaskCoordinator').expireKind(this.roomCode, this.currentSpeaker, 'speak');
+    }
     if (this.phase !== PHASE.DAY) return;
 
     this.hasSpoken.add(this.speakingOrder[this.currentSpeakerIndex]);

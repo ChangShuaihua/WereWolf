@@ -38,7 +38,7 @@ const GameEndMixin = {
   // ==================== Game End ====================
   endGame(winner, message) {
     this.clearTimer();
-    this.phase = PHASE.END;
+    this.enterPhase(PHASE.END);
 
     const duration = this.startTime ? Math.floor((Date.now() - this.startTime) / 1000) : 0;
 
