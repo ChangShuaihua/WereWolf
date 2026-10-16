@@ -4,8 +4,8 @@ const AIAgent = require('../models/AIAgent');
 const DEFAULT_AGENTS = [
   {
     id: 'agent-1',
-    name: '精明的预言家',
-    avatar: '🔮',
+    name: '精明的带头人',
+    avatar: '🧠',
     personality: {
       aggressiveness: 70,
       caution: 60,
@@ -29,8 +29,8 @@ const DEFAULT_AGENTS = [
   },
   {
     id: 'agent-2',
-    name: '冷静的村民',
-    avatar: '👨‍🌾',
+    name: '冷静的旁观者',
+    avatar: '😌',
     personality: {
       aggressiveness: 30,
       caution: 80,
@@ -54,8 +54,8 @@ const DEFAULT_AGENTS = [
   },
   {
     id: 'agent-3',
-    name: '狡猾的狼人',
-    avatar: '🐺',
+    name: '油滑的嘴炮',
+    avatar: '😏',
     personality: {
       aggressiveness: 80,
       caution: 50,
@@ -79,8 +79,8 @@ const DEFAULT_AGENTS = [
   },
   {
     id: 'agent-4',
-    name: '神秘的女巫',
-    avatar: '🧪',
+    name: '话少的谜语人',
+    avatar: '🌫️',
     personality: {
       aggressiveness: 50,
       caution: 90,
@@ -104,8 +104,8 @@ const DEFAULT_AGENTS = [
   },
   {
     id: 'agent-5',
-    name: '强势的猎人',
-    avatar: '🏹',
+    name: '嗓门大的直球',
+    avatar: '📣',
     personality: {
       aggressiveness: 95,
       caution: 30,
@@ -129,8 +129,8 @@ const DEFAULT_AGENTS = [
   },
   {
     id: 'agent-6',
-    name: '幽默的平民',
-    avatar: '😂',
+    name: '爱开玩笑的话匣子',
+    avatar: '😄',
     personality: {
       aggressiveness: 40,
       caution: 50,
@@ -154,7 +154,7 @@ const DEFAULT_AGENTS = [
   },
   {
     id: 'agent-7',
-    name: '新手小白',
+    name: '腼腆的新手',
     avatar: '🐣',
     personality: {
       aggressiveness: 20,
@@ -179,8 +179,8 @@ const DEFAULT_AGENTS = [
   },
   {
     id: 'agent-8',
-    name: '话痨侦探',
-    avatar: '🔍',
+    name: '停不下来的分析狂',
+    avatar: '🗣️',
     personality: {
       aggressiveness: 60,
       caution: 40,
@@ -204,8 +204,8 @@ const DEFAULT_AGENTS = [
   },
   {
     id: 'agent-9',
-    name: '沉默的守卫',
-    avatar: '🛡️',
+    name: '寡言的观察者',
+    avatar: '🤫',
     personality: {
       aggressiveness: 15,
       caution: 95,
@@ -329,6 +329,18 @@ function normalizeAgent(data = {}, existing = null) {
   };
 }
 
+const LEGACY_BUILTIN_NAMES = {
+  'agent-1': { from: '精明的预言家', name: '精明的带头人', avatar: '🧠' },
+  'agent-2': { from: '冷静的村民', name: '冷静的旁观者', avatar: '😌' },
+  'agent-3': { from: '狡猾的狼人', name: '油滑的嘴炮', avatar: '😏' },
+  'agent-4': { from: '神秘的女巫', name: '话少的谜语人', avatar: '🌫️' },
+  'agent-5': { from: '强势的猎人', name: '嗓门大的直球', avatar: '📣' },
+  'agent-6': { from: '幽默的平民', name: '爱开玩笑的话匣子', avatar: '😄' },
+  'agent-7': { from: '新手小白', name: '腼腆的新手', avatar: '🐣' },
+  'agent-8': { from: '话痨侦探', name: '停不下来的分析狂', avatar: '🗣️' },
+  'agent-9': { from: '沉默的守卫', name: '寡言的观察者', avatar: '🤫' },
+};
+
 class AIAgentManager {
   constructor() {
     this.availableAgents = [];// 默认智能体列表
@@ -338,8 +350,22 @@ class AIAgentManager {
   async init() {
     if (this.initialized) return;
     await AIAgent.bulkInsertIfEmpty(DEFAULT_AGENTS.map(agent => normalizeAgent(agent)));
+    await this._renameLegacyBuiltinNames();
     await this.resetRandomAgents();
     this.initialized = true;
+  }
+
+  async _renameLegacyBuiltinNames() {
+    for (const [id, spec] of Object.entries(LEGACY_BUILTIN_NAMES)) {
+      const existing = await AIAgent.findById(id);
+      if (!existing || existing.name !== spec.from) continue;
+      await AIAgent.update(id, {
+        ...existing,
+        name: spec.name,
+        avatar: spec.avatar,
+        updatedAt: Date.now(),
+      });
+    }
   }
 
   async ensureInitialized() {

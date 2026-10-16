@@ -32,7 +32,6 @@ function pLimit(concurrency) {
 
 class AIGameHandler {
   constructor() {
-    this.aiNames = ['小狼', '预言', '女巫', '守卫', '猎人', '村民', '智者', '勇者'];
     this.aiIdCounter = 0;
     this.aiChatTimers = {};
     // AI决策日志（保留最近100条）
