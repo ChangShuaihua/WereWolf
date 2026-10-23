@@ -65,4 +65,12 @@ defineProps({
   font-size: 0.75rem;
   font-weight: 700;
 }
+
+@media (max-width: 768px) {
+  .spectator-select {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+  }
+}
 </style>

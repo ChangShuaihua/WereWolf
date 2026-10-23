@@ -1,5 +1,5 @@
 <template>
-  <div class="game-page" :class="`pane-${mobilePane}`">
+  <div class="game-page">
     <!-- Loading overlay -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
@@ -48,12 +48,6 @@
         <div class="game-message" v-if="gameStore.message">{{ gameStore.message }}</div>
       </div>
     </header>
-
-    <nav class="game-mobile-tabs" aria-label="对局分区">
-      <button type="button" :class="{ active: mobilePane === 'players' }" @click="mobilePane = 'players'">玩家</button>
-      <button type="button" :class="{ active: mobilePane === 'action', alert: actionNeedsYou }" @click="mobilePane = 'action'">操作</button>
-      <button type="button" :class="{ active: mobilePane === 'chat' }" @click="mobilePane = 'chat'">聊天</button>
-    </nav>
 
     <!-- Main Content -->
     <div class="game-main">
@@ -257,7 +251,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { useRoomStore } from '../stores/room'
@@ -284,7 +278,6 @@ const userStore = useUserStore()
 const showRoleReveal = ref(false)
 const loading = ref(true)
 const thoughtPlayer = ref(null)
-const mobilePane = ref('players')
 
 // 规则问答面板
 const showRulePanel = ref(false)
@@ -372,24 +365,6 @@ const hasAction = computed(() => {
     || gameStore.isDay
     || (gameStore.isVote && alive)
 })
-
-const actionNeedsYou = computed(() => {
-  const alive = gameStore.myPlayer?.isAlive
-  return mobilePane.value !== 'action' && (
-    (gameStore.isNight && alive && !!gameStore.nightActionPrompt)
-    || !!gameStore.hunterPrompt
-    || (gameStore.isVote && alive && !gameStore.myVote)
-  )
-})
-
-watch(
-  () => [gameStore.phase, !!gameStore.hunterPrompt],
-  ([phase, hunter]) => {
-    if (window.innerWidth > 768) return
-    if (hunter || phase === 'NIGHT' || phase === 'VOTE') mobilePane.value = 'action'
-    else if (phase === 'DISCUSSION' || phase === 'LAST_WILL' || phase === 'DAY') mobilePane.value = 'chat'
-  }
-)
 
 function viewReplay(gameId) {
   router.push({
@@ -977,10 +952,6 @@ function returnToRoom() {
   cursor: not-allowed;
 }
 
-.game-mobile-tabs {
-  display: none;
-}
-
 .action-empty {
   flex: 1;
   display: flex;
@@ -993,39 +964,6 @@ function returnToRoom() {
 }
 
 @media (max-width: 768px) {
-  .game-mobile-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    padding: 8px 10px 0;
-    flex-shrink: 0;
-    position: relative;
-    z-index: 2;
-  }
-
-  .game-mobile-tabs button {
-    height: 36px;
-    border: var(--border-medium);
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-    border-radius: var(--radius-md);
-    font-family: var(--font-sans);
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .game-mobile-tabs button.active {
-    background: var(--ai-primary);
-    color: var(--on-accent);
-    border-color: transparent;
-  }
-
-  .game-mobile-tabs button.alert:not(.active) {
-    color: var(--werewolf-primary);
-    border-color: color-mix(in srgb, var(--werewolf-primary) 50%, transparent);
-  }
-
   .rule-modal-mask {
     padding: 0;
     align-items: flex-end;

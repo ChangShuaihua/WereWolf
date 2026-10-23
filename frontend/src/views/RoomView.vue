@@ -35,7 +35,7 @@
           </button>
           <button
             v-if="!roomStore.isSpectator"
-            class="btn"
+            class="btn btn-ready-toggle"
             :class="myIsReady ? 'btn-ready' : 'btn-secondary'"
             @click="roomStore.toggleReady()"
           >
@@ -918,7 +918,7 @@ function handleLeave() {
   .seat-grid-6,
   .seat-grid-8,
   .seat-grid-12 {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .add-ai-row {
@@ -937,6 +937,7 @@ function handleLeave() {
     grid-template-rows: auto minmax(0, 1fr);
     gap: 10px;
     padding: calc(10px + env(safe-area-inset-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden;
   }
 
   .room-mobile-tabs {
@@ -1006,14 +1007,112 @@ function handleLeave() {
     white-space: nowrap;
   }
 
+  .room-page,
+  .room-main,
+  .room-content,
+  .room-players-panel,
+  .seat-grid {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .room-mobile-tabs button {
+    height: 44px;
+    letter-spacing: 0.12em;
+    font-family: var(--font-display);
+  }
+
+  .room-code {
+    font-size: 1.05rem;
+    letter-spacing: 0.14em;
+  }
+
+  .room-header-right {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .room-header-right .btn {
+    min-width: 0;
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .room-header-right .btn-ready-toggle {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  .room-header-right .btn-rule {
+    background: transparent;
+    border: var(--border-medium);
+    color: var(--text-secondary);
+  }
+
+  .room-players-panel > .panel-title {
+    display: none;
+  }
+
+  .seat-grid,
+  .seat-grid-6,
+  .seat-grid-8,
+  .seat-grid-12 {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
   .seat-card {
-    min-height: 108px;
-    padding: 28px 6px 10px;
+    width: 100%;
+    min-width: 0;
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: 28px 36px minmax(0, 1fr) auto auto;
+    align-items: center;
+    justify-content: stretch;
+    text-align: left;
+    gap: 8px;
+    padding: 8px 10px;
+    overflow: hidden;
+  }
+
+  .seat-index {
+    position: static;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    line-height: 1;
+    color: var(--text-primary);
+    opacity: 1;
   }
 
   .seat-avatar {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+  }
+
+  .seat-name {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .seat-badges {
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .seat-remove {
+    position: static;
+    grid-column: 5;
+    justify-self: end;
+    opacity: 1;
+  }
+
+  .room-actions-panel .btn {
+    min-height: 44px;
   }
 }
 

@@ -319,24 +319,63 @@ const roleNames = {
   border-radius: var(--radius-sm);
 }
 
-@media (max-width: 480px) {
-  .player-grid {
+@media (max-width: 768px) {
+  .player-grid,
+  .player-grid.grid-6,
+  .player-grid.grid-8,
+  .player-grid.grid-12 {
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
 
-  .player-grid.grid-8,
-  .player-grid.grid-12 {
-    grid-template-columns: repeat(3, 1fr);
+  .player-card {
+    display: grid;
+    grid-template-columns: 28px 36px minmax(0, 1fr);
+    grid-template-areas:
+      "num avatar name"
+      "num avatar badges";
+    align-items: center;
+    text-align: left;
+    column-gap: 10px;
+    row-gap: 2px;
+    min-width: 0;
+    min-height: 0;
+    padding: 8px 12px;
   }
 
-  .player-card {
-    padding: 8px 4px;
-    min-height: 76px;
+  .seat-num-badge {
+    position: static;
+    grid-area: num;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    line-height: 1;
+    color: var(--text-primary);
   }
 
   .player-avatar {
-    width: 28px;
-    height: 28px;
+    grid-area: avatar;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+  }
+
+  .player-name {
+    grid-area: name;
+    font-size: 0.92rem;
+    text-align: left;
+  }
+
+  .player-badges {
+    grid-area: badges;
+    justify-content: flex-start;
+    margin-top: 0;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .player-grid {
+    gap: 8px;
   }
 }
 </style>
