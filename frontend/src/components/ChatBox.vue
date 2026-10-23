@@ -1,6 +1,7 @@
 <template>
   <div class="chat-box">
     <div class="chat-messages" ref="chatContainer">
+      <slot name="notice" />
       <div v-if="messages.length === 0" class="chat-empty">
         <span class="empty-icon">💬</span>
         <p>暂无消息，开始聊天吧</p>
@@ -66,6 +67,7 @@
         </template>
       </div>
     </div>
+    <div class="chat-foot">
     <div v-if="!canSpeak" class="chat-disabled-hint">
       {{ disabledHint }}
     </div>
@@ -81,6 +83,7 @@
         <span>发送</span>
       </button>
     </form>
+    </div>
   </div>
 </template>
 
@@ -208,13 +211,14 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-msg {
-  padding: 10px 14px;
+  padding: 8px 10px;
   background: var(--bg-secondary);
   border: var(--border-thin);
-  border-radius: var(--radius-md);
-  font-size: 0.88rem;
-  line-height: 1.5;
-  word-break: break-word;
+  border-radius: 14px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+  word-break: normal;
   transition: background 0.2s;
 }
 
@@ -228,10 +232,12 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-user {
+  display: block;
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
   color: var(--ai-light);
-  margin-right: 6px;
+  margin: 0 0 2px;
 }
 
 .chat-text {
@@ -241,21 +247,29 @@ watch(() => props.messages.length, async () => {
 .chat-system {
   display: block;
   text-align: center;
-  padding: 6px 12px;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: var(--radius-md);
-  font-size: 0.82rem;
-  color: #60a5fa;
+  padding: 2px 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-tertiary);
   font-weight: 500;
+}
+
+.chat-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .chat-input-wrapper {
   display: flex;
   gap: 8px;
   min-width: 0;
-  border-top: var(--border-thin);
-  background: var(--bg-primary, var(--glass-bg));
+  border-top: none;
+  background: transparent;
   z-index: 1;
 }
 
@@ -310,7 +324,10 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-send-btn:disabled {
-  opacity: 0.4;
+  opacity: 1;
+  background: transparent;
+  color: var(--text-tertiary);
+  border: var(--border-thin);
   cursor: not-allowed;
 }
 

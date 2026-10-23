@@ -424,7 +424,7 @@ function handleLeave() {
   min-height: 0;
   display: grid;
   grid-template-columns: clamp(76px, 9vw, 120px) minmax(0, 1fr) clamp(76px, 9vw, 120px);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 0;
   position: relative;
   z-index: 1;
@@ -1041,14 +1041,7 @@ function handleLeave() {
 }
 
 .room-stage .room-chat-panel {
-  grid-column: 2;
-  grid-row: 1;
-  z-index: 2;
-  pointer-events: auto;
-  height: auto;
-  min-height: 0;
-  align-self: stretch;
-  border-radius: 22px;
+  display: contents;
 }
 
 @media (hover: none) {
@@ -1108,8 +1101,8 @@ function handleLeave() {
   }
 
   .room-stage {
-    grid-template-columns: 68px minmax(0, 1fr) 68px;
-    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: 64px minmax(0, 1fr) 64px;
+    grid-template-rows: minmax(0, 1fr) auto;
     gap: 0;
     min-height: 0;
   }
@@ -1129,7 +1122,7 @@ function handleLeave() {
     display: grid;
     grid-column: 1 / -1;
     grid-row: 1;
-    grid-template-columns: 68px minmax(0, 1fr) 68px;
+    grid-template-columns: 64px minmax(0, 1fr) 64px;
     gap: 0;
     width: 100%;
     height: 100%;
@@ -1168,10 +1161,10 @@ function handleLeave() {
   .stage-12 .seat-card:nth-child(6n + 6) { grid-row: 6; }
 
   .room-stage .seat-card {
+    min-width: 0;
     width: 100%;
-    max-width: 64px;
-    height: 100%;
     max-width: 100%;
+    height: 100%;
     max-height: 100%;
     min-height: 0;
     padding: 0;
@@ -1237,12 +1230,28 @@ function handleLeave() {
   }
 
   .seat-badges {
-    position: absolute;
-    top: 50%;
-    right: 0;
-    transform: translateY(6px);
-    min-height: 0;
-    gap: 0;
+    display: none;
+  }
+
+  .seat-ready .seat-avatar {
+    box-shadow: 0 0 0 2px var(--status-success, #3d9a6a);
+  }
+
+  .seat-remove {
+    width: 16px;
+    height: 16px;
+    font-size: 9px;
+    line-height: 14px;
+  }
+
+  .seat-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .room-chat-panel {
+    display: contents;
   }
 
   .seat-remove {
@@ -1274,7 +1283,7 @@ function handleLeave() {
   .room-dock {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 6px;
   }
 
   .room-dock .room-actions-panel {
@@ -1297,21 +1306,21 @@ function handleLeave() {
 
   .room-header-right .btn {
     min-width: 0;
-    min-height: 40px;
-    height: 40px;
+    min-height: 34px;
+    height: 34px;
     padding: 0 10px;
-    font-size: 0.82rem;
+    font-size: 0.78rem;
   }
 
   .room-header-right .btn-ready-toggle {
     grid-column: 1 / -1;
     order: -1;
-    min-height: 48px;
-    height: 48px;
+    min-height: 40px;
+    height: 40px;
     border-radius: 999px;
     font-family: var(--font-display);
-    font-size: 1.05rem;
-    letter-spacing: 0.22em;
+    font-size: 0.95rem;
+    letter-spacing: 0.12em;
   }
 
   .room-header-right .btn-rule {
@@ -1332,7 +1341,7 @@ function handleLeave() {
 
   .room-dock .btn-start {
     width: 100%;
-    min-height: 44px;
+    min-height: 40px;
     border-radius: 999px;
   }
 

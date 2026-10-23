@@ -13,18 +13,13 @@
             <span>在线玩家：{{ totalPlayers }}</span>
           </div>
           <h1 class="hero-title">
-            <span class="title-desktop">
-              <span class="title-gradient">欢迎来到</span>
-              <br />
-              Werewolf AI 游戏大厅
-            </span>
-            <span class="title-mobile">开一桌</span>
+            <span class="title-gradient">欢迎来到</span>
+            <br />
+            Werewolf AI 游戏大厅
           </h1>
           <p class="hero-desc">
-            <span class="desc-desktop">选择你的游戏模式，或使用 AI 智能体开启一场精彩的对局</span>
-            <span class="desc-mobile">人数一定，角色就定了。创建房间，或加入下面已有的桌。</span>
+            选择你的游戏模式，<span class="desc-break"></span>或使用 AI 智能体开启一场精彩的对局
           </p>
-          <p class="hero-meta">{{ totalRooms }} 间进行中 · {{ aiAgentCount }} 个 AI 人格</p>
         </div>
         <div class="hero-stats">
           <div class="stat-card">
@@ -495,17 +490,8 @@ async function handleSearchJoin() {
   margin: 0;
 }
 
-.title-mobile,
-.desc-mobile,
-.hero-meta {
+.desc-break {
   display: none;
-}
-
-.hero-meta {
-  margin: 14px 0 0;
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
-  color: var(--text-tertiary);
 }
 
 .mode-count {
@@ -1109,34 +1095,27 @@ async function handleSearchJoin() {
 
 @media (max-width: 768px) {
   .lobby-content {
-    padding: 12px 16px 32px;
-    gap: 28px;
+    padding: 4px 16px 24px;
+    gap: 22px;
   }
 
   .hero-section {
     gap: 0;
-    padding: 8px 0 0;
+    padding: 0;
   }
 
   .hero-badge {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
 
-  .title-desktop,
-  .desc-desktop,
-  .hero-stats {
-    display: none;
-  }
-
-  .title-mobile,
-  .desc-mobile,
-  .hero-meta {
+  .desc-break {
     display: block;
   }
 
   .hero-title {
-    font-size: 2.35rem;
-    letter-spacing: 0.12em;
+    font-size: 1.7rem;
+    letter-spacing: 0.02em;
+    line-height: 1.25;
     margin-bottom: 8px;
   }
 
@@ -1144,16 +1123,44 @@ async function handleSearchJoin() {
   .section-desc {
     font-size: 0.92rem;
     max-width: none;
-    line-height: 1.6;
+    line-height: 1.65;
+  }
+
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .stat-card {
+    min-width: 0;
+    padding: 10px 6px;
+  }
+
+  .stat-value {
+    font-size: 1.35rem;
+    letter-spacing: 0;
+  }
+
+  .stat-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+  }
+
+  .section-header {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+    margin-bottom: 12px;
   }
 
   .section-title {
-    font-size: 1.35rem;
-    letter-spacing: 0.12em;
-  }
-
-  .modes-section .section-header {
-    display: none;
+    font-size: 1.15rem;
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
   }
 
   .modes-grid {
@@ -1163,11 +1170,11 @@ async function handleSearchJoin() {
 
   .mode-card {
     display: grid;
-    grid-template-columns: 52px minmax(0, 1fr);
-    column-gap: 12px;
-    row-gap: 12px;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 10px;
+    row-gap: 10px;
     align-items: start;
-    padding: 16px 16px 14px;
+    padding: 14px 14px 12px;
   }
 
   .mode-card:hover {
@@ -1178,7 +1185,7 @@ async function handleSearchJoin() {
   .mode-count {
     display: block;
     font-family: var(--font-display);
-    font-size: 2.6rem;
+    font-size: 2.15rem;
     font-weight: 600;
     line-height: 0.85;
     letter-spacing: -0.04em;
@@ -1202,26 +1209,50 @@ async function handleSearchJoin() {
   }
 
   .mode-title {
-    font-size: 1.25rem;
-    letter-spacing: 0.08em;
+    font-size: 1.2rem;
+    letter-spacing: 0.04em;
     margin-bottom: 2px;
   }
 
   .mode-desc {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
   }
 
   .mode-roles {
+    flex-wrap: nowrap;
+    gap: 0;
     min-height: 0;
     margin-bottom: 0;
+    overflow: hidden;
+  }
+
+  .role-tag {
+    padding: 0;
+    border: none;
+    background: none;
+    border-radius: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
+  .role-tag:not(:last-child)::after {
+    content: ' · ';
+    color: var(--text-tertiary);
   }
 
   .mode-actions {
     grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
   }
 
   .mode-actions .btn {
-    min-height: 44px;
+    width: auto;
+    min-width: 7.5rem;
+    height: 40px;
+    min-height: 40px;
   }
 
   .rooms-empty {

@@ -10,7 +10,7 @@
     <!-- Role Reveal Overlay -->
     <RoleReveal v-if="showRoleReveal" :role="gameStore.myRole" :roleName="gameStore.myRoleName" @close="showRoleReveal = false" />
 
-    <div class="game-spectator-strip">
+    <div v-if="roomStore.spectators.length || roomStore.isSpectator" class="game-spectator-strip">
       <SpectatorBar :spectators="roomStore.spectators" :watching="roomStore.isSpectator" />
     </div>
 
@@ -85,22 +85,6 @@
 
       <div class="game-center">
         <section class="game-section chat-section">
-          <div v-if="speakOpen" class="speak-bar">
-            <span>轮到你发言</span>
-            <button type="button" class="btn btn-primary" @click="gameStore.nextSpeaker()">结束发言</button>
-            <button type="button" class="btn btn-secondary" @click="gameStore.skipSpeaking()">跳过</button>
-          </div>
-          <div v-if="wolfBoard" class="speak-bar wolf-board">
-            <span v-for="choice in wolfBoard.choices" :key="choice.playerId">
-              {{ choice.playerName }} → {{ choice.targetName || '未选' }}
-            </span>
-          </div>
-          <div class="section-header">
-            <div class="section-title">
-              <span class="section-icon">💬</span>
-              <span>聊天</span>
-            </div>
-          </div>
           <ChatBox 
             :messages="roomStore.chat" 
             :phase="gameStore.phase"
@@ -108,7 +92,20 @@
             :is-alive="gameStore.myPlayer?.isAlive ?? true"
             :observer="roomStore.isSpectator"
             @send="handleChat" 
-          />
+          >
+            <template #notice>
+              <div v-if="speakOpen" class="speak-bar">
+                <span>轮到你发言</span>
+                <button type="button" class="btn btn-primary" @click="gameStore.nextSpeaker()">结束发言</button>
+                <button type="button" class="btn btn-secondary" @click="gameStore.skipSpeaking()">跳过</button>
+              </div>
+              <div v-if="wolfBoard" class="speak-bar wolf-board">
+                <span v-for="choice in wolfBoard.choices" :key="choice.playerId">
+                  {{ choice.playerName }} → {{ choice.targetName || '未选' }}
+                </span>
+              </div>
+            </template>
+          </ChatBox>
         </section>
       </div>
     </div>

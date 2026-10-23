@@ -17,9 +17,7 @@
         :title="inspectAi && isAiPlayer(seat.player) ? '查看思考过程' : undefined"
         @click="selectAi(seat.player)"
       >
-        <div class="seat-num-badge">
-          {{ seat.seatNum }}号
-        </div>
+        <div class="seat-num-badge">{{ seat.seatNum }}</div>
 
         <div class="player-avatar" :class="{ 'is-dead-avatar': seat.player.isAlive === false }">
           <img v-if="seat.player.avatarUrl" :src="seat.player.avatarUrl" alt="" class="avatar-photo" />
@@ -31,14 +29,14 @@
           <span v-if="(seat.player.socketId || seat.player.id) === hostId" class="badge badge-host">👑</span>
           <span v-if="isAiPlayer(seat.player)" class="badge badge-ai">🤖</span>
           <span v-if="showReady && seat.player.isReady" class="badge badge-ready">✅</span>
-          <span v-if="seat.player.isAlive === false" class="badge badge-dead">💀 已淘汰</span>
+          <span v-if="seat.player.isAlive === false" class="badge badge-dead">出局</span>
           <span v-if="showRoles && roles[seat.player.id || seat.player.socketId]" class="badge badge-role">
             {{ roleNames[roles[seat.player.id || seat.player.socketId]] }}
           </span>
         </div>
       </div>
       <div v-else class="player-card player-card-empty">
-        <div class="seat-num-badge">{{ seat.seatNum }}号</div>
+        <div class="seat-num-badge">{{ seat.seatNum }}</div>
         <div class="player-avatar empty-avatar">—</div>
         <div class="player-name empty-name">等待中</div>
       </div>
