@@ -403,16 +403,12 @@ async function handleSearchJoin() {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at 12% -8%, var(--atmosphere-a) 0%, transparent 52%),
-    radial-gradient(ellipse at 100% 100%, var(--werewolf-glow) 0%, transparent 46%);
+    linear-gradient(180deg, rgba(7, 10, 18, 0.42) 0%, rgba(7, 10, 18, 0.08) 42%, rgba(7, 10, 18, 0.34) 100%),
+    url('/bg.png') center / cover no-repeat;
 }
 
 .bg-pattern {
-  position: absolute;
-  inset: 0;
-  background-image: 
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.03) 1px, transparent 0);
-  background-size: 32px 32px;
+  display: none;
 }
 
 .lobby-content {
@@ -476,16 +472,18 @@ async function handleSearchJoin() {
   line-height: 1.18;
   letter-spacing: 0.03em;
   margin: 0 0 16px;
-  color: var(--text-primary);
+  color: #f7f3ec;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
 }
 
 .title-gradient {
-  color: var(--ai-secondary);
+  color: #e7c27a;
 }
 
 .hero-desc {
   font-size: 1.1rem;
-  color: var(--text-secondary);
+  color: #f7f3ec;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
   max-width: 500px;
   margin: 0;
 }
@@ -511,10 +509,10 @@ async function handleSearchJoin() {
 }
 
 .stat-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: var(--border-medium);
+  background: rgba(8, 12, 22, 0.34);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(198, 161, 94, 0.38);
   border-radius: var(--radius-lg);
   padding: 20px 24px;
   text-align: center;
@@ -522,13 +520,13 @@ async function handleSearchJoin() {
 }
 
 .stat-ai {
-  border-color: color-mix(in srgb, var(--ai-primary) 35%, transparent);
-  background: var(--ai-glow);
+  border-color: rgba(198, 161, 94, 0.72);
+  background: rgba(198, 161, 94, 0.12);
 }
 
 .stat-werewolf {
-  border-color: rgba(229, 57, 53, 0.3);
-  background: rgba(229, 57, 53, 0.08);
+  border-color: rgba(196, 92, 102, 0.55);
+  background: rgba(8, 12, 22, 0.34);
 }
 
 .stat-value {
@@ -582,10 +580,10 @@ async function handleSearchJoin() {
 
 .mode-card {
   position: relative;
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: var(--border-medium);
+  background: rgba(8, 12, 22, 0.32);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(198, 161, 94, 0.4);
   border-radius: var(--radius-xl);
   padding: 32px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -704,10 +702,10 @@ async function handleSearchJoin() {
   position: relative;
   display: flex;
   align-items: center;
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: var(--border-medium);
+  background: rgba(8, 12, 22, 0.34);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(198, 161, 94, 0.32);
   border-radius: var(--radius-lg);
   padding: 0 16px;
   transition: all 0.2s ease;
@@ -780,10 +778,10 @@ async function handleSearchJoin() {
   flex-direction: column;
   align-items: center;
   padding: 60px 40px;
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: var(--border-medium);
+  background: rgba(8, 12, 22, 0.32);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(198, 161, 94, 0.32);
   border-radius: var(--radius-xl);
   text-align: center;
 }
@@ -807,10 +805,10 @@ async function handleSearchJoin() {
 }
 
 .room-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: var(--border-medium);
+  background: rgba(8, 12, 22, 0.32);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(198, 161, 94, 0.38);
   border-radius: var(--radius-lg);
   padding: 20px;
   cursor: pointer;

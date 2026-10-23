@@ -480,15 +480,7 @@ onMounted(loadStatus)
 }
 
 .form-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-[data-theme="dark"] .form-input::placeholder {
   color: rgba(255, 255, 255, 0.4);
-}
-
-[data-theme="light"] .form-input::placeholder {
-  color: rgba(0, 0, 0, 0.4);
 }
 
 .form-hint {

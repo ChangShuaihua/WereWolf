@@ -4,8 +4,8 @@ import App from './App.vue'
 import router from './router'
 import './assets/style.css'
 
-const savedTheme = localStorage.getItem('werewolf_theme') || 'light'
-document.documentElement.setAttribute('data-theme', savedTheme)
+localStorage.removeItem('werewolf_theme')
+document.documentElement.setAttribute('data-theme', 'dark')
 
 const app = createApp(App)
 app.use(createPinia())

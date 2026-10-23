@@ -1,10 +1,5 @@
 <template>
   <div class="login-container">
-    <button class="login-theme-toggle" @click="themeStore.toggleTheme()" :title="themeStore.isDark ? '切换到亮色模式' : '切换到暗色模式'">
-      <span v-if="themeStore.isDark" class="login-theme-icon">☀️</span>
-      <span v-else class="login-theme-icon">🌙</span>
-    </button>
-
     <div class="login-bg">
       <div class="stars"></div>
       <div class="moon"></div>
@@ -27,27 +22,13 @@
             <p class="brand-subtitle">AI 驱动的狼人杀</p>
           </div>
         </div>
-        <div class="hero-features">
-          <div class="feature-item">
-            <span class="feature-icon">🎯</span>
-            <span class="feature-text">智能AI对手</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">🎨</span>
-            <span class="feature-text">多种人格可选</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">⚡</span>
-            <span class="feature-text">实时互动</span>
-          </div>
-        </div>
       </div>
 
       <div class="login-form-wrapper">
         <div class="login-form-card">
           <div class="card-header">
             <h2>{{ isLogin ? '欢迎回来' : '创建账号' }}</h2>
-            <p class="card-subtitle">{{ isLogin ? '登录进入狼人世界' : '开启你的游戏之旅' }}</p>
+            <p class="card-subtitle">{{ isLogin ? '登录账号，进入黑夜对局' : '创建一个账号，加入黑夜对局' }}</p>
           </div>
 
           <div v-if="forceLogoutMsg" class="force-logout-alert">
@@ -104,9 +85,9 @@
               {{ error }}
             </p>
 
-            <button type="submit" class="btn btn-ai btn-lg btn-block" :disabled="loading">
+            <button type="submit" class="btn btn-ai btn-lg btn-block login-submit" :disabled="loading">
               <span v-if="loading" class="loading-spinner"></span>
-              {{ loading ? '处理中...' : (isLogin ? '登 录' : '注 册') }}
+              {{ loading ? '处理中...' : (isLogin ? '登录' : '注册') }}
             </button>
           </form>
 
@@ -134,12 +115,10 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { useThemeStore } from '../stores/theme'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
-const themeStore = useThemeStore()
 
 const isLogin = ref(true)
 const username = ref('')
@@ -212,29 +191,9 @@ async function handleSubmit() {
   min-height: 100vh;
   display: flex;
   position: relative;
-  overflow: hidden;
-  background: var(--bg-primary);
-  transition: background 0.3s ease;
-}
-
-[data-theme="dark"] .login-container {
-  background: linear-gradient(180deg, #070a12 0%, #101624 58%, #16110e 100%);
-}
-
-[data-theme="light"] .login-container {
-  background: linear-gradient(180deg, #d5deea 0%, #e7edf4 46%, #efe6d6 100%);
-}
-
-[data-theme="light"] .stars {
-  opacity: 0.22;
-  filter: invert(1);
-}
-
-[data-theme="light"] .mountain-layer,
-[data-theme="light"] .mountain-layer-2,
-[data-theme="light"] .wolf-silhouette,
-[data-theme="light"] .mist {
-  opacity: 0.28;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #070a12;
 }
 
 .login-bg {
@@ -242,6 +201,20 @@ async function handleSubmit() {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(7, 10, 18, 0.12) 0%, rgba(7, 10, 18, 0.02) 36%, rgba(7, 10, 18, 0.42) 100%),
+    url('/bg.png') center 28% / cover no-repeat;
+}
+
+.stars,
+.moon,
+.moon-glow,
+.mountain-layer,
+.mountain-layer-2,
+.wolf-silhouette,
+.mist,
+.particles {
+  display: none;
 }
 
 .stars {
@@ -382,93 +355,58 @@ async function handleSubmit() {
 .login-content {
   position: relative;
   z-index: 10;
-  width: 100%;
-  max-width: 1200px;
+  width: min(440px, 100%);
   margin: 0 auto;
-  padding: 60px 40px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  min-height: 100vh;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 16px;
 }
 
 .login-hero {
-  color: var(--text-primary);
+  color: #f7f3ec;
+  text-align: center;
 }
 
 .brand-logo {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 40px;
+  gap: 8px;
+  margin: 0;
 }
 
 .logo-icon {
-  font-size: 4rem;
-  filter: drop-shadow(0 0 20px var(--ai-glow));
-  animation: pulse 3s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { filter: drop-shadow(0 0 20px var(--ai-glow)); }
-  50% { filter: drop-shadow(0 0 40px var(--ai-glow)); }
+  font-size: 3.2rem;
+  filter: drop-shadow(0 0 18px rgba(198, 161, 94, 0.45));
 }
 
 .brand-text-group {
   display: flex;
   flex-direction: column;
+  align-items: center;
 }
 
 .brand-title {
   font-family: var(--font-display);
-  font-size: clamp(2.4rem, 4vw, 3rem);
+  font-size: clamp(2.2rem, 4vw, 2.8rem);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--text-primary);
+  letter-spacing: 0.08em;
+  color: #f7f3ec;
   margin: 0;
   line-height: 1.05;
-  white-space: nowrap;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
 }
 
 .brand-subtitle {
-  font-size: 0.95rem;
-  color: var(--ai-secondary);
-  letter-spacing: 0.28em;
+  font-size: 0.92rem;
+  letter-spacing: 0.22em;
   margin: 8px 0 0;
-}
-
-.hero-features {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-top: 40px;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 24px;
-  background: var(--bg-secondary);
-  border: var(--border-thin);
-  border-radius: var(--radius-lg);
-  transition: all 0.3s ease;
-}
-
-.feature-item:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--ai-primary);
-  transform: translateX(8px);
-}
-
-.feature-icon {
-  font-size: 1.8rem;
-}
-
-.feature-text {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+  color: #f7f3ec;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
 }
 
 .login-form-wrapper {
@@ -480,13 +418,13 @@ async function handleSubmit() {
 .login-form-card {
   width: 100%;
   max-width: 420px;
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid color-mix(in srgb, var(--ai-primary) 28%, transparent);
-  border-radius: var(--radius-xl);
-  padding: 48px 40px;
-  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--hairline);
+  background: rgba(8, 12, 22, 0.22);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(212, 175, 110, 0.62);
+  border-radius: 28px;
+  padding: 28px 28px 20px;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(212, 175, 110, 0.12);
   animation: cardFadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
@@ -503,12 +441,12 @@ async function handleSubmit() {
 
 .card-header {
   text-align: center;
-  margin-bottom: 36px;
+  margin-bottom: 12px;
 }
 
 .card-header h2 {
   font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--text-primary);
@@ -540,7 +478,7 @@ async function handleSubmit() {
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 
 .input-group {
@@ -574,9 +512,9 @@ async function handleSubmit() {
   width: 100%;
   height: 48px;
   padding: 0 16px 0 48px;
-  background: var(--bg-secondary);
-  border: var(--border-medium);
-  border-radius: var(--radius-md);
+  background: rgba(6, 10, 18, 0.2);
+  border: 1px solid rgba(212, 175, 110, 0.62);
+  border-radius: 14px;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 0.95rem;
@@ -585,14 +523,14 @@ async function handleSubmit() {
 }
 
 .input-wrapper input:hover {
-  border-color: var(--text-tertiary);
-  background: var(--bg-tertiary);
+  border-color: rgba(232, 205, 150, 0.9);
+  background: rgba(6, 10, 18, 0.28);
 }
 
 .input-wrapper input:focus {
-  border-color: var(--ai-primary);
-  box-shadow: 0 0 0 3px var(--ai-glow);
-  background: var(--bg-tertiary);
+  border-color: #e8cd96;
+  box-shadow: 0 0 0 3px rgba(212, 175, 110, 0.18);
+  background: rgba(6, 10, 18, 0.32);
 }
 
 .input-wrapper input::placeholder {
@@ -635,9 +573,24 @@ async function handleSubmit() {
   to { transform: rotate(360deg); }
 }
 
+.login-form-card .login-submit {
+  margin-top: 8px;
+  background: transparent;
+  color: #f4e7d0;
+  border: 1px solid rgba(212, 175, 110, 0.85);
+  box-shadow: none;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+}
+
+.login-form-card .login-submit:hover:not(:disabled) {
+  background: rgba(212, 175, 110, 0.16);
+  color: #fff8ea;
+}
+
 .form-footer {
   text-align: center;
-  margin-top: 28px;
+  margin-top: 16px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -700,41 +653,14 @@ async function handleSubmit() {
   }
 
   .login-content {
-    grid-template-columns: 1fr;
-    padding: 40px 20px;
-    gap: 40px;
-  }
-  
-  .login-hero {
-    text-align: center;
-  }
-  
-  .brand-logo {
-    justify-content: center;
-  }
-  
-  .hero-features {
-    display: none;
-  }
-  
-  .wolf-silhouette {
-    width: 120px;
-    height: 90px;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-  
-  .moon {
-    width: 80px;
-    height: 80px;
-    top: 8%;
-    right: 10%;
+    min-height: 100%;
+    padding: 36px 20px;
   }
 }
 
 @media (max-width: 600px) {
   .login-content {
-    padding: calc(72px + env(safe-area-inset-top, 0px)) 16px calc(28px + env(safe-area-inset-bottom, 0px));
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(20px + env(safe-area-inset-bottom, 0px));
     gap: 20px;
   }
 
@@ -768,56 +694,5 @@ async function handleSubmit() {
   .card-header h2 {
     font-size: 1.6rem;
   }
-
-  .login-theme-toggle {
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    right: 12px;
-  }
-
-  .moon,
-  .moon-glow,
-  .wolf-silhouette {
-    display: none;
-  }
-}
-
-.login-theme-toggle {
-  position: fixed;
-  top: 24px;
-  right: 24px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: var(--border-thin);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  padding: 0;
-  box-shadow: var(--shadow-md);
-}
-
-.login-theme-toggle:hover {
-  background: var(--bg-tertiary);
-  transform: scale(1.1);
-  box-shadow: var(--shadow-lg);
-}
-
-.login-theme-toggle:active {
-  transform: scale(0.95);
-}
-
-.login-theme-icon {
-  font-size: 1.3rem;
-  transition: transform 0.3s ease;
-}
-
-.login-theme-toggle:hover .login-theme-icon {
-  transform: rotate(20deg);
 }
 </style>
