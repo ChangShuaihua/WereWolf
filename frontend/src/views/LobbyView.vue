@@ -13,11 +13,18 @@
             <span>在线玩家：{{ totalPlayers }}</span>
           </div>
           <h1 class="hero-title">
-            <span class="title-gradient">欢迎来到</span>
-            <br />
-            Werewolf AI 游戏大厅
+            <span class="title-desktop">
+              <span class="title-gradient">欢迎来到</span>
+              <br />
+              Werewolf AI 游戏大厅
+            </span>
+            <span class="title-mobile">开一桌</span>
           </h1>
-          <p class="hero-desc">选择你的游戏模式，或使用 AI 智能体开启一场精彩的对局</p>
+          <p class="hero-desc">
+            <span class="desc-desktop">选择你的游戏模式，或使用 AI 智能体开启一场精彩的对局</span>
+            <span class="desc-mobile">人数一定，角色就定了。创建房间，或加入下面已有的桌。</span>
+          </p>
+          <p class="hero-meta">{{ totalRooms }} 间进行中 · {{ aiAgentCount }} 个 AI 人格</p>
         </div>
         <div class="hero-stats">
           <div class="stat-card">
@@ -54,14 +61,17 @@
             @mouseleave="hoveredMode = null"
           >
             <div class="mode-glow"></div>
-            <div class="mode-header">
-              <div class="mode-icon">{{ mode.icon }}</div>
-              <div class="mode-badge">{{ mode.players }}人</div>
-            </div>
-            <h3 class="mode-title">{{ mode.name }}</h3>
-            <p class="mode-desc">{{ mode.description }}</p>
-            <div class="mode-roles">
-              <span v-for="role in mode.roles" :key="role" class="role-tag">{{ role }}</span>
+            <div class="mode-count" aria-hidden="true">{{ mode.players }}</div>
+            <div class="mode-body">
+              <div class="mode-header">
+                <div class="mode-icon">{{ mode.icon }}</div>
+                <div class="mode-badge">{{ mode.players }}人</div>
+              </div>
+              <h3 class="mode-title">{{ mode.name }}</h3>
+              <p class="mode-desc">{{ mode.description }}</p>
+              <div class="mode-roles">
+                <span v-for="role in mode.roles" :key="role" class="role-tag">{{ role }}</span>
+              </div>
             </div>
             <div class="mode-actions">
               <button 
@@ -483,6 +493,29 @@ async function handleSearchJoin() {
   color: var(--text-secondary);
   max-width: 500px;
   margin: 0;
+}
+
+.title-mobile,
+.desc-mobile,
+.hero-meta {
+  display: none;
+}
+
+.hero-meta {
+  margin: 14px 0 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+
+.mode-count {
+  display: none;
+}
+
+.mode-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .hero-stats {
@@ -1063,59 +1096,136 @@ async function handleSearchJoin() {
   .hero-section {
     flex-direction: column;
     align-items: flex-start;
-    gap: 32px;
+    justify-content: flex-start;
+    gap: 24px;
+  }
+
+  /* 桌面横排时 520px 是宽度；竖排后会变成高度，把统计卡顶到屏幕底部。 */
+  .hero-text {
+    flex: none;
+    width: 100%;
   }
 }
 
 @media (max-width: 768px) {
   .lobby-content {
-    padding: 20px 16px 28px;
-    gap: 36px;
+    padding: 12px 16px 32px;
+    gap: 28px;
   }
-  
-  .modes-grid {
-    grid-template-columns: 1fr;
-    gap: 14px;
+
+  .hero-section {
+    gap: 0;
+    padding: 8px 0 0;
   }
-  
+
+  .hero-badge {
+    margin-bottom: 12px;
+  }
+
+  .title-desktop,
+  .desc-desktop,
+  .hero-stats {
+    display: none;
+  }
+
+  .title-mobile,
+  .desc-mobile,
+  .hero-meta {
+    display: block;
+  }
+
   .hero-title {
-    font-size: clamp(1.7rem, 7.5vw, 2.2rem);
+    font-size: 2.35rem;
+    letter-spacing: 0.12em;
+    margin-bottom: 8px;
   }
 
   .hero-desc,
   .section-desc {
     font-size: 0.92rem;
+    max-width: none;
+    line-height: 1.6;
   }
 
   .section-title {
-    font-size: 1.45rem;
+    font-size: 1.35rem;
+    letter-spacing: 0.12em;
+  }
+
+  .modes-section .section-header {
+    display: none;
+  }
+
+  .modes-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .mode-card {
-    padding: 22px 18px;
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 12px;
+    align-items: start;
+    padding: 16px 16px 14px;
+  }
+
+  .mode-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .mode-count {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 2.6rem;
+    font-weight: 600;
+    line-height: 0.85;
+    letter-spacing: -0.04em;
+  }
+
+  .mode-card.mode-6 { border-left: 3px solid var(--villager-primary); }
+  .mode-card.mode-8 { border-left: 3px solid var(--ai-primary); }
+  .mode-card.mode-12 { border-left: 3px solid var(--werewolf-primary); }
+  .mode-card.mode-6 .mode-count { color: var(--villager-primary); }
+  .mode-card.mode-8 .mode-count { color: var(--ai-primary); }
+  .mode-card.mode-12 .mode-count { color: var(--werewolf-primary); }
+
+  .mode-icon,
+  .mode-badge,
+  .mode-glow {
+    display: none;
+  }
+
+  .mode-header {
+    display: none;
+  }
+
+  .mode-title {
+    font-size: 1.25rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+  }
+
+  .mode-desc {
+    margin-bottom: 8px;
+  }
+
+  .mode-roles {
+    min-height: 0;
+    margin-bottom: 0;
+  }
+
+  .mode-actions {
+    grid-column: 1 / -1;
+  }
+
+  .mode-actions .btn {
+    min-height: 44px;
   }
 
   .rooms-empty {
-    padding: 36px 16px;
-  }
-  
-  .hero-stats {
-    width: 100%;
-  }
-  
-  .stat-card {
-    flex: 1;
-    min-width: 0;
-    padding: 14px 8px;
-  }
-
-  .stat-value {
-    font-size: 1.7rem;
-  }
-
-  .stat-label {
-    font-size: 0.75rem;
-    white-space: nowrap;
+    padding: 28px 16px;
   }
 
   .room-search-bar {
@@ -1125,17 +1235,27 @@ async function handleSearchJoin() {
 
   .btn-join-by-code {
     width: 100%;
+    min-height: 44px;
   }
-  
+
   .workshop-card {
     flex-direction: column;
-    text-align: center;
-    padding: 32px 24px;
+    align-items: flex-start;
+    text-align: left;
+    gap: 0;
+    padding: 20px 18px;
   }
-  
+
   .workshop-visual {
-    width: 120px;
-    height: 120px;
+    display: none;
+  }
+
+  .workshop-title {
+    font-size: 1.35rem;
+  }
+
+  .workshop-desc {
+    margin-bottom: 16px;
   }
 }
 </style>

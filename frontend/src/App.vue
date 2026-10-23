@@ -157,11 +157,12 @@ const showChrome = computed(() => {
     align-items: center;
     justify-content: center;
     gap: 2px;
-    min-height: 44px;
+    min-height: 48px;
     text-decoration: none;
     color: var(--text-secondary);
-    font-size: 0.68rem;
-    letter-spacing: 0.06em;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    box-shadow: inset 0 2px 0 transparent;
   }
 
   .mobile-tab-icon {
@@ -170,7 +171,8 @@ const showChrome = computed(() => {
   }
 
   .mobile-tab-active {
-    color: var(--ai-secondary);
+    color: var(--ai-primary);
+    box-shadow: inset 0 2px 0 var(--ai-primary);
   }
 }
 </style>

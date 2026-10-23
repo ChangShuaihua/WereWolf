@@ -301,20 +301,14 @@ const DayPhaseMixin = {
       : aiGameHandler._generateChatMessage(this, player, task);
 
     try {
-      const result = await coordinator.withDeadline(generate, task.deadline - Date.now());
+      const result = await coordinator.withDeadline(generate, task.deadline - Date.now(), task);
       const stillSpeaking = kind !== 'speak' || this.currentSpeaker === player.socketId;
       if (!coordinator.samePhase(task, this) || !stillSpeaking) {
         coordinator.expire(task);
         return '';
       }
 
-      let output = result.done ? result.action : '';
-      if (!result.done || !String(output || '').trim()) {
-        output = kind === 'last-will'
-          ? aiGameHandler._getFallbackLastWillMessage(this, player)
-          : aiGameHandler._getFallbackChatMessage(this, player);
-        task.usedFallback = true;
-      }
+      const output = result.done ? result.action : '';
       if (!coordinator.samePhase(task, this) || !String(output || '').trim()) {
         coordinator.expire(task);
         return '';

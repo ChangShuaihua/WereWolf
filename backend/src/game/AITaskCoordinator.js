@@ -41,6 +41,7 @@ class AITaskCoordinator {
       state: 'RUNNING',
       startedAt: Date.now(),
       usedFallback: false,
+      controller: new AbortController(),
     };
     this.tasks.set(task.id, task);
     this.byKey.set(key, task.id);
@@ -111,10 +112,13 @@ class AITaskCoordinator {
     }
   }
 
-  withDeadline(promise, ms) {
+  withDeadline(promise, ms, task) {
     let timer;
     const timeout = new Promise((resolve) => {
-      timer = setTimeout(() => resolve({ done: false, action: null }), Math.max(0, ms));
+      timer = setTimeout(() => {
+        task?.controller?.abort();
+        resolve({ done: false, action: null });
+      }, Math.max(0, ms));
     });
     return Promise.race([
       Promise.resolve(promise).then((action) => ({ done: true, action })),

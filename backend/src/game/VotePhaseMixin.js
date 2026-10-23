@@ -42,17 +42,14 @@ const VotePhaseMixin = {
         const result = await coordinator.withDeadline(
           aiGameHandler._decideVote(this, aiPlayer, task),
           task.deadline - Date.now(),
+          task,
         );
         if (!coordinator.samePhase(task, this)) {
           coordinator.expire(task);
           continue;
         }
 
-        let voteTarget = result.done ? result.action : null;
-        if (!result.done) {
-          voteTarget = aiGameHandler._getFallbackVote(this, aiPlayer);
-          task.usedFallback = true;
-        }
+        const voteTarget = result.done ? result.action : null;
         if (!voteTarget || !coordinator.samePhase(task, this)) {
           coordinator.expire(task);
           continue;

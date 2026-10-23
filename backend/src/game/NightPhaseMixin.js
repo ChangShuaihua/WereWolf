@@ -264,11 +264,7 @@ const NightPhaseMixin = {
           coordinator.expire(task);
           continue;
         }
-        let action = decision?.action || null;
-        if (!action) {
-          action = aiGameHandler._getFallbackNightAction(this, aiPlayer, ROLE.WEREWOLF);
-          task.usedFallback = true;
-        }
+        const action = decision?.action || null;
         if (!action || !coordinator.samePhase(task, this)) {
           coordinator.expire(task);
           continue;
@@ -307,17 +303,14 @@ const NightPhaseMixin = {
         const result = await coordinator.withDeadline(
           aiGameHandler._decideNightAction(this, aiPlayer, role, task),
           task.deadline - Date.now(),
+          task,
         );
         if (!coordinator.samePhase(task, this)) {
           coordinator.expire(task);
           continue;
         }
 
-        let action = result.done ? result.action : null;
-        if (!result.done) {
-          action = aiGameHandler._getFallbackNightAction(this, aiPlayer, role);
-          task.usedFallback = true;
-        }
+        const action = result.done ? result.action : null;
         if (!action || !coordinator.samePhase(task, this)) {
           coordinator.expire(task);
           continue;

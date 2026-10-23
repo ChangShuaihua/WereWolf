@@ -104,11 +104,7 @@ function accusationCounts(game, candidates) {
     .sort((a, b) => b.count - a.count);
 }
 
-function note(rememberThought, game, aiPlayer, thought) {
-  if (typeof rememberThought === 'function') rememberThought(game, aiPlayer, thought);
-}
-
-function emergencyNightAction(game, aiPlayer, role, rememberThought) {
+function emergencyNightAction(game, aiPlayer, role) {
   const candidates = legalNightTargets(game, aiPlayer, role);
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
   let action = null;
@@ -117,33 +113,11 @@ function emergencyNightAction(game, aiPlayer, role, rememberThought) {
   else if (role === ROLE.GUARD && pick) action = { action: 'guard', targetId: pick.socketId };
   else if (role === ROLE.WITCH) action = { action: 'skip', targetId: null };
 
-  if (action) {
-    const summary = action.action === 'skip'
-      ? '跳过'
-      : `${action.action} → ${game.getSeatNum(action.targetId)}`;
-    note(rememberThought, game, aiPlayer, {
-      kind: '夜间行动',
-      summary,
-      reasoning: '模型两次都没有给出合法行动，随机选了一个合法目标。',
-    });
-  }
   return action;
 }
 
-function nightAction(game, aiPlayer, role, rememberThought) {
-  const finish = (action) => {
-    if (action) {
-      const summary = action.action === 'skip'
-        ? '跳过'
-        : `${action.action} → ${action.targetId ? game.getSeatNum(action.targetId) : '无'}`;
-      note(rememberThought, game, aiPlayer, {
-        kind: '夜间行动',
-        summary,
-        reasoning: '按本地策略选择，没有大模型推理。',
-      });
-    }
-    return action;
-  };
+function nightAction(game, aiPlayer, role) {
+  const finish = (action) => action;
   if (aiPlayer?.fallbackEnabled === false) return null;
   const strategy = nightStrategy(aiPlayer);
   const candidates = legalNightTargets(game, aiPlayer, role);
@@ -204,17 +178,8 @@ function voteCandidates(game, aiPlayer) {
   return candidates;
 }
 
-function vote(game, aiPlayer, rememberThought) {
-  const finish = (targetId) => {
-    if (targetId) {
-      note(rememberThought, game, aiPlayer, {
-        kind: '投票',
-        summary: `投票给 ${game.getSeatNum(targetId)}`,
-        reasoning: '按本地策略投票，没有大模型推理。',
-      });
-    }
-    return targetId;
-  };
+function vote(game, aiPlayer) {
+  const finish = (targetId) => targetId;
   if (aiPlayer?.fallbackEnabled === false) return null;
   const candidates = voteCandidates(game, aiPlayer);
   if (candidates.length === 0) return null;
