@@ -40,7 +40,7 @@ const props = defineProps({
   prompt: { type: Object, default: null },
 })
 
-const emit = defineEmits(['shoot'])
+const emit = defineEmits(['shoot', 'settled'])
 
 const selectedTarget = ref(null)
 const actionDone = ref(false)
@@ -59,6 +59,7 @@ function selectTarget(targetId) {
 function confirmAction() {
   emit('shoot', selectedTarget.value)
   actionDone.value = true
+  emit('settled')
 }
 </script>
 

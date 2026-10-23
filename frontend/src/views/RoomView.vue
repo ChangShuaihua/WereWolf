@@ -1,59 +1,29 @@
 <template>
-  <div class="room-page" :class="`pane-${mobilePane}`">
-    <nav class="room-mobile-tabs" aria-label="房间分区">
-      <button type="button" :class="{ active: mobilePane === 'seats' }" @click="mobilePane = 'seats'">座位</button>
-      <button type="button" :class="{ active: mobilePane === 'chat' }" @click="mobilePane = 'chat'">聊天</button>
-    </nav>
-    <div class="room-main">
-      <div class="room-header">
-        <button class="btn-back" @click="handleLeave">
-          <span class="back-icon">←</span>
-          <span class="back-label">返回大厅</span>
-        </button>
-        
-        <div class="room-title-area">
-          <h2 class="room-name">房间 <span class="room-code">{{ roomStore.roomCode }}</span></h2>
-          <div class="room-meta">
-            <span class="room-mode-badge">{{ roomStore.maxPlayers }}人局</span>
-            <span class="room-divider">·</span>
-            <span class="room-player-count">{{ roomStore.players.length }}/{{ roomStore.maxPlayers }}</span>
-          </div>
-        </div>
-
-        <div class="room-header-right">
-          <button class="btn btn-rule" @click="showRulePanel = true" type="button">
-            <span>📖</span>
-            <span class="btn-label">游戏规则</span>
-          </button>
-          <button
-            v-if="!roomStore.isSpectator"
-            class="btn btn-secondary"
-            type="button"
-            @click="handleJoinSpectator"
-          >
-            加入观众席
-          </button>
-          <button
-            v-if="!roomStore.isSpectator"
-            class="btn btn-ready-toggle"
-            :class="myIsReady ? 'btn-ready' : 'btn-secondary'"
-            @click="roomStore.toggleReady()"
-          >
-            {{ myIsReady ? '✅ 已准备' : '📌 准备' }}
-          </button>
+  <div class="room-page">
+    <header class="room-header">
+      <button class="btn-back" @click="handleLeave">
+        <span class="back-icon">←</span>
+        <span class="back-label">返回大厅</span>
+      </button>
+      <div class="room-title-area">
+        <h2 class="room-name">房间 <span class="room-code">{{ roomStore.roomCode }}</span></h2>
+        <div class="room-meta">
+          <span class="room-mode-badge">{{ roomStore.maxPlayers }}人局</span>
+          <span class="room-divider">·</span>
+          <span class="room-player-count">{{ roomStore.players.length }}/{{ roomStore.maxPlayers }}</span>
         </div>
       </div>
+      <SpectatorBar class="room-spectators" :spectators="roomStore.spectators" :watching="roomStore.isSpectator" />
+    </header>
 
-      <div class="room-content">
-        <div class="room-players-panel">
-          <SpectatorBar :spectators="roomStore.spectators" :watching="roomStore.isSpectator" />
-          <div class="panel-title">
-            <span class="panel-title-icon">👥</span>
-            <span>玩家列表</span>
-            <span class="panel-title-badge">{{ roomStore.players.length }}/{{ roomStore.maxPlayers }}</span>
-          </div>
-
-          <div class="seat-grid" :class="`seat-grid-${roomStore.maxPlayers}`">
+    <div class="room-stage" :class="`stage-${roomStore.maxPlayers}`">
+      <div class="room-players-panel">
+        <div class="panel-title">
+          <span class="panel-title-icon">👥</span>
+          <span>玩家列表</span>
+          <span class="panel-title-badge">{{ roomStore.players.length }}/{{ roomStore.maxPlayers }}</span>
+        </div>
+        <div class="seat-grid" :class="`seat-grid-${roomStore.maxPlayers}`">
             <div
               v-for="seat in allSeats"
               :key="seat.seatIndex"
@@ -97,66 +67,84 @@
                 <div class="seat-badges"></div>
               </template>
             </div>
-          </div>
         </div>
+      </div>
+      <div class="room-chat-panel">
+        <div class="panel-title">
+          <span class="panel-title-icon">💬</span>
+          <span>房间聊天</span>
+        </div>
+        <ChatBox :messages="roomStore.chat" :observer="roomStore.isSpectator" @send="roomStore.sendChat" />
+      </div>
+    </div>
 
-        <div class="room-actions-panel" v-if="roomStore.isHost()">
-          <div class="panel-title">
-            <span class="panel-title-icon">⚙️</span>
-            <span>房间管理</span>
-          </div>
-          <div class="actions-body">
-            <div class="add-ai-row">
-              <select v-model="selectedAgentId" class="agent-select">
-                <option value="">选择AI智能体</option>
-                <optgroup v-if="builtinAgents.length" label="内置">
-                  <option v-for="agent in builtinAgents" :key="agent.id" :value="agent.id">
-                    {{ agent.avatar }} {{ agent.name }}
-                  </option>
-                </optgroup>
-                <optgroup v-if="myAgents.length" label="我的">
-                  <option v-for="agent in myAgents" :key="agent.id" :value="agent.id">
-                    {{ agent.avatar }} {{ agent.name }}
-                  </option>
-                </optgroup>
-                <optgroup v-if="otherAgents.length" label="其他用户">
-                  <option v-for="agent in otherAgents" :key="agent.id" :value="agent.id">
-                    {{ agent.avatar }} {{ agent.name }}
-                  </option>
-                </optgroup>
-              </select>
-              <button
-                class="btn btn-ai btn-block"
-                :disabled="roomStore.players.length >= roomStore.maxPlayers"
-                @click="handleAddAI"
-              >
-                🤖 添加AI玩家
-              </button>
-            </div>
+    <footer class="room-dock">
+      <div class="room-header-right">
+        <button class="btn btn-rule" @click="showRulePanel = true" type="button">
+          <span>📖</span>
+          <span class="btn-label">游戏规则</span>
+        </button>
+        <button
+          v-if="!roomStore.isSpectator"
+          class="btn btn-secondary"
+          type="button"
+          @click="handleJoinSpectator"
+        >
+          加入观众席
+        </button>
+        <button
+          v-if="!roomStore.isSpectator"
+          class="btn btn-ready-toggle"
+          :class="myIsReady ? 'btn-ready' : 'btn-secondary'"
+          @click="roomStore.toggleReady()"
+        >
+          {{ myIsReady ? '已准备' : '准备' }}
+        </button>
+      </div>
+      <div class="room-actions-panel" v-if="roomStore.isHost()">
+        <div class="actions-body">
+          <div class="add-ai-row">
+            <select v-model="selectedAgentId" class="agent-select">
+              <option value="">选择AI智能体</option>
+              <optgroup v-if="builtinAgents.length" label="内置">
+                <option v-for="agent in builtinAgents" :key="agent.id" :value="agent.id">
+                  {{ agent.avatar }} {{ agent.name }}
+                </option>
+              </optgroup>
+              <optgroup v-if="myAgents.length" label="我的">
+                <option v-for="agent in myAgents" :key="agent.id" :value="agent.id">
+                  {{ agent.avatar }} {{ agent.name }}
+                </option>
+              </optgroup>
+              <optgroup v-if="otherAgents.length" label="其他用户">
+                <option v-for="agent in otherAgents" :key="agent.id" :value="agent.id">
+                  {{ agent.avatar }} {{ agent.name }}
+                </option>
+              </optgroup>
+            </select>
             <button
-              class="btn btn-primary btn-block btn-start"
-              :disabled="!roomStore.allReady()"
-              @click="roomStore.startGame()"
+              class="btn btn-ai btn-block"
+              :disabled="roomStore.players.length >= roomStore.maxPlayers"
+              @click="handleAddAI"
             >
-              <template v-if="roomStore.players.length >= roomStore.maxPlayers && roomStore.allReady()">
-                🎮 开始游戏
-              </template>
-              <template v-else>
-                等待其他玩家准备...
-              </template>
+              添加 AI
             </button>
           </div>
+          <button
+            class="btn btn-primary btn-block btn-start"
+            :disabled="!roomStore.allReady()"
+            @click="roomStore.startGame()"
+          >
+            <template v-if="roomStore.players.length >= roomStore.maxPlayers && roomStore.allReady()">
+              开始游戏
+            </template>
+            <template v-else>
+              等人到齐并准备
+            </template>
+          </button>
         </div>
       </div>
-    </div>
-
-    <div class="room-chat-panel">
-      <div class="panel-title">
-        <span class="panel-title-icon">💬</span>
-        <span>房间聊天</span>
-      </div>
-      <ChatBox :messages="roomStore.chat" :observer="roomStore.isSpectator" @send="roomStore.sendChat" />
-    </div>
+    </footer>
 
     <!-- 游戏规则问答弹窗卡片 -->
     <div v-if="showRulePanel" class="rule-modal-mask" @click.self="showRulePanel = false">
@@ -246,7 +234,6 @@ const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
 const loading = ref(true)
-const mobilePane = ref('seats')
 const aiAgents = ref([])
 const selectedAgentId = ref('')
 const builtinAgents = computed(() => aiAgents.value.filter(agent => agent.ownerId == null))
@@ -421,14 +408,26 @@ function handleLeave() {
 <style scoped>
 .room-page {
   height: 100%;
+  flex: 1;
+  min-height: 0;
   background: var(--bg-primary);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  padding: calc(20px + env(safe-area-inset-top, 0px)) 24px calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px calc(16px + env(safe-area-inset-bottom, 0px));
   position: relative;
-  align-items: stretch;
   overflow: hidden;
+}
+
+.room-stage {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: clamp(76px, 9vw, 120px) minmax(0, 1fr) clamp(76px, 9vw, 120px);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .room-page::before {
@@ -464,6 +463,14 @@ function handleLeave() {
   border: var(--border-thin);
   border-radius: var(--radius-xl);
   padding: 14px 20px;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.room-header :deep(.spectator-bar) {
+  margin-bottom: 0;
+  margin-left: auto;
 }
 
 .btn-back {
@@ -553,6 +560,31 @@ function handleLeave() {
   gap: 8px;
 }
 
+.room-dock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.room-dock .room-actions-panel {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.room-dock .actions-body {
+  flex-direction: row;
+  align-items: center;
+}
+
+.room-dock .btn-start {
+  width: auto;
+  white-space: nowrap;
+}
+
 .room-mobile-tabs {
   display: none;
 }
@@ -568,17 +600,7 @@ function handleLeave() {
 }
 
 .room-players-panel {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: var(--border-thin);
-  border-radius: var(--radius-xl);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  display: contents;
 }
 
 .room-players-panel .panel-title {
@@ -886,6 +908,149 @@ function handleLeave() {
   min-height: 0;
 }
 
+.room-players-panel > .panel-title,
+.room-chat-panel > .panel-title {
+  display: none;
+}
+
+.room-stage .seat-grid,
+.room-stage .seat-grid-6,
+.room-stage .seat-grid-8,
+.room-stage .seat-grid-12 {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  grid-template-columns: clamp(76px, 9vw, 120px) minmax(0, 1fr) clamp(76px, 9vw, 120px);
+  gap: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  pointer-events: none;
+  background: transparent;
+  align-self: stretch;
+}
+
+.stage-6 .seat-grid { grid-template-rows: repeat(3, minmax(0, 1fr)); }
+.stage-8 .seat-grid { grid-template-rows: repeat(4, minmax(0, 1fr)); }
+.stage-12 .seat-grid { grid-template-rows: repeat(6, minmax(0, 1fr)); }
+
+.stage-6 .seat-card:nth-child(-n + 3) { grid-column: 1; }
+.stage-6 .seat-card:nth-child(n + 4) { grid-column: 3; }
+.stage-6 .seat-card:nth-child(3n + 1) { grid-row: 1; }
+.stage-6 .seat-card:nth-child(3n + 2) { grid-row: 2; }
+.stage-6 .seat-card:nth-child(3n + 3) { grid-row: 3; }
+
+.stage-8 .seat-card:nth-child(-n + 4) { grid-column: 1; }
+.stage-8 .seat-card:nth-child(n + 5) { grid-column: 3; }
+.stage-8 .seat-card:nth-child(4n + 1) { grid-row: 1; }
+.stage-8 .seat-card:nth-child(4n + 2) { grid-row: 2; }
+.stage-8 .seat-card:nth-child(4n + 3) { grid-row: 3; }
+.stage-8 .seat-card:nth-child(4n + 4) { grid-row: 4; }
+
+.stage-12 .seat-card:nth-child(-n + 6) { grid-column: 1; }
+.stage-12 .seat-card:nth-child(n + 7) { grid-column: 3; }
+.stage-12 .seat-card:nth-child(6n + 1) { grid-row: 1; }
+.stage-12 .seat-card:nth-child(6n + 2) { grid-row: 2; }
+.stage-12 .seat-card:nth-child(6n + 3) { grid-row: 3; }
+.stage-12 .seat-card:nth-child(6n + 4) { grid-row: 4; }
+.stage-12 .seat-card:nth-child(6n + 5) { grid-row: 5; }
+.stage-12 .seat-card:nth-child(6n + 6) { grid-row: 6; }
+
+.room-stage .seat-card {
+  width: min(96px, 100%);
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  padding: 0;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  pointer-events: auto;
+  align-self: center;
+  justify-self: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.room-stage .seat-occupied,
+.room-stage .seat-me,
+.room-stage .seat-host,
+.room-stage .seat-ready,
+.room-stage .seat-ai,
+.room-stage .seat-empty {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.room-stage .seat-empty { opacity: 0.55; }
+
+.room-stage .seat-index {
+  top: 0;
+  left: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  border: 1px solid color-mix(in srgb, var(--ai-primary) 50%, transparent);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  color: var(--text-primary);
+  opacity: 1;
+  z-index: 1;
+}
+
+.room-stage .seat-avatar {
+  width: auto;
+  height: min(64px, 58%);
+  aspect-ratio: 1;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.room-stage .seat-me .seat-avatar {
+  box-shadow: 0 0 0 2px var(--ai-primary);
+}
+
+.room-stage .seat-name {
+  max-width: 100%;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.room-stage .seat-badges {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(8px);
+  min-height: 0;
+  gap: 0;
+}
+
+.room-stage .seat-remove {
+  opacity: 1;
+  top: 0;
+  right: 0;
+}
+
+.room-stage .room-chat-panel {
+  grid-column: 2;
+  grid-row: 1;
+  z-index: 2;
+  pointer-events: auto;
+  height: auto;
+  min-height: 0;
+  align-self: stretch;
+  border-radius: 22px;
+}
+
 @media (hover: none) {
   .seat-remove {
     opacity: 1;
@@ -893,133 +1058,48 @@ function handleLeave() {
 }
 
 @media (max-width: 900px) {
-  .room-page {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) minmax(240px, 38vh);
-    overflow: hidden;
-  }
-
-  .room-main {
-    height: auto;
-    max-height: 100%;
-    min-height: 0;
-  }
-
-  .room-header {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .room-title-area {
-    order: 3;
-    width: 100%;
-  }
-
-  .seat-grid-6,
-  .seat-grid-8,
-  .seat-grid-12 {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
+  .room-dock,
+  .room-dock .actions-body,
   .add-ai-row {
-    flex-direction: column;
-  }
-
-  .room-chat-panel {
-    height: auto;
-    min-height: 0;
-    max-height: none;
+    flex-wrap: wrap;
   }
 }
 
 @media (max-width: 768px) {
   .room-page {
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 10px;
-    padding: calc(10px + env(safe-area-inset-top, 0px)) 10px calc(10px + env(safe-area-inset-bottom, 0px));
-    overflow-x: hidden;
-  }
-
-  .room-mobile-tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    position: relative;
-    z-index: 2;
-  }
-
-  .room-mobile-tabs button {
-    height: 36px;
-    border: var(--border-medium);
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-    border-radius: var(--radius-md);
-    font-family: var(--font-sans);
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .room-mobile-tabs button.active {
-    background: var(--ai-primary);
-    color: var(--on-accent);
-    border-color: transparent;
-  }
-
-  .pane-seats .room-chat-panel,
-  .pane-chat .room-main {
-    display: none;
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px));
   }
 
   .room-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      "back title"
-      "actions actions";
-    align-items: center;
-    gap: 8px 12px;
-    padding: 10px 12px;
+    gap: 8px;
+    padding: 8px 10px;
   }
 
-  .btn-back { grid-area: back; }
   .back-label { display: none; }
-  .room-title-area {
-    grid-area: title;
-    order: 0;
-    width: auto;
+
+  .room-header :deep(.spectator-bar) {
+    display: none;
   }
-  .room-header-right {
-    grid-area: actions;
-    width: 100%;
+
+  .room-header :deep(.spectator-bar:has(.spectator-badge)) {
+    display: flex;
+    grid-column: 1 / -1;
+    margin-left: 0;
   }
-  .room-header-right .btn {
-    flex: 1;
-    height: 40px;
-    padding: 0 10px;
-    font-size: 0.82rem;
-  }
+
+  .room-header :deep(.spectator-label) { display: none; }
 
   .room-name {
+    margin: 0;
+    font-family: var(--font-display);
     font-size: 1rem;
+    letter-spacing: 0.08em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .room-page,
-  .room-main,
-  .room-content,
-  .room-players-panel,
-  .seat-grid {
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  .room-mobile-tabs button {
-    height: 44px;
-    letter-spacing: 0.12em;
-    font-family: var(--font-display);
   }
 
   .room-code {
@@ -1027,27 +1107,15 @@ function handleLeave() {
     letter-spacing: 0.14em;
   }
 
-  .room-header-right {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+  .room-stage {
+    grid-template-columns: 68px minmax(0, 1fr) 68px;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+    min-height: 0;
   }
 
-  .room-header-right .btn {
-    min-width: 0;
-    min-height: 44px;
-    height: 44px;
-  }
-
-  .room-header-right .btn-ready-toggle {
-    grid-column: 1 / -1;
-    order: -1;
-  }
-
-  .room-header-right .btn-rule {
-    background: transparent;
-    border: var(--border-medium);
-    color: var(--text-secondary);
+  .room-players-panel {
+    display: contents;
   }
 
   .room-players-panel > .panel-title {
@@ -1058,57 +1126,214 @@ function handleLeave() {
   .seat-grid-6,
   .seat-grid-8,
   .seat-grid-12 {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-row: 1;
+    grid-template-columns: 68px minmax(0, 1fr) 68px;
+    gap: 0;
     width: 100%;
-    overflow-x: hidden;
-    overflow-y: auto;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+    pointer-events: none;
+    background: transparent;
+    align-self: stretch;
   }
 
-  .seat-card {
+  .stage-6 .seat-grid { grid-template-rows: repeat(3, minmax(0, 1fr)); }
+  .stage-8 .seat-grid { grid-template-rows: repeat(4, minmax(0, 1fr)); }
+  .stage-12 .seat-grid { grid-template-rows: repeat(6, minmax(0, 1fr)); }
+
+  .stage-6 .seat-card:nth-child(-n + 3) { grid-column: 1; }
+  .stage-6 .seat-card:nth-child(n + 4) { grid-column: 3; }
+  .stage-6 .seat-card:nth-child(3n + 1) { grid-row: 1; }
+  .stage-6 .seat-card:nth-child(3n + 2) { grid-row: 2; }
+  .stage-6 .seat-card:nth-child(3n + 3) { grid-row: 3; }
+
+  .stage-8 .seat-card:nth-child(-n + 4) { grid-column: 1; }
+  .stage-8 .seat-card:nth-child(n + 5) { grid-column: 3; }
+  .stage-8 .seat-card:nth-child(4n + 1) { grid-row: 1; }
+  .stage-8 .seat-card:nth-child(4n + 2) { grid-row: 2; }
+  .stage-8 .seat-card:nth-child(4n + 3) { grid-row: 3; }
+  .stage-8 .seat-card:nth-child(4n + 4) { grid-row: 4; }
+
+  .stage-12 .seat-card:nth-child(-n + 6) { grid-column: 1; }
+  .stage-12 .seat-card:nth-child(n + 7) { grid-column: 3; }
+  .stage-12 .seat-card:nth-child(6n + 1) { grid-row: 1; }
+  .stage-12 .seat-card:nth-child(6n + 2) { grid-row: 2; }
+  .stage-12 .seat-card:nth-child(6n + 3) { grid-row: 3; }
+  .stage-12 .seat-card:nth-child(6n + 4) { grid-row: 4; }
+  .stage-12 .seat-card:nth-child(6n + 5) { grid-row: 5; }
+  .stage-12 .seat-card:nth-child(6n + 6) { grid-row: 6; }
+
+  .room-stage .seat-card {
     width: 100%;
-    min-width: 0;
-    min-height: 52px;
-    display: grid;
-    grid-template-columns: 28px 36px minmax(0, 1fr) auto auto;
-    align-items: center;
-    justify-content: stretch;
-    text-align: left;
-    gap: 8px;
-    padding: 8px 10px;
+    max-width: 64px;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    min-height: 0;
+    padding: 0;
+    gap: 2px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    pointer-events: auto;
+    align-self: center;
+    justify-self: center;
+    justify-content: center;
     overflow: hidden;
   }
 
+  .seat-occupied,
+  .seat-me,
+  .seat-host,
+  .seat-ready,
+  .seat-ai,
+  .seat-empty {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    opacity: 1;
+  }
+
+  .seat-empty { opacity: 0.55; }
+
   .seat-index {
-    position: static;
+    top: 0;
+    left: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    border: 1px solid color-mix(in srgb, var(--ai-primary) 50%, transparent);
     font-family: var(--font-display);
-    font-size: 1.2rem;
-    line-height: 1;
+    font-size: 0.62rem;
     color: var(--text-primary);
     opacity: 1;
+    z-index: 1;
   }
 
   .seat-avatar {
-    width: 36px;
-    height: 36px;
+    width: auto;
+    height: min(46px, 58%);
+    aspect-ratio: 1;
     margin: 0;
+    flex: 0 0 auto;
+  }
+
+  .seat-me .seat-avatar {
+    box-shadow: 0 0 0 2px var(--ai-primary);
   }
 
   .seat-name {
-    min-width: 0;
-    text-align: left;
+    max-width: 64px;
+    font-size: 0.68rem;
+    line-height: 1.2;
   }
 
   .seat-badges {
-    justify-content: flex-end;
-    min-width: 0;
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(6px);
+    min-height: 0;
+    gap: 0;
   }
 
   .seat-remove {
-    position: static;
-    grid-column: 5;
-    justify-self: end;
     opacity: 1;
+    top: 0;
+    right: 0;
+  }
+
+  .room-chat-panel {
+    grid-column: 2;
+    grid-row: 1;
+    z-index: 2;
+    pointer-events: auto;
+    height: auto;
+    min-height: 0;
+    padding: 8px 8px 6px;
+    border-radius: 22px;
+    align-self: stretch;
+  }
+
+  .room-chat-panel > .panel-title {
+    display: none;
+  }
+
+  .room-chat-panel > :deep(.chat-box) {
+    padding: 4px;
+  }
+
+  .room-dock {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .room-dock .room-actions-panel {
+    padding: 0;
+    background: transparent;
+    border: none;
+    backdrop-filter: none;
+  }
+
+  .room-dock .actions-body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .room-header-right {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .room-header-right .btn {
+    min-width: 0;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 10px;
+    font-size: 0.82rem;
+  }
+
+  .room-header-right .btn-ready-toggle {
+    grid-column: 1 / -1;
+    order: -1;
+    min-height: 48px;
+    height: 48px;
+    border-radius: 999px;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    letter-spacing: 0.22em;
+  }
+
+  .room-header-right .btn-rule {
+    background: transparent;
+    border: var(--border-medium);
+    color: var(--text-secondary);
+  }
+
+  .room-dock .add-ai-row {
+    flex-wrap: nowrap;
+  }
+
+  .room-dock .add-ai-row .btn {
+    width: auto;
+    flex: 0 0 auto;
+    min-height: 42px;
+  }
+
+  .room-dock .btn-start {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 999px;
   }
 
   .room-actions-panel .btn {

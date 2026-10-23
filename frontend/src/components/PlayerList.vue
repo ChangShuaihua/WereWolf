@@ -320,56 +320,49 @@ const roleNames = {
 }
 
 @media (max-width: 768px) {
-  .player-grid,
-  .player-grid.grid-6,
-  .player-grid.grid-8,
-  .player-grid.grid-12 {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-
   .player-card {
-    display: grid;
-    grid-template-columns: 28px 36px minmax(0, 1fr);
-    grid-template-areas:
-      "num avatar name"
-      "num avatar badges";
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    text-align: left;
-    column-gap: 10px;
-    row-gap: 2px;
-    min-width: 0;
+    justify-content: flex-start;
+    width: 64px;
+    max-width: 100%;
     min-height: 0;
-    padding: 8px 12px;
+    padding: 0;
+    gap: 2px;
+    background: transparent;
+    border: none;
+    text-align: center;
+    justify-self: center;
+    align-self: center;
   }
 
   .seat-num-badge {
-    position: static;
-    grid-area: num;
+    position: absolute;
+    top: 0;
+    left: 0;
     font-family: var(--font-display);
-    font-size: 1.15rem;
+    font-size: 0.62rem;
     line-height: 1;
     color: var(--text-primary);
   }
 
   .player-avatar {
-    grid-area: avatar;
-    width: 36px;
-    height: 36px;
+    width: 46px;
+    height: 46px;
     margin: 0;
   }
 
   .player-name {
-    grid-area: name;
-    font-size: 0.92rem;
-    text-align: left;
+    max-width: 64px;
+    font-size: 0.68rem;
+    line-height: 1.2;
+    text-align: center;
   }
 
   .player-badges {
-    grid-area: badges;
-    justify-content: flex-start;
+    justify-content: center;
     margin-top: 0;
-    flex-wrap: wrap;
   }
 }
 

@@ -39,7 +39,7 @@ const props = defineProps({
   existingVote: { type: String, default: '' },
 })
 
-const emit = defineEmits(['vote'])
+const emit = defineEmits(['vote', 'settled'])
 
 const selectedCandidate = ref(null)
 const hasVoted = ref(!!props.existingVote)
@@ -63,6 +63,7 @@ function confirmVote() {
   votedTargetId.value = selectedCandidate.value
   hasVoted.value = true
   selectedCandidate.value = null
+  emit('settled')
 }
 
 // W20: 切换至改投模式

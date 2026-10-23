@@ -45,15 +45,21 @@
         <button class="btn-game-rule" @click="showRulePanel = true" type="button" title="游戏规则问答">
           📖 规则
         </button>
+        <button
+          v-if="roomStore.isSpectator"
+          class="btn-game-rule"
+          type="button"
+          @click="insightOpen = !insightOpen"
+        >
+          全知
+        </button>
+        <button v-if="canReviseVote" class="btn-game-rule" type="button" @click="voteSettled = false">修改投票</button>
         <div class="game-message" v-if="gameStore.message">{{ gameStore.message }}</div>
       </div>
     </header>
 
     <!-- Main Content -->
-    <div class="game-main">
-      <!-- Left Panel: Player List & Action Panels -->
-      <div class="game-left-panel">
-        <!-- Player Grid -->
+    <div class="game-main" :class="`players-${roomStore.maxPlayers}`">
         <section class="game-section player-section">
             <div class="section-header">
               <div class="section-title">
@@ -77,67 +83,18 @@
             </div>
           </section>
 
-        <!-- Action Panels -->
-        <section class="game-section action-section">
-          <div v-if="roomStore.isSpectator" class="spectator-insight">
-            <div class="insight-title">全知视角</div>
-            <p v-if="gameStore.currentNightRole?.message" class="insight-now">{{ gameStore.currentNightRole.message }}</p>
-            <div v-if="gameStore.spectatorVotes.length" class="insight-block">
-              <div class="insight-label">本轮投票</div>
-              <p v-for="(vote, index) in gameStore.spectatorVotes" :key="`${vote.voterName}-${index}`">
-                {{ vote.voterName }} → {{ vote.targetName }}
-              </p>
-            </div>
-            <div class="insight-block">
-              <div class="insight-label">行动记录</div>
-              <p v-if="!gameStore.spectatorHistory.length" class="insight-empty">对局开始后，这里会显示全部身份行动</p>
-              <p v-for="(item, index) in gameStore.spectatorHistory" :key="`${item.night}-${index}`">
-                <span v-if="item.night">第{{ item.night }}夜 · </span>{{ item.detail }}
-              </p>
-            </div>
-          </div>
-          <div v-else-if="!hasAction" class="action-empty">当前没有需要你操作的内容</div>
-          <NightPanel
-            v-if="!roomStore.isSpectator && gameStore.isNight && gameStore.myPlayer?.isAlive"
-            :prompt="gameStore.nightActionPrompt"
-            :seerResult="gameStore.seerResult"
-            :currentNightRole="gameStore.currentNightRole"
-            :werewolf-vote-state="gameStore.werewolfVoteState"
-            @action="gameStore.submitNightAction"
-          />
-
-          <HunterPanel
-            v-if="!roomStore.isSpectator && gameStore.hunterPrompt"
-            :prompt="gameStore.hunterPrompt"
-            @shoot="gameStore.submitHunterShoot"
-          />
-
-          <DayPanel
-            v-if="!roomStore.isSpectator && gameStore.isDay"
-            :message="gameStore.message"
-            :isAlive="gameStore.myPlayer?.isAlive"
-            :currentSpeaker="gameStore.currentSpeaker"
-            :speakerName="gameStore.speakerName"
-            :mySocketId="mySocketId"
-            @skip="gameStore.skipSpeaking()"
-            @next="gameStore.nextSpeaker()"
-            @skipDay="gameStore.skipDay()"
-          />
-
-          <VotePanel
-            v-if="!roomStore.isSpectator && gameStore.isVote && gameStore.myPlayer?.isAlive"
-            :candidates="gameStore.candidates"
-            :votedCount="gameStore.votedCount"
-            :totalVoters="gameStore.totalVoters"
-            :existingVote="gameStore.myVote"
-            @vote="gameStore.submitVote"
-          />
-        </section>
-      </div>
-
-      <!-- Right Panel: Chat -->
-      <aside class="game-right-panel">
+      <div class="game-center">
         <section class="game-section chat-section">
+          <div v-if="speakOpen" class="speak-bar">
+            <span>轮到你发言</span>
+            <button type="button" class="btn btn-primary" @click="gameStore.nextSpeaker()">结束发言</button>
+            <button type="button" class="btn btn-secondary" @click="gameStore.skipSpeaking()">跳过</button>
+          </div>
+          <div v-if="wolfBoard" class="speak-bar wolf-board">
+            <span v-for="choice in wolfBoard.choices" :key="choice.playerId">
+              {{ choice.playerName }} → {{ choice.targetName || '未选' }}
+            </span>
+          </div>
           <div class="section-header">
             <div class="section-title">
               <span class="section-icon">💬</span>
@@ -153,7 +110,62 @@
             @send="handleChat" 
           />
         </section>
-      </aside>
+      </div>
+    </div>
+
+    <div v-if="decisionOpen" class="decision-mask">
+      <div class="decision-sheet" role="dialog" aria-modal="true">
+        <div class="decision-sheet-head">
+          <span>{{ decisionTitle }}</span>
+          <button v-if="nightOpen && nightSettledAction === 'check' && gameStore.seerResult" class="decision-close" type="button" @click="nightSettled = true">知道了</button>
+          <button v-else-if="insightOpen && !choiceOpen" class="decision-close" type="button" @click="insightOpen = false">关闭</button>
+        </div>
+        <div v-if="roomStore.isSpectator && insightOpen" class="spectator-insight">
+          <p v-if="gameStore.currentNightRole?.message" class="insight-now">{{ gameStore.currentNightRole.message }}</p>
+          <div v-if="gameStore.spectatorVotes.length" class="insight-block">
+            <div class="insight-label">本轮投票</div>
+            <p v-for="(vote, index) in gameStore.spectatorVotes" :key="`${vote.voterName}-${index}`">
+              {{ vote.voterName }} → {{ vote.targetName }}
+            </p>
+          </div>
+          <div class="insight-block">
+            <div class="insight-label">行动记录</div>
+            <p v-if="!gameStore.spectatorHistory.length" class="insight-empty">对局开始后，这里会显示全部身份行动</p>
+            <p v-for="(item, index) in gameStore.spectatorHistory" :key="`${item.night}-${index}`">
+              <span v-if="item.night">第{{ item.night }}夜 · </span>{{ item.detail }}
+            </p>
+          </div>
+        </div>
+        <NightPanel
+          v-if="nightMounted"
+          v-show="nightOpen"
+          :prompt="gameStore.nightActionPrompt"
+          :seerResult="gameStore.seerResult"
+          :currentNightRole="gameStore.currentNightRole"
+          :werewolf-vote-state="gameStore.werewolfVoteState"
+          @action="gameStore.submitNightAction"
+          @settled="onNightSettled"
+          @revise="nightSettled = false"
+        />
+        <HunterPanel
+          v-if="hunterMounted"
+          v-show="hunterOpen"
+          :prompt="gameStore.hunterPrompt"
+          @shoot="gameStore.submitHunterShoot"
+          @settled="hunterSettled = true"
+        />
+        <VotePanel
+          v-if="voteMounted"
+          v-show="voteOpen"
+          :candidates="gameStore.candidates"
+          :votedCount="gameStore.votedCount"
+          :totalVoters="gameStore.totalVoters"
+          :key="voteRound"
+          :existingVote="gameStore.myVote"
+          @vote="gameStore.submitVote"
+          @settled="voteSettled = true"
+        />
+      </div>
     </div>
 
     <!-- Game Over -->
@@ -251,7 +263,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { useRoomStore } from '../stores/room'
@@ -263,7 +275,6 @@ import SpectatorBar from '../components/SpectatorBar.vue'
 import RoleReveal from '../components/RoleReveal.vue'
 import Countdown from '../components/Countdown.vue'
 import NightPanel from '../components/NightPanel.vue'
-import DayPanel from '../components/DayPanel.vue'
 import VotePanel from '../components/VotePanel.vue'
 import GameResult from '../components/GameResult.vue'
 import HunterPanel from '../components/HunterPanel.vue'
@@ -358,13 +369,62 @@ const roleIcon = computed(() => roleIcons[gameStore.myRole] || '❓')
 
 const aliveCount = computed(() => gameStore.players.filter(p => p.isAlive).length)
 
-const hasAction = computed(() => {
-  const alive = gameStore.myPlayer?.isAlive
-  return (gameStore.isNight && alive)
-    || !!gameStore.hunterPrompt
-    || gameStore.isDay
-    || (gameStore.isVote && alive)
+const insightOpen = ref(false)
+const nightSettled = ref(false)
+const nightSettledAction = ref('')
+const voteSettled = ref(false)
+const voteRound = ref(0)
+const hunterSettled = ref(false)
+
+watch(() => gameStore.nightActionPrompt, (prompt) => {
+  nightSettled.value = !!prompt?.alreadyDone
+  if (!prompt?.alreadyDone) nightSettledAction.value = ''
 })
+
+watch(() => gameStore.phase, (phase) => {
+  if (phase === 'VOTE') voteSettled.value = !!gameStore.myVote
+  else voteSettled.value = false
+})
+
+watch(() => gameStore.message, () => {
+  if (gameStore.phase === 'VOTE' && !gameStore.myVote && gameStore.candidates.length > 0) {
+    voteSettled.value = false
+    voteRound.value += 1
+  }
+})
+
+watch(() => gameStore.hunterPrompt, () => {
+  hunterSettled.value = false
+})
+
+const nightMounted = computed(() => !roomStore.isSpectator && gameStore.isNight && !!gameStore.myPlayer?.isAlive && !!gameStore.nightActionPrompt)
+const nightOpen = computed(() => nightMounted.value && !nightSettled.value)
+const voteMounted = computed(() => !roomStore.isSpectator && gameStore.isVote && !!gameStore.myPlayer?.isAlive)
+const voteOpen = computed(() => voteMounted.value && !voteSettled.value)
+const hunterMounted = computed(() => !roomStore.isSpectator && !!gameStore.hunterPrompt)
+const hunterOpen = computed(() => hunterMounted.value && !hunterSettled.value)
+const speakOpen = computed(() => !roomStore.isSpectator && gameStore.isDay && !!gameStore.myPlayer?.isAlive && gameStore.currentSpeaker === mySocketId.value)
+const choiceOpen = computed(() => nightOpen.value || voteOpen.value || hunterOpen.value)
+const decisionOpen = computed(() => choiceOpen.value || (roomStore.isSpectator && insightOpen.value))
+const canReviseVote = computed(() => voteMounted.value && voteSettled.value)
+const wolfBoard = computed(() => {
+  if (roomStore.isSpectator || gameStore.myRole !== 'werewolf' || !gameStore.isNight) return null
+  const state = gameStore.werewolfVoteState
+  if (!state?.choices?.length) return null
+  return state
+})
+const decisionTitle = computed(() => {
+  if (nightOpen.value) return '夜晚行动'
+  if (hunterOpen.value) return '猎人开枪'
+  if (voteOpen.value) return '投票放逐'
+  return '全知视角'
+})
+
+function onNightSettled(action) {
+  nightSettledAction.value = action || ''
+  if (action === 'check') return
+  nightSettled.value = true
+}
 
 function viewReplay(gameId) {
   router.push({
@@ -487,6 +547,84 @@ function returnToRoom() {
 </script>
 
 <style scoped>
+.decision-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(16, 18, 24, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.decision-sheet {
+  width: min(520px, 100%);
+  max-height: min(78dvh, 720px);
+  overflow: auto;
+  padding: 16px 16px 20px;
+  border-radius: 22px 22px 16px 16px;
+  background: var(--bg-card);
+  border: var(--border-thin);
+  box-shadow: 0 24px 60px rgba(16, 18, 24, 0.35);
+}
+
+.decision-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: 0.12em;
+  color: var(--text-primary);
+}
+
+.speak-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border-bottom: var(--border-thin);
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+.speak-bar .btn {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.wolf-board {
+  flex-wrap: wrap;
+  font-family: var(--font-body);
+  letter-spacing: 0;
+  font-size: 13px;
+}
+
+.decision-close {
+  border: var(--border-medium);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+@media (min-width: 769px) {
+  .decision-mask {
+    align-items: center;
+  }
+
+  .decision-sheet {
+    border-radius: 22px;
+  }
+}
+
 /* C13: indicate the role badge is clickable to re-view role details */
 .my-role {
   cursor: pointer;
@@ -502,6 +640,10 @@ function returnToRoom() {
   display: flex;
   justify-content: flex-end;
   padding: 10px 24px 0;
+}
+
+.game-spectator-strip:not(:has(.spectator-badge)):not(:has(option:nth-child(2))) {
+  display: none;
 }
 
 .game-spectator-strip :deep(.spectator-bar) {

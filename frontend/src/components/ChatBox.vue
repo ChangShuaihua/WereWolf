@@ -252,14 +252,17 @@ watch(() => props.messages.length, async () => {
 
 .chat-input-wrapper {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
   border-top: var(--border-thin);
   background: var(--bg-primary, var(--glass-bg));
   z-index: 1;
 }
 
 .chat-input-field {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
   height: 40px;
   padding: 0 14px;
   background: var(--bg-secondary);
@@ -287,8 +290,9 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-send-btn {
+  flex: 0 0 auto;
   height: 40px;
-  padding: 0 18px;
+  padding: 0 12px;
   background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
   border: none;
   border-radius: var(--radius-md);

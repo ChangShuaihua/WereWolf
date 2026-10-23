@@ -150,15 +150,26 @@ const props = defineProps({
   seerResult: { type: Object, default: null },
   currentNightRole: { type: Object, default: null },
   werewolfVoteState: { type: Object, default: null },
+  reviseTick: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['action'])
+const emit = defineEmits(['action', 'settled', 'revise'])
 
 const witchMode = ref('save')
 const selectedTarget = ref(null)
 const actionDone = ref(false)
 const completedAction = ref(null)
 const completedTarget = ref(null)
+watch(actionDone, (done, previous) => {
+  if (done) emit('settled', completedAction.value)
+  else if (previous) emit('revise')
+})
+
+watch(() => props.reviseTick, (tick, previous) => {
+  if (!tick || tick === previous) return
+  if (actionDone.value && completedAction.value === 'kill') reviseWerewolfVote()
+})
+
 const timeLeft = ref(30)
 const nightTimeLeft = ref(30)
 const timerInterval = ref(null)
@@ -170,8 +181,8 @@ watch(() => props.prompt, (newPrompt) => {
   clearInterval(timerInterval.value)
   if (newPrompt?.alreadyDone) {
     // Reconnection: player already acted, restore confirmation state
-    actionDone.value = true
     completedAction.value = newPrompt.completedAction || newPrompt.action
+    actionDone.value = true
     completedTarget.value = newPrompt.completedTarget || null
   } else if (newPrompt) {
     // New prompt: reset state and start timer
