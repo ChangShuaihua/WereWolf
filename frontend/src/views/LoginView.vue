@@ -56,32 +56,28 @@
             </div>
 
             <div class="input-group">
-              <label class="input-label">密码</label>
+              <label class="input-label">{{ passwordLabel }}</label>
               <div class="input-wrapper">
                 <span class="input-icon">🔒</span>
-                <input 
-                  v-model="password" 
-                  type="password" 
-                  :placeholder="isLogin ? '请输入密码' : '请输入密码（至少6位）'" 
+                <input
+                  ref="passwordInput"
+                  v-model="passwordDraft"
+                  type="password"
+                  :placeholder="passwordPlaceholder"
+                  :autocomplete="isLogin ? 'current-password' : 'new-password'"
                   minlength="6"
-                  required 
+                  required
                 />
               </div>
-              <span v-if="!isLogin" class="input-hint">密码长度至少6位，建议包含字母和数字</span>
-            </div>
-
-            <div v-if="!isLogin" class="input-group">
-              <label class="input-label">确认密码</label>
-              <div class="input-wrapper">
-                <span class="input-icon">🔐</span>
-                <input 
-                  v-model="confirmPassword" 
-                  type="password" 
-                  placeholder="请再次输入密码" 
-                  minlength="6"
-                  required 
-                />
-              </div>
+              <span v-if="!isLogin" class="input-hint">{{ passwordHint }}</span>
+              <button
+                v-if="!isLogin && confirming"
+                type="button"
+                class="password-back"
+                @click="resetPasswordStep"
+              >
+                重新输入密码
+              </button>
             </div>
 
             <p v-if="error" class="error-message">
@@ -91,7 +87,7 @@
 
             <button type="submit" class="btn btn-ai btn-lg btn-block login-submit" :disabled="loading">
               <span v-if="loading" class="loading-spinner"></span>
-              {{ loading ? '处理中...' : (isLogin ? '登录' : '注册') }}
+              {{ loading ? '处理中...' : submitLabel }}
             </button>
           </form>
 
@@ -117,7 +113,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
 
@@ -128,10 +124,34 @@ const userStore = useUserStore()
 const isLogin = ref(true)
 const username = ref('')
 const password = ref('')
-const confirmPassword = ref('')
+const passwordDraft = ref('')
+const confirming = ref(false)
+const passwordInput = ref(null)
 const loading = ref(false)
 const error = ref('')
 const forceLogoutMsg = ref('')
+
+const passwordLabel = computed(() => {
+  if (isLogin.value || !confirming.value) return '密码'
+  return '确认密码'
+})
+
+const passwordPlaceholder = computed(() => {
+  if (isLogin.value) return '请输入密码'
+  if (!confirming.value) return '请输入密码（至少6位）'
+  return '请再次输入密码'
+})
+
+const passwordHint = computed(() => {
+  if (!confirming.value) return '密码长度至少6位，建议包含字母和数字'
+  return '请再输入一次刚才的密码'
+})
+
+const submitLabel = computed(() => {
+  if (isLogin.value) return '登录'
+  if (!confirming.value) return '下一步'
+  return '注册'
+})
 
 onMounted(() => {
   if (route.query.forceLogout === '1') {
@@ -139,11 +159,20 @@ onMounted(() => {
   }
 })
 
+function resetPasswordStep() {
+  confirming.value = false
+  password.value = ''
+  passwordDraft.value = ''
+  error.value = ''
+  nextTick(() => passwordInput.value?.focus())
+}
+
 function handleToggle() {
   isLogin.value = !isLogin.value
   error.value = ''
   password.value = ''
-  confirmPassword.value = ''
+  passwordDraft.value = ''
+  confirming.value = false
 }
 
 function getParticleStyle(i) {
@@ -162,25 +191,33 @@ function getParticleStyle(i) {
 
 async function handleSubmit() {
   error.value = ''
+
+  if (!isLogin.value && !confirming.value) {
+    if (passwordDraft.value.length < 6) {
+      error.value = '密码长度至少6位'
+      return
+    }
+    password.value = passwordDraft.value
+    passwordDraft.value = ''
+    confirming.value = true
+    await nextTick()
+    passwordInput.value?.focus()
+    return
+  }
+
   loading.value = true
   try {
-    if (!isLogin.value) {
-      if (password.value.length < 6) {
-        error.value = '密码长度至少6位'
-        loading.value = false
-        return
-      }
-      if (password.value !== confirmPassword.value) {
-        error.value = '两次输入的密码不一致'
-        loading.value = false
-        return
-      }
+    if (!isLogin.value && passwordDraft.value !== password.value) {
+      error.value = '两次输入的密码不一致'
+      loading.value = false
+      return
     }
 
+    const secret = isLogin.value ? passwordDraft.value : password.value
     if (isLogin.value) {
-      await userStore.login(username.value, password.value)
+      await userStore.login(username.value, secret)
     } else {
-      await userStore.register(username.value, password.value)
+      await userStore.register(username.value, secret)
     }
     router.push('/lobby')
   } catch (err) {
@@ -602,6 +639,21 @@ async function handleSubmit() {
   font-size: 0.78rem;
   color: #e4d9c8;
   margin-top: 2px;
+}
+
+.password-back {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #e7c27a;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.password-back:hover {
+  color: #fff6df;
 }
 
 .error-message {
