@@ -44,22 +44,42 @@
             maxlength="20"
             class="form-input"
           />
-          <span class="form-hint">用户名长度2-20个字符</span>
+          <span class="form-hint">2-20个字符，只能包含字母、数字、下划线或中文</span>
         </div>
 
         <div class="form-group">
           <label :for="passwordFieldId">{{ passwordLabel }}</label>
           <div class="password-row">
-            <input
-              :id="passwordFieldId"
-              ref="passwordInput"
-              v-model="passwordDraft"
-              type="password"
-              class="form-input"
-              :placeholder="passwordPlaceholder"
-              :autocomplete="passwordStep === 'old' ? 'current-password' : 'new-password'"
-              @keydown.enter.prevent="onPasswordEnter"
-            />
+            <div class="password-field">
+              <input
+                :id="passwordFieldId"
+                ref="passwordInput"
+                v-model="passwordDraft"
+                :type="showPassword ? 'text' : 'password'"
+                class="form-input"
+                :placeholder="passwordPlaceholder"
+                :autocomplete="passwordStep === 'old' ? 'current-password' : 'new-password'"
+                @keydown.enter.prevent="onPasswordEnter"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+                :aria-pressed="showPassword"
+                @click="showPassword = !showPassword"
+              >
+                <svg v-if="showPassword" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 3l18 18" />
+                  <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                  <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5.5 0 9.5 4.2 11 7-0.6 1.1-1.5 2.3-2.6 3.4" />
+                  <path d="M6.1 6.1C4.2 7.4 2.8 9.1 2 12c1.5 2.8 5.5 7 10 7 1.3 0 2.5-.2 3.6-.7" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
             <button
               v-if="passwordStep !== 'confirm'"
               type="button"
@@ -124,6 +144,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import api from '../api'
 import { compressAvatar } from '../utils/avatarImage'
+import { validatePassword, validateUsername } from '../utils/authRules'
 import { useConfirmDialog } from '../composables/useConfirm'
 
 const { showConfirm } = useConfirmDialog()
@@ -137,6 +158,7 @@ const form = ref({
   password: '',
 })
 const passwordDraft = ref('')
+const showPassword = ref(false)
 const passwordStep = ref('old')
 const passwordInput = ref(null)
 const passwordLabel = computed(() => ({ old: '修改密码', new: '新密码', confirm: '确认新密码' }[passwordStep.value]))
@@ -266,13 +288,9 @@ function advancePassword() {
       messageType.value = 'error'
       return false
     }
-    if (value.length < 6) {
-      message.value = '密码长度至少6位'
-      messageType.value = 'error'
-      return false
-    }
-    if (!/[a-zA-Z]/.test(value) || !/\d/.test(value)) {
-      message.value = '密码必须包含字母和数字'
+    const passwordErr = validatePassword(value)
+    if (passwordErr) {
+      message.value = passwordErr
       messageType.value = 'error'
       return false
     }
@@ -361,8 +379,10 @@ async function handleSave() {
   }
 
   if (form.value.username) {
-    if (form.value.username.length < 2 || form.value.username.length > 20) {
-      message.value = '用户名长度应为2-20个字符'
+    form.value.username = form.value.username.trim()
+    const usernameErr = validateUsername(form.value.username)
+    if (usernameErr) {
+      message.value = usernameErr
       messageType.value = 'error'
       return
     }
@@ -627,9 +647,49 @@ async function handleLogout() {
   gap: 8px;
 }
 
-.password-row .form-input {
+.password-field {
+  position: relative;
   flex: 1;
   min-width: 0;
+}
+
+.password-field .form-input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #e7c27a;
+  cursor: pointer;
+}
+
+.password-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: rgba(198, 161, 94, 0.16);
+  outline: none;
 }
 
 .password-next {

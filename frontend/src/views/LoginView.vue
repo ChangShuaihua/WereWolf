@@ -57,17 +57,34 @@
 
             <div class="input-group">
               <label class="input-label">{{ passwordLabel }}</label>
-              <div class="input-wrapper">
+              <div class="input-wrapper has-toggle">
                 <span class="input-icon">🔒</span>
                 <input
                   ref="passwordInput"
                   v-model="passwordDraft"
-                  type="password"
+                  :type="showPassword ? 'text' : 'password'"
                   :placeholder="passwordPlaceholder"
                   :autocomplete="isLogin ? 'current-password' : 'new-password'"
-                  minlength="6"
                   required
                 />
+                <button
+                  type="button"
+                  class="password-toggle"
+                  :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+                  :aria-pressed="showPassword"
+                  @click="showPassword = !showPassword"
+                >
+                  <svg v-if="showPassword" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 3l18 18" />
+                    <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                    <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5.5 0 9.5 4.2 11 7-0.6 1.1-1.5 2.3-2.6 3.4" />
+                    <path d="M6.1 6.1C4.2 7.4 2.8 9.1 2 12c1.5 2.8 5.5 7 10 7 1.3 0 2.5-.2 3.6-.7" />
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
               </div>
               <span v-if="!isLogin" class="input-hint">{{ passwordHint }}</span>
               <button
@@ -116,6 +133,7 @@
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
+import { validatePassword, validateUsername } from '../utils/authRules'
 
 const router = useRouter()
 const route = useRoute()
@@ -126,6 +144,7 @@ const username = ref('')
 const password = ref('')
 const passwordDraft = ref('')
 const confirming = ref(false)
+const showPassword = ref(false)
 const passwordInput = ref(null)
 const loading = ref(false)
 const error = ref('')
@@ -138,12 +157,12 @@ const passwordLabel = computed(() => {
 
 const passwordPlaceholder = computed(() => {
   if (isLogin.value) return '请输入密码'
-  if (!confirming.value) return '请输入密码（至少6位）'
+  if (!confirming.value) return '至少6位，需含字母和数字'
   return '请再次输入密码'
 })
 
 const passwordHint = computed(() => {
-  if (!confirming.value) return '密码长度至少6位，建议包含字母和数字'
+  if (!confirming.value) return '密码至少6位，且必须包含字母和数字'
   return '请再输入一次刚才的密码'
 })
 
@@ -173,6 +192,7 @@ function handleToggle() {
   password.value = ''
   passwordDraft.value = ''
   confirming.value = false
+  showPassword.value = false
 }
 
 function getParticleStyle(i) {
@@ -191,10 +211,26 @@ function getParticleStyle(i) {
 
 async function handleSubmit() {
   error.value = ''
+  const name = username.value.trim()
+  username.value = name
+
+  if (!name) {
+    error.value = '用户名不能为空'
+    return
+  }
+
+  if (!isLogin.value) {
+    const usernameErr = validateUsername(name)
+    if (usernameErr) {
+      error.value = usernameErr
+      return
+    }
+  }
 
   if (!isLogin.value && !confirming.value) {
-    if (passwordDraft.value.length < 6) {
-      error.value = '密码长度至少6位'
+    const passwordErr = validatePassword(passwordDraft.value)
+    if (passwordErr) {
+      error.value = passwordErr
       return
     }
     password.value = passwordDraft.value
@@ -202,6 +238,11 @@ async function handleSubmit() {
     confirming.value = true
     await nextTick()
     passwordInput.value?.focus()
+    return
+  }
+
+  if (!passwordDraft.value && isLogin.value) {
+    error.value = '密码不能为空'
     return
   }
 
@@ -603,6 +644,42 @@ async function handleSubmit() {
   font-size: 1.1rem;
   opacity: 0.7;
   pointer-events: none;
+}
+
+.input-wrapper.has-toggle input {
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #e7c27a;
+  cursor: pointer;
+}
+
+.password-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: rgba(198, 161, 94, 0.16);
+  outline: none;
 }
 
 .input-wrapper input {

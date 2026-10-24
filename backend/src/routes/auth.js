@@ -11,8 +11,12 @@ const router = express.Router();
 // W15: username allows letters, digits, underscore, and CJK; 2-20 chars
 const USERNAME_REGEX = /^[a-zA-Z0-9_\u4e00-\u9fa5]{2,20}$/;
 
+function normalizeUsername(username) {
+  return typeof username === 'string' ? username.trim() : '';
+}
+
 function validateUsername(username) {
-  if (!username || typeof username !== 'string') return '用户名不能为空';
+  if (!username) return '用户名不能为空';
   if (!USERNAME_REGEX.test(username)) {
     return '用户名只能包含字母、数字、下划线或中文，长度2-20个字符';
   }
@@ -58,7 +62,8 @@ function validatePassword(password) {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const username = normalizeUsername(req.body.username);
+    const { password } = req.body;
     const usernameErr = validateUsername(username);
     if (usernameErr) return res.status(400).json({ message: usernameErr });
     const passwordErr = validatePassword(password);
@@ -84,7 +89,8 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const username = normalizeUsername(req.body.username);
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
     if (!username || !password) {
       return res.status(400).json({ message: '用户名和密码不能为空' });
     }
@@ -131,7 +137,8 @@ router.get('/me', authMiddleware, async (req, res) => {
 // PUT /api/auth/me
 router.put('/me', authMiddleware, async (req, res) => {
   try {
-    const { username, password, oldPassword, aiFallbackEnabled } = req.body;
+    const username = normalizeUsername(req.body.username);
+    const { password, oldPassword, aiFallbackEnabled } = req.body;
 
     if (!username && !password && typeof aiFallbackEnabled !== 'boolean') {
       return res.status(400).json({ message: '请提供要修改的信息' });
