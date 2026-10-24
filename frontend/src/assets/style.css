@@ -378,9 +378,14 @@ h1, h2, h3 {
 }
 
 .tab-active {
-  color: var(--text-primary) !important;
-  border-bottom-color: var(--ai-primary);
+  color: #e7c27a !important;
+  font-weight: 700;
+  border-bottom: 2px solid #e7c27a;
   background: transparent;
+}
+
+.tab-active .tab-text {
+  color: #e7c27a;
 }
 
 .tab-icon {
@@ -388,10 +393,54 @@ h1, h2, h3 {
 }
 
 .header-user {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.user-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 148px;
+  padding: 8px 6px 6px;
+  background: rgba(12, 14, 22, 0.94);
+  border: 1px solid rgba(198, 161, 94, 0.42);
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+  z-index: 120;
+}
+
+.user-menu::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 8px;
+}
+
+.user-menu a,
+.user-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #f4efe6;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.user-menu a:hover,
+.user-menu button:hover {
+  background: rgba(198, 161, 94, 0.16);
+  color: #e7c27a;
 }
 
 .user-link {
@@ -402,7 +451,9 @@ h1, h2, h3 {
   border-radius: var(--radius-full);
   color: var(--text-primary);
   text-decoration: none;
+  font: inherit;
   font-size: 0.9rem;
+  cursor: pointer;
   transition: all 0.2s;
   background: transparent;
   border: var(--border-medium);

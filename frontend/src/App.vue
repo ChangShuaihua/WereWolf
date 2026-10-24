@@ -23,12 +23,25 @@
           <span class="tab-text">设置</span>
         </router-link>
       </nav>
-      <div class="header-user">
-        <router-link to="/profile" class="user-link">
+      <div
+        class="header-user"
+        @mouseenter="userMenuOpen = true"
+        @mouseleave="userMenuOpen = false"
+      >
+        <button
+          type="button"
+          class="user-link"
+          :aria-expanded="userMenuOpen"
+          @click="userMenuOpen = !userMenuOpen"
+        >
           <img v-if="userStore.user.avatarUrl" :src="userStore.user.avatarUrl" alt="" class="user-avatar" />
           <span v-else class="user-icon">👤</span>
           <span class="user-name">{{ userStore.user.username }}</span>
-        </router-link>
+        </button>
+        <div v-show="userMenuOpen" class="user-menu">
+          <router-link to="/profile" @click="userMenuOpen = false">个人资料</router-link>
+          <button type="button" @click="handleLogout">退出登录</button>
+        </div>
       </div>
     </header>
     <main class="app-main" :class="{ 'page-scroll': isScrollablePage }">
@@ -68,16 +81,32 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { useConfirmDialog } from './composables/useConfirm'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import Toast from './components/Toast.vue'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
-const { visible: dialogVisible, state: dialogState, onConfirm: onDialogConfirm, onCancel: onDialogCancel } = useConfirmDialog()
+const userMenuOpen = ref(false)
+const { visible: dialogVisible, state: dialogState, showConfirm, onConfirm: onDialogConfirm, onCancel: onDialogCancel } = useConfirmDialog()
+
+async function handleLogout() {
+  userMenuOpen.value = false
+  const confirmed = await showConfirm({
+    title: '退出确认',
+    message: '确定要退出登录吗？',
+    confirmText: '退出',
+    cancelText: '取消',
+    type: 'warning'
+  })
+  if (!confirmed) return
+  await userStore.logout()
+  router.push('/login')
+}
 
 // 游戏页面和房间页面不需要外部滚动
 const isScrollablePage = computed(() => {

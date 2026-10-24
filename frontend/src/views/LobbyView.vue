@@ -8,31 +8,27 @@
     <div class="lobby-content">
       <section class="hero-section">
         <div class="hero-text">
-          <div class="hero-badge">
-            <span class="badge-dot"></span>
-            <span>在线玩家：{{ totalPlayers }}</span>
-          </div>
           <h1 class="hero-title">
-            <span class="title-gradient">欢迎回来{{ userStore.user?.username ? '，' + userStore.user.username : '' }}</span>
+            <span class="title-gradient">欢迎回来，{{ userStore.user?.username }}</span>
             <br />
             Werewolf AI 游戏大厅
           </h1>
           <p class="hero-desc">
-            选择你的游戏模式，<span class="desc-break"></span>或使用 AI 智能体开启一场精彩的对局
+            选择对局人数，<span class="desc-break"></span>搭配AI智能体开启狼人杀对局
           </p>
         </div>
         <div class="hero-stats">
           <div class="stat-card">
-            <div class="stat-value">{{ totalRooms }}</div>
+            <div class="stat-value">{{ totalPlayers }}</div>
+            <div class="stat-label"><span class="badge-dot"></span>在线玩家</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" :class="{ 'is-zero': totalRooms === 0 }">{{ totalRooms }}</div>
             <div class="stat-label">进行中房间</div>
           </div>
-          <div class="stat-card stat-ai">
-            <div class="stat-value">{{ aiAgentCount }}</div>
-            <div class="stat-label">AI 人格</div>
-          </div>
-          <div class="stat-card stat-werewolf">
-            <div class="stat-value">3</div>
-            <div class="stat-label">模式选择</div>
+          <div class="stat-card">
+            <div class="stat-value" :class="{ 'is-zero': aiAgentCount === 0 }">{{ aiAgentCount }}</div>
+            <div class="stat-label">我的 AI 人格</div>
           </div>
         </div>
       </section>
@@ -416,10 +412,10 @@ async function handleSearchJoin() {
   z-index: 1;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 40px var(--space-8);
+  padding: 24px var(--space-8) 40px;
   display: flex;
   flex-direction: column;
-  gap: 60px;
+  gap: 32px;
 }
 
 /* Hero Section */
@@ -427,28 +423,13 @@ async function handleSearchJoin() {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 28px 0 8px;
+  padding: 4px 0 0;
   gap: 32px;
 }
 
 .hero-text {
   flex: 1 1 520px;
   min-width: 0;
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--ai-primary) 35%, transparent);
-  border-radius: var(--radius-full);
-  font-size: 0.78rem;
-  color: var(--ai-secondary);
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  margin-bottom: 20px;
 }
 
 .badge-dot {
@@ -499,6 +480,7 @@ async function handleSearchJoin() {
 .mode-body {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-width: 0;
 }
 
@@ -509,51 +491,46 @@ async function handleSearchJoin() {
 }
 
 .stat-card {
-  background: rgba(8, 12, 22, 0.34);
+  background: rgba(8, 10, 18, 0.78);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(198, 161, 94, 0.38);
+  border: 1px solid rgba(198, 161, 94, 0.28);
   border-radius: var(--radius-lg);
-  padding: 20px 24px;
+  padding: 18px 22px;
   text-align: center;
-  min-width: 110px;
-}
-
-.stat-ai {
-  border-color: rgba(198, 161, 94, 0.72);
-  background: rgba(198, 161, 94, 0.12);
-}
-
-.stat-werewolf {
-  border-color: rgba(196, 92, 102, 0.55);
-  background: rgba(8, 12, 22, 0.34);
+  min-width: 124px;
 }
 
 .stat-value {
   font-family: var(--font-display);
   font-size: 2.2rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #f7f3ec;
   letter-spacing: 0.04em;
 }
 
-.stat-ai .stat-value {
-  color: var(--ai-secondary);
-}
-
-.stat-werewolf .stat-value {
-  color: var(--werewolf-primary);
+.stat-value.is-zero {
+  color: #b7b1a6;
 }
 
 .stat-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: #e4d9c8;
   margin-top: 4px;
+}
+
+.stat-label .badge-dot {
+  width: 7px;
+  height: 7px;
 }
 
 /* Section Headers */
 .section-header {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .section-title {
@@ -576,20 +553,45 @@ async function handleSearchJoin() {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
+  align-items: stretch;
 }
 
 .mode-card {
   position: relative;
+  height: 100%;
   background: rgba(8, 12, 22, 0.32);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(198, 161, 94, 0.4);
   border-radius: var(--radius-xl);
-  padding: 32px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 28px 28px 24px;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.mode-card:hover,
+.mode-card.mode-hover-active {
+  transform: translateY(-6px);
+  border-color: rgba(231, 194, 122, 0.9);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), 0 0 22px rgba(176, 48, 42, 0.28);
+}
+
+.mode-card:hover .mode-actions .btn,
+.mode-card.mode-hover-active .mode-actions .btn {
+  border-color: rgba(231, 194, 122, 0.8);
+  box-shadow: 0 0 16px rgba(231, 194, 122, 0.4), 0 0 26px rgba(176, 48, 42, 0.28);
+  filter: brightness(1.08);
+}
+
+.mode-actions .btn {
+  transition: box-shadow 0.2s ease, filter 0.2s ease, border-color 0.2s ease;
+}
+
+.mode-actions .btn:hover:not(:disabled) {
+  box-shadow: 0 0 18px rgba(231, 194, 122, 0.55), 0 0 30px rgba(176, 48, 42, 0.4);
+  filter: brightness(1.12);
 }
 
 .mode-card::before {
@@ -601,19 +603,9 @@ async function handleSearchJoin() {
   transition: opacity 0.3s;
 }
 
-.mode-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: var(--shadow-lg);
-}
-
-.mode-6 { --mode-glow: rgba(79, 140, 255, 0.15); }
-.mode-8 { --mode-glow: rgba(245, 185, 66, 0.15); }
-.mode-12 { --mode-glow: rgba(229, 57, 53, 0.15); }
-
-.mode-6:hover { border-color: rgba(79, 140, 255, 0.4); box-shadow: 0 8px 32px rgba(79, 140, 255, 0.2); }
-.mode-8:hover { border-color: rgba(245, 185, 66, 0.4); box-shadow: 0 8px 32px rgba(245, 185, 66, 0.2); }
-.mode-12:hover { border-color: rgba(229, 57, 53, 0.4); box-shadow: 0 8px 32px rgba(229, 57, 53, 0.2); }
+.mode-6 { --mode-glow: rgba(231, 194, 122, 0.16); }
+.mode-8 { --mode-glow: rgba(231, 194, 122, 0.16); }
+.mode-12 { --mode-glow: rgba(176, 48, 42, 0.18); }
 
 .mode-glow {
   position: absolute;
@@ -630,7 +622,8 @@ async function handleSearchJoin() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  min-height: 44px;
+  margin-bottom: 14px;
 }
 
 .mode-icon {
@@ -658,29 +651,34 @@ async function handleSearchJoin() {
   letter-spacing: 0.06em;
   color: var(--text-primary);
   margin: 0 0 8px;
+  min-height: 1.65rem;
 }
 
 .mode-desc {
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  color: #e4d9c8;
   margin: 0 0 16px;
+  min-height: 1.4em;
 }
 
 .mode-roles {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 24px;
-  min-height: 32px;
+  align-content: flex-start;
+  gap: 8px;
+  margin-bottom: 20px;
+  min-height: 76px;
 }
 
 .role-tag {
   padding: 4px 10px;
-  background: rgba(0, 0, 0, 0.04);
-  border: var(--border-thin);
-  border-radius: var(--radius-full);
-  font-size: 0.78rem;
-  color: var(--text-secondary);
+  background: rgba(198, 161, 94, 0.16);
+  border: 1px solid rgba(231, 194, 122, 0.48);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  color: #f6ead0;
 }
 
 .mode-actions {
@@ -1098,12 +1096,8 @@ async function handleSearchJoin() {
   }
 
   .hero-section {
-    gap: 0;
+    gap: 16px;
     padding: 0;
-  }
-
-  .hero-badge {
-    margin-bottom: 10px;
   }
 
   .desc-break {
@@ -1218,26 +1212,18 @@ async function handleSearchJoin() {
   }
 
   .mode-roles {
-    flex-wrap: nowrap;
-    gap: 0;
+    flex-wrap: wrap;
+    gap: 6px;
     min-height: 0;
     margin-bottom: 0;
-    overflow: hidden;
   }
 
   .role-tag {
-    padding: 0;
-    border: none;
-    background: none;
-    border-radius: 0;
     font-size: 0.68rem;
-    letter-spacing: 0;
-    white-space: nowrap;
   }
 
   .role-tag:not(:last-child)::after {
-    content: ' · ';
-    color: var(--text-tertiary);
+    content: none;
   }
 
   .mode-actions {
