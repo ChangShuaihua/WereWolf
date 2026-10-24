@@ -13,7 +13,7 @@
             <span>在线玩家：{{ totalPlayers }}</span>
           </div>
           <h1 class="hero-title">
-            <span class="title-gradient">欢迎来到</span>
+            <span class="title-gradient">欢迎回来{{ userStore.user?.username ? '，' + userStore.user.username : '' }}</span>
             <br />
             Werewolf AI 游戏大厅
           </h1>

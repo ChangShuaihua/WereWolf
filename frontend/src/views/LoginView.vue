@@ -1,6 +1,10 @@
 <template>
   <div class="login-container">
     <div class="login-bg">
+      <div class="night-atmosphere" aria-hidden="true">
+        <span class="moon-breath"></span>
+        <span class="star-field"></span>
+      </div>
       <div class="stars"></div>
       <div class="moon"></div>
       <div class="moon-glow"></div>
@@ -27,7 +31,7 @@
       <div class="login-form-wrapper">
         <div class="login-form-card">
           <div class="card-header">
-            <h2>{{ isLogin ? '欢迎回来' : '创建账号' }}</h2>
+            <h2>{{ isLogin ? '欢迎来到 Werewolf AI' : '创建账号' }}</h2>
             <p class="card-subtitle">{{ isLogin ? '登录账号，进入黑夜对局' : '创建一个账号，加入黑夜对局' }}</p>
           </div>
 
@@ -94,7 +98,8 @@
           <div class="form-footer">
             <span class="toggle-text">{{ isLogin ? '还没有账号？' : '已有账号？' }}</span>
             <button 
-              class="toggle-link" 
+              class="toggle-link"
+              :class="{ 'toggle-link-accent': isLogin }"
               @click.prevent="handleToggle"
             >
               {{ isLogin ? '立即创建' : '前往登录' }}
@@ -204,6 +209,54 @@ async function handleSubmit() {
   background:
     linear-gradient(180deg, rgba(7, 10, 18, 0.12) 0%, rgba(7, 10, 18, 0.02) 36%, rgba(7, 10, 18, 0.42) 100%),
     url('/bg.png') center 28% / cover no-repeat;
+}
+
+.night-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.moon-breath {
+  position: absolute;
+  top: 6%;
+  left: 46%;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(196, 52, 42, 0.34) 0%, rgba(196, 52, 42, 0.08) 46%, transparent 72%);
+  filter: blur(6px);
+  animation: moonBreath 7s ease-in-out infinite;
+}
+
+.star-field {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1.4px 1.4px at 18% 14%, rgba(255, 244, 220, 0.9), transparent),
+    radial-gradient(1.2px 1.2px at 72% 11%, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1.6px 1.6px at 84% 22%, rgba(255, 220, 180, 0.85), transparent),
+    radial-gradient(1px 1px at 30% 28%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1.3px 1.3px at 58% 8%, rgba(255, 236, 210, 0.75), transparent);
+  animation: starTwinkle 6.5s ease-in-out infinite;
+}
+
+@keyframes moonBreath {
+  0%, 100% { opacity: 0.4; transform: scale(0.96); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moon-breath,
+  .star-field,
+  .login-form-card {
+    animation: none;
+  }
 }
 
 .stars,
@@ -375,12 +428,14 @@ async function handleSubmit() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   margin: 0;
 }
 
 .logo-icon {
-  font-size: 3.2rem;
+  font-size: 2.7rem;
+  line-height: 1;
+  margin-bottom: -4px;
   filter: drop-shadow(0 0 18px rgba(198, 161, 94, 0.45));
 }
 
@@ -425,7 +480,11 @@ async function handleSubmit() {
   border: 1px solid rgba(212, 175, 110, 0.62);
   border-radius: 28px;
   padding: 28px 28px 20px;
-  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(212, 175, 110, 0.12);
+  box-shadow:
+    0 0 28px rgba(176, 48, 42, 0.28),
+    0 0 64px rgba(92, 36, 78, 0.22),
+    0 24px 50px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(212, 175, 110, 0.12);
   animation: cardFadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
@@ -449,7 +508,7 @@ async function handleSubmit() {
   font-family: var(--font-display);
   font-size: 1.75rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.04em;
   color: var(--text-primary);
   margin-bottom: 8px;
 }
@@ -491,7 +550,7 @@ async function handleSubmit() {
 .input-label {
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: #efe6d6;
   letter-spacing: 0.02em;
 }
 
@@ -513,10 +572,10 @@ async function handleSubmit() {
   width: 100%;
   height: 48px;
   padding: 0 16px 0 48px;
-  background: rgba(6, 10, 18, 0.2);
+  background: rgba(8, 10, 18, 0.72);
   border: 1px solid rgba(212, 175, 110, 0.62);
   border-radius: 14px;
-  color: var(--text-primary);
+  color: #f7f3ec;
   font-family: var(--font-sans);
   font-size: 0.95rem;
   transition: all 0.2s;
@@ -524,23 +583,24 @@ async function handleSubmit() {
 }
 
 .input-wrapper input:hover {
-  border-color: rgba(232, 205, 150, 0.9);
-  background: rgba(6, 10, 18, 0.28);
+  border-color: rgba(196, 92, 84, 0.9);
+  background: rgba(18, 10, 16, 0.78);
+  box-shadow: 0 0 0 1px rgba(140, 42, 58, 0.35);
 }
 
 .input-wrapper input:focus {
-  border-color: #e8cd96;
-  box-shadow: 0 0 0 3px rgba(212, 175, 110, 0.18);
-  background: rgba(6, 10, 18, 0.32);
+  border-color: #e7c27a;
+  box-shadow: 0 0 0 3px rgba(160, 48, 62, 0.38), 0 0 18px rgba(231, 194, 122, 0.22);
+  background: rgba(12, 8, 14, 0.84);
 }
 
 .input-wrapper input::placeholder {
-  color: var(--text-tertiary);
+  color: #e4d9c8;
 }
 
 .input-hint {
   font-size: 0.78rem;
-  color: var(--text-tertiary);
+  color: #e4d9c8;
   margin-top: 2px;
 }
 
@@ -587,6 +647,7 @@ async function handleSubmit() {
 .login-form-card .login-submit:hover:not(:disabled) {
   background: rgba(212, 175, 110, 0.16);
   color: #fff8ea;
+  box-shadow: 0 0 18px rgba(231, 194, 122, 0.38), 0 0 28px rgba(176, 48, 42, 0.32);
 }
 
 .form-footer {
@@ -605,18 +666,33 @@ async function handleSubmit() {
 
 .toggle-link {
   background: none;
-  border: none;
-  color: var(--ai-light);
+  border: 1px solid transparent;
+  color: #e7c27a;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
-  transition: color 0.2s;
+  transition: color 0.2s, background 0.2s, box-shadow 0.2s, border-color 0.2s;
 }
 
-.toggle-link:hover {
-  color: var(--ai-primary);
-  text-decoration: underline;
+.toggle-link-accent {
+  color: #ffe7b0;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border-color: rgba(231, 194, 122, 0.7);
+  background: rgba(176, 48, 42, 0.28);
+  text-shadow: 0 0 12px rgba(231, 194, 122, 0.45);
+}
+
+.toggle-link:hover,
+.toggle-link-accent:hover {
+  color: #fff6df;
+  background: rgba(176, 48, 42, 0.42);
+  border-color: rgba(255, 214, 150, 0.9);
+  box-shadow: 0 0 16px rgba(176, 48, 42, 0.4);
+  text-decoration: none;
 }
 
 .form-decoration {
@@ -652,7 +728,8 @@ async function handleSubmit() {
   }
 
   .logo-icon {
-    font-size: 3.6rem;
+    font-size: 3rem;
+    margin-bottom: -6px;
   }
 
   .brand-title {
@@ -675,7 +752,8 @@ async function handleSubmit() {
   }
 
   .card-header h2 {
-    font-size: 2.15rem;
+    font-size: 1.9rem;
+    letter-spacing: 0.04em;
   }
 
   .card-subtitle {
