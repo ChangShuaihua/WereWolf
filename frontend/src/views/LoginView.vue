@@ -413,6 +413,7 @@ async function handleSubmit() {
   position: relative;
   display: flex;
   justify-content: center;
+  width: 100%;
 }
 
 .login-form-card {
@@ -642,6 +643,73 @@ async function handleSubmit() {
 
 @keyframes rotate {
   to { transform: rotate(360deg); }
+}
+
+@media (min-width: 901px) {
+  .login-content {
+    width: min(560px, 100%);
+    gap: 28px;
+  }
+
+  .logo-icon {
+    font-size: 3.6rem;
+  }
+
+  .brand-title {
+    font-size: 3.1rem;
+  }
+
+  .brand-subtitle {
+    font-size: 1rem;
+    margin-top: 10px;
+  }
+
+  .login-form-card {
+    max-width: 560px;
+    padding: 40px 44px 32px;
+    border-radius: 32px;
+  }
+
+  .card-header {
+    margin-bottom: 22px;
+  }
+
+  .card-header h2 {
+    font-size: 2.15rem;
+  }
+
+  .card-subtitle {
+    font-size: 1.05rem;
+  }
+
+  .login-form {
+    gap: 20px;
+  }
+
+  .input-label {
+    font-size: 0.95rem;
+  }
+
+  .input-wrapper input {
+    height: 56px;
+    font-size: 1.05rem;
+    border-radius: 16px;
+  }
+
+  .login-form-card .login-submit {
+    height: 58px;
+    margin-top: 12px;
+    font-size: 1.15rem;
+  }
+
+  .form-footer {
+    margin-top: 22px;
+  }
+
+  .toggle-text,
+  .toggle-link {
+    font-size: 1rem;
+  }
 }
 
 @media (max-width: 900px) {
