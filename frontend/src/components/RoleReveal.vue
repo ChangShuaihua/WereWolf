@@ -212,4 +212,51 @@ const roleDesc = computed(() => roleDescs[props.role] || '')
   background: linear-gradient(135deg, #38bdf8, #0284c7);
   box-shadow: 0 4px 20px rgba(56, 189, 248, 0.4);
 }
+
+@media (min-width: 901px) {
+  .role-reveal-card {
+    max-width: 560px;
+    padding: 68px 56px 52px;
+    border-radius: 28px;
+  }
+
+  .role-reveal-icon {
+    font-size: 7.2rem;
+    margin-bottom: 28px;
+  }
+
+  .role-reveal-title {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    letter-spacing: 0.46em;
+    margin-bottom: 14px;
+  }
+
+  .role-reveal-name {
+    font-family: var(--font-display);
+    font-size: 3.6rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    margin-bottom: 28px;
+  }
+
+  .role-reveal-desc {
+    font-size: 1.18rem;
+    line-height: 1.8;
+    margin-bottom: 42px;
+  }
+
+  .role-reveal-btn {
+    min-height: 58px;
+    font-size: 1.18rem;
+    border-radius: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-reveal-card,
+  .role-reveal-icon {
+    animation: none;
+  }
+}
 </style>

@@ -202,28 +202,54 @@ onMounted(() => {
 
 <style scoped>
 .stats-page {
-  width: 70vw;
-  margin: 0 auto;
-  padding: 24px 16px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px 16px 16px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.stats-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 10, 18, 0.42) 0%, rgba(7, 10, 18, 0.14) 42%, rgba(7, 10, 18, 0.46) 100%),
+    url('/bg3.png') center 28% / cover no-repeat;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .stats-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: relative;
+  z-index: 1;
 }
 
 .card {
-  background: var(--bg-secondary);
+  background: rgba(8, 12, 22, 0.46);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-radius: 16px;
   padding: 24px;
-  border: var(--border-thin);
+  border: 1px solid rgba(198, 161, 94, 0.32);
 }
 
-/* 积分卡片 */
 .score-card {
+  flex-shrink: 0;
   text-align: center;
-  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  background: rgba(8, 12, 22, 0.42);
 }
 
 .score-header {
@@ -298,6 +324,7 @@ onMounted(() => {
 /* 标签切换 */
 .tabs {
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
 }
 
@@ -305,8 +332,8 @@ onMounted(() => {
   flex: 1;
   padding: 10px 16px;
   border-radius: 10px;
-  border: var(--border-thin);
-  background: var(--bg-secondary);
+  border: 1px solid rgba(198, 161, 94, 0.28);
+  background: rgba(8, 12, 22, 0.4);
   color: var(--text-secondary);
   font-size: 1rem;
   cursor: pointer;
@@ -325,8 +352,10 @@ onMounted(() => {
 
 /* 列表卡片 */
 .list-card {
+  flex: 1;
+  min-height: 0;
   padding: 16px;
-  min-height: 300px;
+  overflow-y: auto;
 }
 
 .loading, .empty {

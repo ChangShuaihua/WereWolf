@@ -410,7 +410,7 @@ function handleLeave() {
   height: 100%;
   flex: 1;
   min-height: 0;
-  background: var(--bg-primary);
+  background: transparent;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -435,8 +435,8 @@ function handleLeave() {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse at 12% -8%, var(--atmosphere-a) 0%, transparent 46%),
-    radial-gradient(ellipse at 100% 100%, var(--atmosphere-b) 0%, transparent 42%);
+    linear-gradient(180deg, rgba(7, 10, 18, 0.28) 0%, rgba(7, 10, 18, 0.08) 42%, rgba(7, 10, 18, 0.34) 100%),
+    url('/bg4.png') center 35% / cover no-repeat;
   pointer-events: none;
   z-index: 0;
 }
@@ -748,15 +748,15 @@ function handleLeave() {
   width: 48px;
   height: 48px;
   margin: 4px auto 2px;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(8, 12, 22, 0.78);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.2rem;
   font-weight: 600;
-  color: var(--text-primary);
-  border: 2px solid rgba(0, 0, 0, 0.08);
+  color: #f4e7d0;
+  border: 1.5px solid rgba(198, 161, 94, 0.5);
   overflow: hidden;
 }
 
@@ -767,8 +767,8 @@ function handleLeave() {
 }
 
 .seat-avatar.ai-avatar {
-  background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
-  color: white;
+  background: linear-gradient(135deg, var(--ai-primary), #e7c27a);
+  color: var(--on-accent);
   border-color: transparent;
   box-shadow: 0 4px 14px var(--ai-glow);
 }
@@ -1352,16 +1352,16 @@ function handleLeave() {
 
 /* ===== 游戏规则按钮 ===== */
 .btn-rule {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #86efac;
+  background: rgba(198, 161, 94, 0.12);
+  border: 1px solid rgba(198, 161, 94, 0.45);
+  color: #e7c27a;
   font-family: var(--font-sans);
 }
 
 .btn-rule:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: rgba(34, 197, 94, 0.5);
-  color: #bbf7d0;
+  background: rgba(198, 161, 94, 0.22);
+  border-color: rgba(231, 194, 122, 0.75);
+  color: #f4e7d0;
 }
 
 /* ===== 规则问答弹窗 ===== */

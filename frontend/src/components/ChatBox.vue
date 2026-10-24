@@ -226,6 +226,18 @@ watch(() => props.messages.length, async () => {
   background: var(--bg-tertiary);
 }
 
+.chat-msg.system-msg {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 4px 8px;
+  box-shadow: none;
+}
+
+.chat-msg.system-msg:hover {
+  background: transparent;
+}
+
 .chat-msg.ai-msg {
   background: var(--ai-glow);
   border-color: color-mix(in srgb, var(--ai-primary) 28%, transparent);
@@ -266,8 +278,11 @@ watch(() => props.messages.length, async () => {
 
 .chat-input-wrapper {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
+  margin: 0;
+  padding: 0;
   border-top: none;
   background: transparent;
   z-index: 1;
@@ -279,10 +294,10 @@ watch(() => props.messages.length, async () => {
   width: 100%;
   height: 40px;
   padding: 0 14px;
-  background: var(--bg-secondary);
-  border: var(--border-thin);
+  background: rgba(8, 12, 22, 0.78);
+  border: 1px solid rgba(198, 161, 94, 0.4);
   border-radius: var(--radius-md);
-  color: var(--text-primary);
+  color: #f4efe6;
   font-size: 0.88rem;
   font-family: var(--font-sans);
   outline: none;
@@ -290,11 +305,11 @@ watch(() => props.messages.length, async () => {
 }
 
 .chat-input-field::placeholder {
-  color: var(--text-tertiary);
+  color: #b7b1a6;
 }
 
 .chat-input-field:hover {
-  border-color: var(--text-tertiary);
+  border-color: rgba(231, 194, 122, 0.72);
 }
 
 .chat-input-field:focus {
@@ -305,14 +320,17 @@ watch(() => props.messages.length, async () => {
 
 .chat-send-btn {
   flex: 0 0 auto;
+  width: auto;
+  min-width: 84px;
   height: 40px;
-  padding: 0 12px;
+  padding: 0 18px;
   background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
   border: none;
   border-radius: var(--radius-md);
-  color: white;
+  color: var(--on-accent);
   font-size: 0.88rem;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.2s;
   font-family: var(--font-sans);
@@ -326,8 +344,8 @@ watch(() => props.messages.length, async () => {
 .chat-send-btn:disabled {
   opacity: 1;
   background: transparent;
-  color: var(--text-tertiary);
-  border: var(--border-thin);
+  color: #e7c27a;
+  border: 1px solid rgba(198, 161, 94, 0.45);
   cursor: not-allowed;
 }
 
@@ -391,12 +409,12 @@ watch(() => props.messages.length, async () => {
 
 /* Replay Card Styles */
 .replay-card {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-  border: 1px solid rgba(99, 102, 241, 0.4);
-  border-radius: 12px;
-  padding: 16px;
-  margin: 8px 0;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+  background: rgba(8, 12, 22, 0.62);
+  border: 1px solid rgba(198, 161, 94, 0.32);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin: 4px 0 12px;
+  box-shadow: none;
   max-width: 100%;
 }
 
@@ -404,21 +422,22 @@ watch(() => props.messages.length, async () => {
   text-align: center;
   margin-bottom: 8px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+  border-bottom: 1px solid rgba(198, 161, 94, 0.28);
 }
 
 .replay-title {
-  font-size: 1rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
   font-weight: 700;
-  color: #a5b4fc;
-  letter-spacing: 0.05em;
+  color: #e7c27a;
+  letter-spacing: 0.16em;
 }
 
 .replay-summary {
   text-align: center;
-  font-size: 0.85rem;
-  color: #cbd5e1;
-  margin-bottom: 12px;
+  font-size: 1rem;
+  color: #d9d0c2;
+  margin-bottom: 14px;
 }
 
 .replay-section {
@@ -429,10 +448,10 @@ watch(() => props.messages.length, async () => {
 }
 
 .replay-section-title {
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 600;
-  color: #e2e8f0;
-  margin-bottom: 8px;
+  color: #f4efe6;
+  margin-bottom: 10px;
 }
 
 .replay-players {
@@ -553,10 +572,13 @@ watch(() => props.messages.length, async () => {
 }
 
 .replay-event {
-  font-size: 0.78rem;
-  color: #cbd5e1;
-  padding: 3px 0;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #e7e0d4;
+  padding: 5px 0 5px 12px;
+  margin: 2px 0;
+  border-bottom: none;
+  border-left: 2px solid rgba(198, 161, 94, 0.38);
 }
 
 .replay-event:last-child {
@@ -574,5 +596,43 @@ watch(() => props.messages.length, async () => {
 .replay-history::-webkit-scrollbar-thumb {
   background: rgba(99, 102, 241, 0.3);
   border-radius: 2px;
+}
+
+@media (min-width: 901px) {
+  .chat-msg {
+    padding: 12px 16px;
+    font-size: 1.12rem;
+    line-height: 1.6;
+  }
+
+  .chat-user {
+    font-size: 1rem;
+    margin-bottom: 4px;
+  }
+
+  .chat-system {
+    font-size: 1.05rem;
+    line-height: 1.55;
+  }
+
+  .chat-empty p {
+    font-size: 1.05rem;
+  }
+
+  .chat-input-field,
+  .chat-send-btn {
+    height: 48px;
+    font-size: 1.05rem;
+    border-radius: 12px;
+  }
+
+  .chat-send-btn {
+    min-width: 104px;
+    padding: 0 22px;
+  }
+
+  .chat-disabled-hint {
+    font-size: 1rem;
+  }
 }
 </style>

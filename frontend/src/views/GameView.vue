@@ -622,6 +622,57 @@ function returnToRoom() {
   }
 }
 
+@media (min-width: 901px) {
+  .decision-sheet {
+    width: min(880px, 76vw);
+    max-height: min(86dvh, 920px);
+    padding: 28px 36px 36px;
+  }
+
+  .decision-sheet-head {
+    margin-bottom: 20px;
+    font-size: 1.65rem;
+  }
+
+  .decision-sheet :deep(.timer-bar) {
+    height: 40px;
+    margin-bottom: 22px;
+  }
+
+  .decision-sheet :deep(.timer-text),
+  .decision-sheet :deep(.teammates-info p),
+  .decision-sheet :deep(.vote-title),
+  .decision-sheet :deep(.vote-row),
+  .decision-sheet :deep(.vote-unanimous),
+  .decision-sheet :deep(.witch-hint),
+  .decision-sheet :deep(.confirmed-info p),
+  .decision-sheet :deep(.seer-result p) {
+    font-size: 18px;
+  }
+
+  .decision-sheet :deep(.action-message) {
+    font-size: 22px;
+    margin-bottom: 22px;
+  }
+
+  .decision-sheet :deep(.btn-target),
+  .decision-sheet :deep(.btn-mode),
+  .decision-sheet :deep(.btn-primary),
+  .decision-sheet :deep(.btn-danger),
+  .decision-sheet :deep(.btn-secondary),
+  .decision-sheet :deep(.btn-warn) {
+    min-height: 52px;
+    height: auto;
+    padding: 12px 26px;
+    font-size: 18px;
+  }
+
+  .decision-sheet :deep(.teammates-info),
+  .decision-sheet :deep(.werewolf-vote-live) {
+    padding: 18px 20px;
+  }
+}
+
 /* C13: indicate the role badge is clickable to re-view role details */
 .my-role {
   cursor: pointer;
@@ -749,9 +800,9 @@ function returnToRoom() {
 /* 游戏规则按钮 */
 .btn-game-rule {
   padding: 6px 14px;
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #86efac;
+  background: rgba(198, 161, 94, 0.12);
+  border: 1px solid rgba(198, 161, 94, 0.45);
+  color: #e7c27a;
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   font-weight: 600;
@@ -761,9 +812,9 @@ function returnToRoom() {
 }
 
 .btn-game-rule:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: rgba(34, 197, 94, 0.5);
-  color: #bbf7d0;
+  background: rgba(198, 161, 94, 0.22);
+  border-color: rgba(231, 194, 122, 0.75);
+  color: #f4e7d0;
 }
 
 /* ===== 规则问答弹窗 ===== */

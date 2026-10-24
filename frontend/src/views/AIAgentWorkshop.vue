@@ -617,7 +617,7 @@ onMounted(async () => {
 <style scoped>
 .workshop-page {
   min-height: calc(100vh - var(--header-h));
-  background: var(--bg-primary);
+  background: transparent;
   padding: 32px;
   position: relative;
 }
@@ -627,8 +627,8 @@ onMounted(async () => {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse at 12% -8%, var(--atmosphere-a) 0%, transparent 46%),
-    radial-gradient(ellipse at 100% 100%, var(--atmosphere-b) 0%, transparent 42%);
+    linear-gradient(180deg, rgba(7, 10, 18, 0.46) 0%, rgba(7, 10, 18, 0.16) 40%, rgba(7, 10, 18, 0.48) 100%),
+    url('/bg2.png') center 28% / cover no-repeat;
   pointer-events: none;
   z-index: 0;
 }

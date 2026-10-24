@@ -289,8 +289,8 @@ h1, h2, h3 {
 
 .btn-success,
 .btn-ready {
-  background: #2c6b50;
-  color: #faf6ef;
+  background: var(--status-success);
+  color: var(--on-accent);
 }
 
 .btn-sm {
@@ -788,9 +788,9 @@ textarea.input-field {
 }
 
 .phase-indicator.day {
-  background: var(--villager-glow);
-  border-color: color-mix(in srgb, var(--villager-primary) 42%, transparent);
-  color: var(--villager-secondary);
+  background: rgba(198, 161, 94, 0.16);
+  border-color: rgba(231, 194, 122, 0.55);
+  color: #f4e7d0;
   box-shadow: none;
 }
 
@@ -892,8 +892,8 @@ textarea.input-field {
   margin: 0 6px;
   padding: 10px 12px;
   border-radius: 18px;
-  background: color-mix(in srgb, var(--bg-card) 88%, transparent);
-  border: var(--border-thin);
+  background: color-mix(in srgb, #0b1018 68%, transparent);
+  border: 1px solid rgba(198, 161, 94, 0.24);
 }
 
 .game-page .chat-foot,
@@ -903,6 +903,60 @@ textarea.input-field {
   z-index: 3;
   pointer-events: auto;
   padding: 8px 2px 0;
+}
+
+@media (min-width: 901px) {
+  .game-main {
+    padding-bottom: 28px;
+  }
+
+  .game-page .chat-foot {
+    grid-column: 2;
+    justify-self: center;
+    width: min(820px, 90%);
+    padding: 6px 0 4px;
+  }
+
+  .game-page .chat-foot .chat-input-wrapper {
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+
+  .game-page .chat-foot .chat-input-field,
+  .game-page .chat-foot .chat-send-btn {
+    height: 48px;
+    font-size: 1.05rem;
+    border-radius: 12px;
+  }
+
+  .game-page .chat-foot .chat-send-btn {
+    width: auto;
+    min-width: 104px;
+    padding: 0 22px;
+    flex: 0 0 auto;
+  }
+
+  .my-role {
+    padding: 12px 28px;
+    gap: 12px;
+  }
+
+  .role-emoji {
+    font-size: 1.9rem;
+  }
+
+  .role-name {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    letter-spacing: 0.14em;
+  }
+
+  .phase-text {
+    font-size: 1.08rem;
+  }
 }
 
 .game-page .chat-disabled-hint,
@@ -1028,6 +1082,9 @@ textarea.input-field {
   aspect-ratio: 1;
   margin: 0;
   flex: 0 0 auto;
+  background: rgba(8, 12, 22, 0.78);
+  border: 1.5px solid rgba(198, 161, 94, 0.55);
+  color: #f4e7d0;
 }
 
 .game-page .player-grid .player-name {

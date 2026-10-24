@@ -280,7 +280,7 @@ onMounted(loadStatus)
 <style scoped>
 .settings-page {
   min-height: calc(100vh - var(--header-h));
-  background: var(--bg-primary);
+  background: transparent;
   padding: 40px var(--space-8);
   position: relative;
 }
@@ -290,8 +290,8 @@ onMounted(loadStatus)
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse at 12% -8%, var(--atmosphere-a) 0%, transparent 46%),
-    radial-gradient(ellipse at 100% 100%, var(--atmosphere-b) 0%, transparent 42%);
+    linear-gradient(180deg, rgba(7, 10, 18, 0.46) 0%, rgba(7, 10, 18, 0.16) 40%, rgba(7, 10, 18, 0.48) 100%),
+    url('/bg3.png') center 28% / cover no-repeat;
   pointer-events: none;
   z-index: 0;
 }

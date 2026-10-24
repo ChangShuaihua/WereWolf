@@ -410,7 +410,7 @@ async function handleLogout() {
 <style scoped>
 .profile-page {
   min-height: calc(100vh - var(--header-h));
-  background: var(--bg-primary);
+  background: transparent;
   padding: 40px var(--space-8);
   position: relative;
 }
@@ -420,8 +420,8 @@ async function handleLogout() {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse at 12% -8%, var(--atmosphere-a) 0%, transparent 46%),
-    radial-gradient(ellipse at 100% 100%, var(--atmosphere-b) 0%, transparent 42%);
+    linear-gradient(180deg, rgba(7, 10, 18, 0.46) 0%, rgba(7, 10, 18, 0.16) 40%, rgba(7, 10, 18, 0.48) 100%),
+    url('/bg3.png') center 28% / cover no-repeat;
   pointer-events: none;
   z-index: 0;
 }
@@ -430,7 +430,7 @@ async function handleLogout() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto 32px;
   position: relative;
   z-index: 1;
@@ -448,7 +448,7 @@ async function handleLogout() {
 }
 
 .profile-content {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
