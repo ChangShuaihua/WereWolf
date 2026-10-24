@@ -219,7 +219,7 @@ onMounted(() => {
   inset: 0;
   background:
     linear-gradient(180deg, rgba(7, 10, 18, 0.42) 0%, rgba(7, 10, 18, 0.14) 42%, rgba(7, 10, 18, 0.46) 100%),
-    url('/bg3.png') center 28% / cover no-repeat;
+    url('/bg3.webp') center 28% / cover no-repeat;
   pointer-events: none;
   z-index: 0;
 }

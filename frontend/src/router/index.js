@@ -28,6 +28,27 @@ const router = createRouter({
   routes,
 })
 
+const routeBackgrounds = {
+  Login: '/bg.webp',
+  Lobby: '/bg1.webp',
+  Workshop: '/bg2.webp',
+  Profile: '/bg3.webp',
+  Stats: '/bg3.webp',
+  Settings: '/bg3.webp',
+  Room: '/bg4.webp',
+}
+
+const preloadedBackgrounds = new Set()
+
+function preloadBackground(routeName) {
+  const href = routeBackgrounds[routeName]
+  if (!href || preloadedBackgrounds.has(href)) return
+  preloadedBackgrounds.add(href)
+  const image = new Image()
+  image.decoding = 'async'
+  image.src = href
+}
+
 // W24: 通过解析 JWT payload 的 exp 字段判断 token 是否过期
 function isTokenExpired(token) {
   if (!token) return true
@@ -51,6 +72,7 @@ function isTokenExpired(token) {
 
 // Auth guard
 router.beforeEach(async (to, from, next) => {
+  preloadBackground(to.name)
   const token = getAccessToken()
   const refreshToken = getRefreshToken()
   const expired = isTokenExpired(token)

@@ -628,7 +628,7 @@ onMounted(async () => {
   inset: 0;
   background:
     linear-gradient(180deg, rgba(7, 10, 18, 0.46) 0%, rgba(7, 10, 18, 0.16) 40%, rgba(7, 10, 18, 0.48) 100%),
-    url('/bg2.png') center 28% / cover no-repeat;
+    url('/bg2.webp') center 28% / cover no-repeat;
   pointer-events: none;
   z-index: 0;
 }

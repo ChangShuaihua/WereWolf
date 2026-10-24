@@ -286,7 +286,7 @@ async function handleSubmit() {
   pointer-events: none;
   background:
     linear-gradient(180deg, rgba(7, 10, 18, 0.12) 0%, rgba(7, 10, 18, 0.02) 36%, rgba(7, 10, 18, 0.42) 100%),
-    url('/bg.png') center 28% / cover no-repeat;
+    url('/bg.webp') center 28% / cover no-repeat;
 }
 
 .night-atmosphere {

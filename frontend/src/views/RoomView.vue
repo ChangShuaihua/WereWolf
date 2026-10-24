@@ -436,7 +436,7 @@ function handleLeave() {
   inset: 0;
   background:
     linear-gradient(180deg, rgba(7, 10, 18, 0.28) 0%, rgba(7, 10, 18, 0.08) 42%, rgba(7, 10, 18, 0.34) 100%),
-    url('/bg4.png') center 35% / cover no-repeat;
+    url('/bg4.webp') center 35% / cover no-repeat;
   pointer-events: none;
   z-index: 0;
 }
