@@ -13,8 +13,13 @@ RUN npm run build
 FROM docker.1ms.run/library/nginx:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+COPY docker-entrypoint.d/10-selfsigned-cert.sh /docker-entrypoint.d/10-selfsigned-cert.sh
+RUN chmod +x /docker-entrypoint.d/10-selfsigned-cert.sh \
+    && apk add --no-cache openssl
 
-EXPOSE 80
+ENV NGINX_HOST=121.196.239.144
+
+EXPOSE 80 443
 
 CMD ["nginx", "-g", "daemon off;"]

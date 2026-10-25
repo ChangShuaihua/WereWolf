@@ -34,3 +34,8 @@ Thumbs.db
 
 .vercel
 .env*
+
+# TLS private keys and certificates
+certs/*.pem
+certs/*.key
+certs/*.crt
