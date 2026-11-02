@@ -9,8 +9,6 @@
 
 ### 大厅页
 ![大厅页1](pic/sy1.png)
-![大厅页2](pic/sy2.png)
-![大厅页3](pic/sy3.png)
 
 ### 房间页
 ![房间页](pic/room.png)
