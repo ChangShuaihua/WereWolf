@@ -154,27 +154,13 @@ app.get('/api/lobby-stats', authMiddleware, async (req, res, next) => {
 
 // GET /api/rooms - list active rooms
 app.get('/api/rooms', authMiddleware, (req, res) => {
+  const { buildLobbySnapshot } = require('./socket/roomHandler');
   const rooms = [];
-  const allRooms = roomCache.keys();
-  for (const code of allRooms) {
+  for (const code of roomCache.keys()) {
     const room = roomCache.get(code);
-    if (room) {
-      const connectedPlayers = room.players.filter((p) => p.socketId !== null);
-      if (connectedPlayers.length > 0) {
-        const host =
-          connectedPlayers.find((p) => p.socketId === room.hostId) ||
-          connectedPlayers.find((p) => Number(p.userId) === Number(room.hostUserId));
-        const game = gameCache.get(room.code);
-        rooms.push({
-          code: room.code,
-          hostUsername: host?.username || '未知',
-          playerCount: connectedPlayers.length,
-          maxPlayers: Number(room.maxPlayers) || 6,
-          spectatorCount: (room.spectators || []).filter(s => s.socketId).length,
-          inGame: Boolean(game && game.phase && game.phase !== 'WAITING'),
-        });
-      }
-    }
+    if (!room) continue;
+    const snapshot = buildLobbySnapshot(room);
+    if (snapshot.playerCount > 0) rooms.push(snapshot);
   }
   res.json({ rooms });
 });

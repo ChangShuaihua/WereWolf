@@ -100,6 +100,7 @@ function startGame(io, socket, code) {
 
   gameCache.set(code, engine);
   engine.start();
+  require('./roomHandler').broadcastLobbyRoom(code);
 }
 
 /**
@@ -311,6 +312,7 @@ function resetGame(code) {
 
   const io = require('../app').getIO();
   io.to(code).emit('room_reset');
+  require('./roomHandler').broadcastLobbyRoom(code);
 
   console.log(`[gameHandler] Game ${code} reset, players ready to return`);
 }

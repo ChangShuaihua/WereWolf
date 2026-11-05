@@ -3,7 +3,7 @@ const User = require('../models/User');
 const { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
-const { kickOldSocket, removeUserSocket, getUserBySocket } = require('../utils/userSocketMap');
+const { kickOldSocket, removeUserSocket, getUserBySocket, getUserCount } = require('../utils/userSocketMap');
 const {
   getRoomInfoOrReject,
   validatePhaseOrReject,
@@ -55,6 +55,7 @@ function initSocket(io) {
 
     if (socket.userId) {
       kickOldSocket(io, socket.userId, socket.id);
+      io.emit('lobby_online', { onlineUsers: getUserCount() });
     }
 
     socket.on('error', (err) => {
@@ -285,8 +286,8 @@ function initSocket(io) {
     socket.on('disconnect', () => {
       console.log(`User disconnected: ${socket.id}`);
       const userId = getUserBySocket(socket.id);
-      if (userId) {
-        removeUserSocket(userId, socket.id);
+      if (userId && removeUserSocket(userId, socket.id)) {
+        io.emit('lobby_online', { onlineUsers: getUserCount() });
       }
       handleDisconnect(socket);
       cleanupSocketRateLimits(socket.id);

@@ -250,14 +250,85 @@ function getZoneRooms(mode) {
   return rooms.value.filter(r => Number(r.maxPlayers) === Number(mode))
 }
 
+function normalizeLobbyRoom(data) {
+  if (!data?.code) return null
+  return {
+    code: data.code,
+    hostUsername: data.hostUsername || '未知',
+    playerCount: Number(data.playerCount) || 0,
+    maxPlayers: Number(data.maxPlayers) || 6,
+    spectatorCount: Number(data.spectatorCount) || 0,
+    inGame: Boolean(data.inGame),
+  }
+}
+
+function upsertRoom(data) {
+  const snap = normalizeLobbyRoom(data)
+  if (!snap) return
+  if (snap.playerCount <= 0) {
+    removeRoom(snap.code)
+    return
+  }
+  const idx = rooms.value.findIndex((room) => room.code === snap.code)
+  if (idx === -1) rooms.value.unshift(snap)
+  else rooms.value[idx] = snap
+}
+
+function removeRoom(code) {
+  rooms.value = rooms.value.filter((room) => room.code !== code)
+}
+
 function _onRoomJoined(data) {
   if (data.isSpectator && data.gameActive) router.push(`/game/${data.code}`)
   else router.push(`/room/${data.code}`)
 }
-function _onRoomCreated(data) { rooms.value.unshift(data) }
-function _onRoomDeleted(data) { rooms.value = rooms.value.filter(r => r.code !== data.code) }
+
+let roomsLoaded = false
+const pendingRooms = new Map()
+const pendingDeleted = new Set()
+let onlineFromSocket = false
+
+function _onRoomCreatedDuringLoad(data) {
+  if (roomsLoaded) upsertRoom(data)
+  else stageRoom(data)
+}
+function _onLobbyRoomUpdateDuringLoad(data) {
+  if (roomsLoaded) upsertRoom(data)
+  else stageRoom(data)
+}
+function _onRoomDeletedDuringLoad(data) {
+  if (roomsLoaded) removeRoom(data.code)
+  else stageDelete(data.code)
+}
+function _onLobbyOnlineDuringLoad(data) {
+  if (typeof data?.onlineUsers !== 'number') return
+  onlineFromSocket = true
+  totalPlayers.value = data.onlineUsers
+}
+
+function stageRoom(data) {
+  const snap = normalizeLobbyRoom(data)
+  if (!snap) return
+  if (snap.playerCount <= 0) {
+    stageDelete(snap.code)
+    return
+  }
+  pendingDeleted.delete(snap.code)
+  pendingRooms.set(snap.code, snap)
+}
+
+function stageDelete(code) {
+  pendingRooms.delete(code)
+  pendingDeleted.add(code)
+}
 
 onMounted(async () => {
+  socket.on('room_joined', _onRoomJoined)
+  socket.on('room_created', _onRoomCreatedDuringLoad)
+  socket.on('lobby_room_update', _onLobbyRoomUpdateDuringLoad)
+  socket.on('room_deleted', _onRoomDeletedDuringLoad)
+  socket.on('lobby_online', _onLobbyOnlineDuringLoad)
+
   if (userStore.user) {
     const authPromise = authenticate() // W26: 统一无参签名
     if (!socket.connected) socket.connect()
@@ -266,27 +337,40 @@ onMounted(async () => {
     if (!socket.connected) socket.connect()
   }
 
+  let fetchedRooms = []
   try {
     const { data: roomData } = await api.get('/rooms')
-    rooms.value = roomData.rooms
+    fetchedRooms = roomData.rooms || []
   } catch (e) {}
+
+  const merged = []
+  for (const room of fetchedRooms) {
+    if (pendingDeleted.has(room.code)) continue
+    merged.push(pendingRooms.get(room.code) || normalizeLobbyRoom(room))
+  }
+  for (const snap of pendingRooms.values()) {
+    if (!merged.some((room) => room.code === snap.code)) merged.unshift(snap)
+  }
+  rooms.value = merged.filter(Boolean)
+  roomsLoaded = true
+  pendingRooms.clear()
+  pendingDeleted.clear()
 
   try {
     const { data: stats } = await api.get('/lobby-stats')
-    totalPlayers.value = stats.onlineUsers || 1
+    if (!onlineFromSocket) totalPlayers.value = stats.onlineUsers || 1
     aiAgentCount.value = stats.aiAgentCount || 10
   } catch (e) {}
 
   roomStore.bindEvents()
-  socket.on('room_joined', _onRoomJoined)
-  socket.on('room_created', _onRoomCreated)
-  socket.on('room_deleted', _onRoomDeleted)
 })
 
 onUnmounted(() => {
   socket.off('room_joined', _onRoomJoined)
-  socket.off('room_created', _onRoomCreated)
-  socket.off('room_deleted', _onRoomDeleted)
+  socket.off('room_created', _onRoomCreatedDuringLoad)
+  socket.off('lobby_room_update', _onLobbyRoomUpdateDuringLoad)
+  socket.off('room_deleted', _onRoomDeletedDuringLoad)
+  socket.off('lobby_online', _onLobbyOnlineDuringLoad)
 })
 
 // 上次检查结果缓存：30s 内复用，避免反复调用大模型。

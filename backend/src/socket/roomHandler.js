@@ -226,12 +226,7 @@ function createRoom(socket, username, userId, maxPlayers = 6) {
   joinRoom(socket, code, username, userId, true);
 
   const io = require('../app').getIO();
-  io.emit('room_created', {
-    code,
-    hostUsername: username,
-    playerCount: room.players.length,
-    maxPlayers: room.maxPlayers,
-  });
+  io.emit('room_created', buildLobbySnapshot(roomCache.get(code) || room));
 
   return code;
 }
@@ -792,7 +787,8 @@ function destroyRoom(code) {
 
   roomCache.del(code);
   gameCache.del(code);
-  
+  forgetLobbyRoom(code);
+
   const io = require('../app').getIO();
   io.emit('room_deleted', { code });
   
@@ -1048,6 +1044,7 @@ function broadcastRoomUpdate(code, room = null) {
   console.log(`[roomHandler] broadcastRoomUpdate room=${code}, totalPlayers=${room.players.length}, seats=${seats.length}`);
 
   const io = require('../app').getIO();
+  broadcastLobbyRoom(code, room);
   io.to(code).emit('room_update', {
     players: seats.filter(s => s.occupied).map(s => ({
       socketId: s.socketId,
@@ -1146,4 +1143,43 @@ function handleDisconnect(socket) {
   }
 }
 
-module.exports = { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, applyUserAvatar, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits, abandonRoomIfEmpty, hasRealHuman };
+const lobbySnapshotCache = new Map();
+
+function buildLobbySnapshot(room) {
+  const connectedPlayers = (room.players || []).filter((p) => p.socketId !== null);
+  const host =
+    connectedPlayers.find((p) => p.socketId === room.hostId) ||
+    connectedPlayers.find((p) => Number(p.userId) === Number(room.hostUserId));
+  const game = gameCache.get(room.code);
+  // startTime 在开局后立刻写上，夜晚要等 3 秒才进入。大厅用它提前显示「对局中」。
+  const inGame = Boolean(
+    game && (game.startTime || (game.phase && game.phase !== 'WAITING'))
+  );
+  return {
+    code: room.code,
+    hostUsername: host?.username || '未知',
+    playerCount: connectedPlayers.length,
+    maxPlayers: Number(room.maxPlayers) || 6,
+    spectatorCount: (room.spectators || []).filter((s) => s.socketId).length,
+    inGame,
+  };
+}
+
+function broadcastLobbyRoom(code, room = null) {
+  if (!room) room = roomCache.get(code);
+  if (!room) return;
+
+  const snapshot = buildLobbySnapshot(room);
+  const serialized = snapshot.playerCount > 0 ? JSON.stringify(snapshot) : 'empty';
+  if (lobbySnapshotCache.get(code) === serialized) return;
+  lobbySnapshotCache.set(code, serialized);
+
+  const io = require('../app').getIO();
+  io.emit('lobby_room_update', snapshot);
+}
+
+function forgetLobbyRoom(code) {
+  lobbySnapshotCache.delete(code);
+}
+
+module.exports = { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, broadcastLobbyRoom, buildLobbySnapshot, applyUserAvatar, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits, abandonRoomIfEmpty, hasRealHuman };
