@@ -118,15 +118,15 @@ function removeSpectator(socket, code) {
   if (!room) return;
   const before = ensureSpectators(room).length;
   room.spectators = room.spectators.filter(spectator => spectator.socketId !== socket.id);
-  if (room.spectators.length !== before) {
-    roomCache.set(code, room);
-    broadcastRoomUpdate(code, room);
-  }
   socket.leave(code);
   const info = socketCache.get(socket.id);
   if (info?.isSpectator && !room.players.some(player => player.socketId === socket.id)) {
     socketCache.del(socket.id);
   }
+  if (room.spectators.length === before) return;
+  if (abandonRoomIfEmpty(code)) return;
+  roomCache.set(code, room);
+  broadcastRoomUpdate(code, room);
 }
 
 function phaseTimeoutSeconds(game) {
@@ -373,9 +373,9 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     existing.disconnectTime = null;
     if (!existing.userId) existing.userId = userId;
     
-    if (room.hostUserId === userId || existing.socketId === room.hostId) {
+    if (!room.hostUserId || room.hostUserId === userId || existing.socketId === room.hostId) {
       room.hostId = socket.id;
-      if (!room.hostUserId) room.hostUserId = userId;
+      room.hostUserId = userId;
     }
     
     socket.join(code);
@@ -620,6 +620,10 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
   room.spectators = room.spectators.filter(spectator => spectator.userId !== userId && spectator.socketId !== socket.id);
 
   room.players.push(player);
+  if (!room.hostUserId) {
+    room.hostId = socket.id;
+    room.hostUserId = userId;
+  }
   socket.join(code);
 
   socketCache.set(socket.id, { userId, username, roomCode: code });
@@ -740,20 +744,35 @@ function joinAsSpectator(socket, code, username, userId) {
   return room;
 }
 
-function isRoomOnlyAI(room) {
-  return room.players.every(p => p.isAI);
+// 座位上的真人：在线，或仍在掉线重连计时里。观众席只算还连着的观众。
+function hasRealHuman(room) {
+  if (!room) return false;
+  const humanPlaying = (room.players || []).some(
+    (player) => !player.isAI && (player.socketId || player.disconnectTimer)
+  );
+  const humanWatching = (room.spectators || []).some((spectator) => spectator.socketId);
+  return humanPlaying || humanWatching;
 }
 
-function shouldDestroyRoom(room, leavingUserId) {
-  if (room.hostUserId === leavingUserId) {
-    return true;
+function transferHostIfNeeded(room, leavingUserId, leavingSocketId) {
+  const hostLeft = room.hostUserId === leavingUserId || (leavingSocketId && room.hostId === leavingSocketId);
+  if (!hostLeft) return;
+  const next = (room.players || []).find((player) => !player.isAI && player.socketId)
+    || (room.players || []).find((player) => !player.isAI && player.disconnectTimer);
+  if (next) {
+    room.hostId = next.socketId || null;
+    room.hostUserId = next.userId;
+  } else {
+    room.hostId = null;
+    room.hostUserId = null;
   }
-  
-  if (isRoomOnlyAI(room)) {
-    return true;
-  }
-  
-  return false;
+}
+
+function abandonRoomIfEmpty(code) {
+  const room = roomCache.get(code);
+  if (!room || hasRealHuman(room)) return false;
+  destroyRoom(code);
+  return true;
 }
 
 function destroyRoom(code) {
@@ -801,44 +820,29 @@ function leaveRoom(socket, code, isDisconnect = false) {
     roomCache.set(code, room);
     broadcastRoomUpdate(code);
 
-    // W7: track the disconnect timer so destroyRoom can clean it up
     player.disconnectTimer = setTimeout(() => {
       const roomCheck = roomCache.get(code);
-      if (roomCheck) {
-        const playerCheck = roomCheck.players.find(p => p.userId === leavingUserId);
-        if (playerCheck && playerCheck.socketId === null) {
-          roomCheck.players = roomCheck.players.filter(p => p.userId !== leavingUserId);
-
-          if (roomCheck.players.length === 0) {
-            destroyRoom(code);
-          } else if (shouldDestroyRoom(roomCheck, leavingUserId)) {
-            destroyRoom(code);
-          } else {
-            if (roomCheck.hostUserId === leavingUserId) {
-              roomCheck.hostId = roomCheck.players[0].socketId;
-              roomCheck.hostUserId = roomCheck.players[0].userId;
-            }
-            roomCache.set(code, roomCheck);
-            broadcastRoomUpdate(code);
-          }
-        }
-      }
+      if (!roomCheck) return;
+      const playerCheck = roomCheck.players.find(p => p.userId === leavingUserId);
+      if (!playerCheck || playerCheck.socketId !== null) return;
+      playerCheck.disconnectTimer = null;
+      roomCheck.players = roomCheck.players.filter(p => p.userId !== leavingUserId);
+      if (abandonRoomIfEmpty(code)) return;
+      transferHostIfNeeded(roomCheck, leavingUserId, null);
+      roomCache.set(code, roomCheck);
+      broadcastRoomUpdate(code);
     }, 30000);
   } else {
     room.players = room.players.filter(p => p.socketId !== socket.id);
 
-    if (room.players.length === 0 || shouldDestroyRoom(room, leavingUserId)) {
+    if (!hasRealHuman(room)) {
       destroyRoom(code);
       socket.leave(code);
       socketCache.del(socket.id);
       return;
     }
 
-    if (room.hostId === socket.id && room.players.length > 0) {
-      room.hostId = room.players[0].socketId;
-      room.hostUserId = room.players[0].userId;
-    }
-
+    transferHostIfNeeded(room, leavingUserId, socket.id);
     roomCache.set(code, room);
   }
 
@@ -1107,35 +1111,32 @@ function handleDisconnect(socket) {
 
         // Set timeout to mark as dead if not reconnected (W6: track timer for cleanup)
         player.disconnectTimer = setTimeout(() => {
+          const roomNow = roomCache.get(code);
+          const playerInRoom = roomNow?.players.find(p => p.userId === userId);
+          if (!playerInRoom || playerInRoom.socketId !== null) return;
+          playerInRoom.disconnectTimer = null;
+
           const gameCheck = gameCache.get(code);
-          if (gameCheck) {
-            const gamePlayerCheck = gameCheck.players.find(p => p.userId === userId);
-            if (gamePlayerCheck && gamePlayerCheck.disconnectTime) {
-              // Player still disconnected after timeout
-              const playerInRoom = roomCache.get(code)?.players.find(p => p.userId === userId);
-              if (playerInRoom && playerInRoom.socketId === null) {
-                // Mark as dead
-                if (gamePlayerCheck.isAlive) {
-                  gamePlayerCheck.isAlive = false;
-                  gameCheck.broadcast('player_disconnected', {
-                    id: userId,
-                    username: gamePlayerCheck.username || `玩家${gamePlayerCheck.seatIndex + 1}号`,
-                    message: `${gamePlayerCheck.username || gamePlayerCheck.seatIndex + 1}号 长时间未连接，视为死亡`,
-                  });
-                  if (gameCheck.phase !== 'WAITING' && gameCheck.phase !== 'END') {
-                    gameCheck.checkWinCondition();
-                  }
-                }
-                // Remove from room
-                const roomCheck = roomCache.get(code);
-                if (roomCheck) {
-                  roomCheck.players = roomCheck.players.filter(p => p.userId !== userId);
-                  roomCache.set(code, roomCheck);
-                  broadcastRoomUpdate(code);
-                }
-              }
+          const gamePlayerCheck = gameCheck?.players.find(p => p.userId === userId);
+          if (gameCheck && gamePlayerCheck?.disconnectTime && gamePlayerCheck.isAlive) {
+            gamePlayerCheck.isAlive = false;
+            gameCheck.broadcast('player_disconnected', {
+              id: userId,
+              username: gamePlayerCheck.username || `玩家${gamePlayerCheck.seatIndex + 1}号`,
+              message: `${gamePlayerCheck.username || gamePlayerCheck.seatIndex + 1}号 长时间未连接，视为死亡`,
+            });
+            if (gameCheck.phase !== 'WAITING' && gameCheck.phase !== 'END') {
+              gameCheck.checkWinCondition();
             }
           }
+
+          const roomCheck = roomCache.get(code);
+          if (!roomCheck) return;
+          roomCheck.players = roomCheck.players.filter(p => p.userId !== userId);
+          if (abandonRoomIfEmpty(code)) return;
+          transferHostIfNeeded(roomCheck, userId, null);
+          roomCache.set(code, roomCheck);
+          broadcastRoomUpdate(code);
         }, 60000);
       }
     }
@@ -1145,4 +1146,4 @@ function handleDisconnect(socket) {
   }
 }
 
-module.exports = { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, applyUserAvatar, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits };
+module.exports = { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, applyUserAvatar, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits, abandonRoomIfEmpty, hasRealHuman };

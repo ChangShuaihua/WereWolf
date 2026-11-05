@@ -2,6 +2,7 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 const DB_NAME = process.env.DB_NAME || 'werewolf';
+const MIGRATION_LOCK_TIMEOUT_SEC = 30;
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -15,11 +16,51 @@ const pool = mysql.createPool({
   charset: 'utf8mb4',
 });
 
+function assertSqlIdent(name) {
+  if (typeof name !== 'string' || !/^[A-Za-z0-9_]+$/.test(name)) {
+    throw new Error(`[DB Migration] unsafe SQL identifier: ${name}`);
+  }
+}
+
+function assertMigrationVersions(migrations) {
+  let previous = 0;
+  const seen = new Set();
+  for (const migration of migrations) {
+    const version = migration && migration.version;
+    if (!Number.isInteger(version) || version < 1) {
+      throw new Error(`[DB Migration] invalid version: ${version}`);
+    }
+    if (seen.has(version)) {
+      throw new Error(`[DB Migration] duplicate version: ${version}`);
+    }
+    if (version <= previous) {
+      throw new Error(
+        `[DB Migration] versions must strictly increase: v${version} follows v${previous}`
+      );
+    }
+    if (typeof migration.description !== 'string' || migration.description.trim() === '') {
+      throw new Error(`[DB Migration] v${version} is missing a description`);
+    }
+    if (typeof migration.up !== 'function') {
+      throw new Error(`[DB Migration] v${version} is missing up()`);
+    }
+    seen.add(version);
+    previous = version;
+  }
+}
+
+async function columnSet(conn, table) {
+  assertSqlIdent(table);
+  const [cols] = await conn.query(`SHOW COLUMNS FROM \`${table}\``);
+  return new Set(cols.map((column) => column.Field));
+}
+
 /**
- * 数据库迁移清单 —— 有序执行。
- * 新增改动只需要在末尾 push 一条新迁移：
- *   { version: 4, up: async (conn) => { await conn.query('...'); } }
- * 系统会自动跳过已执行过的版本。
+ * 数据库迁移清单 —— 按版本号递增执行。已写入 schema_version 的 up() 不能再改，修正用新版本。
+ * 新增改动只在末尾追加：
+ *   { version: 11, description: '...', up: async (conn) => { ... } }
+ * 结构变更必须可重入：建表用 IF NOT EXISTS，加列前先查列是否存在。
+ * 加列和数据回填分成相邻两个版本。MySQL 的 CREATE/ALTER 会隐式提交，失败后靠可重入重跑。
  */
 const MIGRATIONS = [
   {
@@ -83,8 +124,7 @@ const MIGRATIONS = [
     version: 2,
     description: 'users 表补齐 score/total_games/total_wins/total_losses（兼容老库）',
     up: async (conn) => {
-      const [cols] = await conn.query('SHOW COLUMNS FROM users');
-      const existing = new Set(cols.map((c) => c.Field));
+      const existing = await columnSet(conn, 'users');
       if (!existing.has('score'))
         await conn.query('ALTER TABLE users ADD COLUMN score INT DEFAULT 0 AFTER password');
       if (!existing.has('total_games'))
@@ -101,8 +141,7 @@ const MIGRATIONS = [
     version: 3,
     description: 'game_records 表补齐 replay_data/analysis（兼容老库）',
     up: async (conn) => {
-      const [cols] = await conn.query('SHOW COLUMNS FROM game_records');
-      const existing = new Set(cols.map((c) => c.Field));
+      const existing = await columnSet(conn, 'game_records');
       if (!existing.has('replay_data'))
         await conn.query(
           'ALTER TABLE game_records ADD COLUMN replay_data JSON NULL AFTER duration'
@@ -117,8 +156,7 @@ const MIGRATIONS = [
     version: 4,
     description: 'ai_agents 表补齐 owner_id（兼容老库）',
     up: async (conn) => {
-      const [cols] = await conn.query('SHOW COLUMNS FROM ai_agents');
-      const existing = new Set(cols.map((c) => c.Field));
+      const existing = await columnSet(conn, 'ai_agents');
       if (!existing.has('owner_id')) {
         await conn.query(
           'ALTER TABLE ai_agents ADD COLUMN owner_id INT NULL AFTER id, ADD INDEX idx_ai_agents_owner (owner_id)'
@@ -130,8 +168,7 @@ const MIGRATIONS = [
     version: 5,
     description: 'users 表增加 AI fallback 偏好',
     up: async (conn) => {
-      const [cols] = await conn.query('SHOW COLUMNS FROM users');
-      const existing = new Set(cols.map((c) => c.Field));
+      const existing = await columnSet(conn, 'users');
       if (!existing.has('ai_fallback_enabled')) {
         await conn.query(
           'ALTER TABLE users ADD COLUMN ai_fallback_enabled BOOLEAN NOT NULL DEFAULT TRUE AFTER total_losses'
@@ -150,8 +187,7 @@ const MIGRATIONS = [
     version: 7,
     description: 'users 表增加用户级大模型 API 配置（api_key/api_url/model_name）',
     up: async (conn) => {
-      const [cols] = await conn.query('SHOW COLUMNS FROM users');
-      const existing = new Set(cols.map((c) => c.Field));
+      const existing = await columnSet(conn, 'users');
       if (!existing.has('api_key'))
         await conn.query(
           'ALTER TABLE users ADD COLUMN api_key VARCHAR(500) NULL AFTER ai_fallback_enabled'
@@ -166,7 +202,14 @@ const MIGRATIONS = [
     version: 8,
     description: '扩大用户 LLM API Key 字段以容纳加密数据',
     up: async (conn) => {
-      await conn.query('ALTER TABLE users MODIFY COLUMN api_key TEXT NULL');
+      const [cols] = await conn.query('SHOW COLUMNS FROM users');
+      const apiKey = cols.find((column) => column.Field === 'api_key');
+      if (!apiKey) {
+        throw new Error('users.api_key is missing; migration v7 must be applied first');
+      }
+      if (!String(apiKey.Type).toLowerCase().includes('text')) {
+        await conn.query('ALTER TABLE users MODIFY COLUMN api_key TEXT NULL');
+      }
     },
   },
   {
@@ -192,8 +235,7 @@ const MIGRATIONS = [
     version: 10,
     description: 'users 表增加头像地址',
     up: async (conn) => {
-      const [cols] = await conn.query('SHOW COLUMNS FROM users');
-      const existing = new Set(cols.map((c) => c.Field));
+      const existing = await columnSet(conn, 'users');
       if (!existing.has('avatar_url')) {
         await conn.query('ALTER TABLE users ADD COLUMN avatar_url VARCHAR(255) NULL AFTER username');
       }
@@ -201,7 +243,7 @@ const MIGRATIONS = [
   },
 ];
 
-async function ensureTableExists(conn) {
+async function ensureSchemaVersionTable(conn) {
   await conn.query(`
     CREATE TABLE IF NOT EXISTS schema_version (
       version INT PRIMARY KEY,
@@ -209,61 +251,125 @@ async function ensureTableExists(conn) {
       applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
-  const [rows] = await conn.query('SELECT MAX(version) AS v FROM schema_version');
-  return (rows[0] && rows[0].v) || 0;
+}
+
+function migrationLockName() {
+  const name = `werewolf_schema_${DB_NAME}`;
+  return name.length <= 64 ? name : name.slice(0, 64);
+}
+
+async function acquireMigrationLock(conn) {
+  const lockName = migrationLockName();
+  const [rows] = await conn.query('SELECT GET_LOCK(?, ?) AS locked', [
+    lockName,
+    MIGRATION_LOCK_TIMEOUT_SEC,
+  ]);
+  if (!rows[0] || Number(rows[0].locked) !== 1) {
+    throw new Error(
+      `[DB Migration] could not acquire lock "${lockName}" within ${MIGRATION_LOCK_TIMEOUT_SEC}s`
+    );
+  }
+  return lockName;
+}
+
+async function releaseMigrationLock(conn, lockName) {
+  try {
+    await conn.query('SELECT RELEASE_LOCK(?)', [lockName]);
+  } catch (err) {
+    console.error('[DB Migration] failed to release lock', err.message);
+  }
+}
+
+async function appliedVersionSet(conn) {
+  const [rows] = await conn.query('SELECT version FROM schema_version');
+  return new Set(rows.map((row) => Number(row.version)));
+}
+
+async function applyMigration(conn, migration) {
+  // 纯数据变更和记版本在同一个事务里提交。CREATE/ALTER 会隐式提交，撤不回，所以结构语句必须可重入。
+  await conn.beginTransaction();
+  try {
+    await migration.up(conn);
+    await conn.query('INSERT INTO schema_version (version, name) VALUES (?, ?)', [
+      migration.version,
+      migration.description,
+    ]);
+    await conn.commit();
+  } catch (err) {
+    try {
+      await conn.rollback();
+    } catch (rollbackErr) {
+      console.error('[DB Migration] rollback failed', rollbackErr.message);
+    }
+    console.error(
+      `[DB Migration] v${migration.version} failed: ${migration.description}`,
+      err.message
+    );
+    throw err;
+  }
 }
 
 // Auto-create database + tables with migrations
 async function initDB() {
-  // Step 1: create database if not exists (connect without db)
+  assertSqlIdent(DB_NAME);
+  assertMigrationVersions(MIGRATIONS);
+
   const tmpConn = await mysql.createConnection({
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
   });
-  await tmpConn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` DEFAULT CHARSET utf8mb4`);
-  await tmpConn.end();
-
-  // Step 2: run migrations sequentially with tx
-  const conn = await pool.getConnection();
   try {
-    await conn.query('USE ' + DB_NAME);
-    await ensureTableExists(conn);
-    const [appliedRows] = await conn.query('SELECT version FROM schema_version');
-    const applied = new Set(appliedRows.map((r) => r.version));
+    await tmpConn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` DEFAULT CHARSET utf8mb4`);
+  } finally {
+    await tmpConn.end();
+  }
+
+  const conn = await pool.getConnection();
+  let lockName = null;
+  try {
+    await conn.query(`USE \`${DB_NAME}\``);
+    lockName = await acquireMigrationLock(conn);
+    await ensureSchemaVersionTable(conn);
+    const applied = await appliedVersionSet(conn);
 
     let appliedCount = 0;
-    for (const m of MIGRATIONS) {
-      if (applied.has(m.version)) continue;
-      // 单迁移事务：出错即回滚，不会留下半迁移
-      await conn.beginTransaction();
-      try {
-        await m.up(conn);
-        await conn.query('INSERT INTO schema_version (version, name) VALUES (?, ?)', [
-          m.version,
-          m.description,
-        ]);
-        await conn.commit();
-        appliedCount++;
-        console.log(`[DB Migration] v${m.version} applied: ${m.description}`);
-      } catch (e) {
-        await conn.rollback();
-        console.error(`[DB Migration] v${m.version} failed: ${m.description}`, e.message);
-        throw e;
+    for (const migration of MIGRATIONS) {
+      if (applied.has(migration.version)) continue;
+      await applyMigration(conn, migration);
+      applied.add(migration.version);
+      appliedCount += 1;
+      console.log(`[DB Migration] v${migration.version} applied: ${migration.description}`);
+    }
+
+    const recorded = await appliedVersionSet(conn);
+    for (const migration of MIGRATIONS) {
+      if (!recorded.has(migration.version)) {
+        throw new Error(
+          `[DB Migration] v${migration.version} is missing from schema_version after apply`
+        );
       }
     }
 
     if (appliedCount === 0) {
-      console.log(`Database "${DB_NAME}" is up to date (${applied.size} migrations)`);
+      console.log(`Database "${DB_NAME}" is up to date (${recorded.size} migrations)`);
     } else {
       console.log(
-        `Database "${DB_NAME}" initialized with ${appliedCount} new migration(s) (total ${applied.size})`
+        `Database "${DB_NAME}" initialized with ${appliedCount} new migration(s) (total ${recorded.size})`
       );
     }
   } finally {
+    if (lockName) await releaseMigrationLock(conn, lockName);
     conn.release();
   }
 }
 
-module.exports = { pool, initDB, getPool: () => pool };
+module.exports = {
+  pool,
+  initDB,
+  getPool: () => pool,
+  MIGRATIONS,
+  assertMigrationVersions,
+  assertSqlIdent,
+};
