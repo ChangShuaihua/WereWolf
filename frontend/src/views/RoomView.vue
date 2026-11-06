@@ -23,6 +23,8 @@
           <span>玩家列表</span>
           <span class="panel-title-badge">{{ roomStore.players.length }}/{{ roomStore.maxPlayers }}</span>
         </div>
+        <p v-if="roomStore.isSpectator" class="seat-claim-tip">有空位时点击座位即可入座</p>
+        <p v-if="seatHint" class="seat-claim-error">{{ seatHint }}</p>
         <div class="seat-grid" :class="`seat-grid-${roomStore.maxPlayers}`">
             <div
               v-for="seat in allSeats"
@@ -31,11 +33,13 @@
               :class="{
                 'seat-occupied': seat.occupied,
                 'seat-empty': !seat.occupied,
+                'seat-claimable': canClaimSeat(seat),
                 'seat-me': seat.socketId === socket.id,
                 'seat-host': seat.isHost,
                 'seat-ready': seat.isReady,
                 'seat-ai': seat.isAI,
               }"
+              @click="claimSeat(seat)"
             >
               <template v-if="seat.occupied">
                 <div class="seat-index">{{ seat.seatIndex + 1 }}</div>
@@ -63,7 +67,7 @@
                 <div class="seat-avatar seat-avatar-empty">
                   <span class="seat-empty-icon">+</span>
                 </div>
-                <div class="seat-name seat-name-empty">等待中</div>
+                <div class="seat-name seat-name-empty">{{ emptySeatLabel(seat) }}</div>
                 <div class="seat-badges"></div>
               </template>
             </div>
@@ -304,7 +308,7 @@ const allSeats = computed(() => {
     if (seat && seat.occupied) {
       result.push(seat)
     } else {
-      result.push({ seatIndex: i, occupied: false })
+      result.push({ seatIndex: i, occupied: false, reserved: Boolean(seat?.reserved) })
     }
   }
   return result
@@ -313,6 +317,25 @@ const allSeats = computed(() => {
 function _onGameStarted(data) {
   if (data?.phase === 'END') return
   router.push(`/game/${roomStore.roomCode}`)
+}
+
+const seatHint = ref('')
+
+function canClaimSeat(seat) {
+  return roomStore.isSpectator && !seat.occupied && !seat.reserved
+}
+
+function emptySeatLabel(seat) {
+  if (seat.reserved) return '保留中'
+  if (roomStore.isSpectator) return '点击入座'
+  return '等待中'
+}
+
+async function claimSeat(seat) {
+  if (!canClaimSeat(seat)) return
+  seatHint.value = ''
+  const res = await roomStore.takeSeat(seat.seatIndex)
+  if (res && res.ok === false) seatHint.value = res.message || '无法入座'
 }
 
 function handleJoinSpectator() {
@@ -715,6 +738,32 @@ function handleLeave() {
   opacity: 0.75;
 }
 
+.seat-claimable {
+  cursor: pointer;
+  opacity: 1;
+}
+
+.seat-claimable:hover {
+  opacity: 1;
+  border-color: var(--ai-primary);
+  background: var(--ai-glow);
+}
+
+.seat-claim-tip,
+.seat-claim-error {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.seat-claim-tip {
+  color: var(--text-secondary);
+}
+
+.seat-claim-error {
+  color: var(--werewolf-secondary, #e35d6a);
+}
+
 .seat-me {
   border-color: var(--ai-primary);
   background: var(--ai-glow);
@@ -988,6 +1037,7 @@ function handleLeave() {
 }
 
 .room-stage .seat-empty { opacity: 0.55; }
+.room-stage .seat-claimable { opacity: 1; }
 
 .room-stage .seat-index {
   top: 0;
@@ -1192,6 +1242,7 @@ function handleLeave() {
   }
 
   .seat-empty { opacity: 0.55; }
+  .seat-claimable { opacity: 1; cursor: pointer; }
 
   .seat-index {
     top: 0;

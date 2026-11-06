@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
+const { createRoom, joinRoom, joinAsSpectator, takeSeat, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
 const { kickOldSocket, removeUserSocket, getUserBySocket, getUserCount } = require('../utils/userSocketMap');
@@ -104,6 +104,20 @@ function initSocket(io) {
       }
       console.log(`[socket] join_as_spectator ${roomCode} from ${finalUsername} (${socket.id})`);
       joinAsSpectator(socket, roomCode, finalUsername, finalUserId);
+    });
+
+    socket.on('take_seat', ({ roomCode, seatIndex } = {}, ack) => {
+      if (socket.kicked) return;
+      const info = socketCache.get(socket.id);
+      const code = roomCode || info?.roomCode;
+      if (!code) {
+        const message = '请先加入房间';
+        socket.emit('error', { message });
+        if (typeof ack === 'function') ack({ ok: false, message });
+        return;
+      }
+      console.log(`[socket] take_seat ${code} seat=${seatIndex} from ${socket.username} (${socket.id})`);
+      takeSeat(socket, code, seatIndex, ack);
     });
 
     // Leave room

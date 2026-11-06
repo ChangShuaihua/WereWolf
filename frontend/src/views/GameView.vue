@@ -42,6 +42,14 @@
       </div>
 
       <div class="game-header-right">
+        <button
+          v-if="roomStore.isSpectator"
+          class="btn-game-rule"
+          type="button"
+          @click="goToLobby"
+        >
+          返回大厅
+        </button>
         <button class="btn-game-rule" @click="showRulePanel = true" type="button" title="游戏规则问答">
           📖 规则
         </button>

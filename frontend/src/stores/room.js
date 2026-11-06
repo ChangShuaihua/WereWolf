@@ -128,6 +128,16 @@ export const useRoomStore = defineStore('room', () => {
     })
   }
 
+  function takeSeat(seatIndex) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ ok: false, message: '入座超时，请重试' }), 5000)
+      socket.emit('take_seat', { roomCode: roomCode.value, seatIndex }, (res) => {
+        clearTimeout(timer)
+        resolve(res || { ok: false, message: '无法入座' })
+      })
+    })
+  }
+
   function leaveRoom() {
     socket.emit('leave_room', { roomCode: roomCode.value })
     roomCode.value = ''
@@ -210,7 +220,7 @@ export const useRoomStore = defineStore('room', () => {
     roomCode, players, seats, spectators, hostId, chat, maxPlayers, isInRoom, isSpectator,
     mySeat, myPlayer,
     bindEvents, unbindEvents,
-    createRoom, joinRoom, joinAsSpectator, leaveRoom,
+    createRoom, joinRoom, joinAsSpectator, takeSeat, leaveRoom,
     toggleReady, startGame, sendChat, addAIPlayer, removeAIPlayer, isHost, allReady,
     clearRoomCode: () => { roomCode.value = ''; localStorage.removeItem(ROOM_CODE_KEY); setSpectatorFlag(false) },
     getSavedRoomCode: () => localStorage.getItem(ROOM_CODE_KEY),

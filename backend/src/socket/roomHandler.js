@@ -73,6 +73,7 @@ function buildSeats(room) {
   const seats = [];
   for (let i = 0; i < room.maxPlayers; i++) {
     const player = connectedPlayers.find(p => p.seatIndex === i);
+    const heldByDisconnect = room.players.find(p => p.seatIndex === i && !p.socketId);
     if (player) {
       seats.push({
         seatIndex: i,
@@ -84,6 +85,12 @@ function buildSeats(room) {
         isReady: player.isReady,
         isAI: player.isAI || false,
         isHost: player.socketId === room.hostId || player.userId === room.hostUserId,
+      });
+    } else if (heldByDisconnect) {
+      seats.push({
+        seatIndex: i,
+        occupied: false,
+        reserved: true,
       });
     } else {
       seats.push({
@@ -652,6 +659,95 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
   return room;
 }
 
+function rejectSeat(socket, ack, message) {
+  socket.emit('error', { message });
+  if (typeof ack === 'function') ack({ ok: false, message });
+  return { ok: false, message };
+}
+
+/**
+ * Spectator claims a specific empty seat and becomes a player.
+ * Only allowed before the game starts. The chosen seat must be free,
+ * including seats still held by a disconnected player.
+ */
+function takeSeat(socket, code, seatIndex, ack) {
+  const room = roomCache.get(code);
+  if (!room) return rejectSeat(socket, ack, '房间不存在或已过期');
+
+  const game = gameCache.get(code);
+  if (game && game.phase !== 'WAITING') {
+    return rejectSeat(socket, ack, '游戏已开始，无法入座');
+  }
+
+  const userId = socket.userId;
+  const username = socket.username;
+  if (!userId || !username) return rejectSeat(socket, ack, '用户未认证，无法入座');
+
+  const index = Number(seatIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= Number(room.maxPlayers)) {
+    return rejectSeat(socket, ack, '座位无效');
+  }
+
+  if (room.players.some(player => player.userId === userId || player.socketId === socket.id)) {
+    return rejectSeat(socket, ack, '你已经在座位上');
+  }
+
+  const spectator = ensureSpectators(room).find(item => item.userId === userId || item.socketId === socket.id);
+  if (!spectator) return rejectSeat(socket, ack, '只有观众可以入座');
+
+  if (room.players.some(player => player.seatIndex === index)) {
+    return rejectSeat(socket, ack, '这个座位已经有人');
+  }
+
+  room.spectators = room.spectators.filter(item => item.userId !== userId && item.socketId !== socket.id);
+
+  const player = {
+    socketId: socket.id,
+    userId,
+    username,
+    avatarUrl: socket.avatarUrl || spectator.avatarUrl || '',
+    isReady: false,
+    isAlive: true,
+    seatIndex: index,
+  };
+  room.players.push(player);
+  if (!room.hostUserId) {
+    room.hostId = socket.id;
+    room.hostUserId = userId;
+  }
+
+  socket.join(code);
+  socketCache.set(socket.id, { userId, username, roomCode: code, isSpectator: false });
+
+  const welcomeMsg = {
+    username: '系统',
+    message: `🎉 ${username} 从观众席坐到了 ${index + 1} 号位`,
+    timestamp: Date.now(),
+    isSystem: true,
+  };
+  room.chat.push(welcomeMsg);
+  if (room.chat.length > 100) room.chat = room.chat.slice(-100);
+  roomCache.set(code, room);
+
+  socket.emit('room_joined', {
+    code,
+    players: buildPublicPlayers(room.players),
+    seats: buildSeats(room),
+    spectators: buildPublicSpectators(room),
+    hostId: room.hostId,
+    maxPlayers: room.maxPlayers,
+    isSpectator: false,
+  });
+  broadcastRoomUpdate(code, room);
+
+  const io = require('../app').getIO();
+  io.to(code).emit('chat_message', welcomeMsg);
+
+  console.log(`[roomHandler] ${username} took seat ${index + 1} in room ${code}`);
+  if (typeof ack === 'function') ack({ ok: true });
+  return { ok: true };
+}
+
 /**
  * Join a room as a spectator. Spectators do not take a seat and can watch an in-progress game.
  */
@@ -1182,4 +1278,4 @@ function forgetLobbyRoom(code) {
   lobbySnapshotCache.delete(code);
 }
 
-module.exports = { createRoom, joinRoom, joinAsSpectator, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, broadcastLobbyRoom, buildLobbySnapshot, applyUserAvatar, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits, abandonRoomIfEmpty, hasRealHuman };
+module.exports = { createRoom, joinRoom, joinAsSpectator, takeSeat, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, broadcastLobbyRoom, buildLobbySnapshot, applyUserAvatar, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits, abandonRoomIfEmpty, hasRealHuman };
