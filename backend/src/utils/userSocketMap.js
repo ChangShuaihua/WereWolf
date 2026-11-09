@@ -48,15 +48,11 @@ function cleanUpOldSocketRoom(io, oldSocketId) {
 
     const game = gameCache.get(code);
     if (game) {
-      const gamePlayer = game.players.find(p => p.socketId === oldSocketId);
+      const gamePlayer = game.players.find(p => p.socketId === oldSocketId || p.boundSocketId === oldSocketId);
       if (gamePlayer) {
-        gamePlayer.socketId = null;
+        gamePlayer.boundSocketId = gamePlayer.socketId || gamePlayer.boundSocketId || oldSocketId;
         gamePlayer.disconnectTime = Date.now();
       }
-    }
-
-    if (game && game.roles && game.roles[oldSocketId]) {
-      delete game.roles[oldSocketId];
     }
   }
 

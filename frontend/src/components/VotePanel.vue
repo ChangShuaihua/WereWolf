@@ -8,7 +8,7 @@
         :key="c.id"
         class="btn btn-target btn-vote"
         :class="{ selected: selectedCandidate === c.id, voted: hasVoted && votedTargetId === c.id }"
-        :disabled="hasVoted && votedTargetId === c.id"
+        :disabled="hasVoted"
         @click="selectCandidate(c.id)"
       >
         {{ c.username }}
@@ -16,15 +16,13 @@
     </div>
 
     <div v-if="selectedCandidate" class="action-confirm">
-      <button class="btn btn-danger" @click="confirmVote">🗳️ {{ hasVoted ? '修改投票' : '确认投票' }}</button>
+      <button class="btn btn-danger" :disabled="hasVoted" @click="confirmVote">🗳️ 确认投票</button>
       <button class="btn btn-secondary" @click="cancelSelect">取消</button>
     </div>
 
     <div v-if="hasVoted && !selectedCandidate" class="vote-done">
       <p class="vote-message">✅ 你的投票已确认</p>
       <p class="vote-target">你投票给了 <strong>{{ votedTargetName }}</strong></p>
-      <!-- W20: 允许改投 -->
-      <button class="btn btn-secondary btn-change-vote" @click="changeVote">✏️ 修改投票</button>
     </div>
   </div>
 </template>
@@ -52,23 +50,17 @@ const votedTargetName = computed(() => {
 })
 
 function selectCandidate(id) {
-  // W20: 已投票情况下，仅当选不同目标时才允许重新选择
-  if (hasVoted.value && id === votedTargetId.value) return
+  if (hasVoted.value) return
   selectedCandidate.value = selectedCandidate.value === id ? null : id
 }
 
 function confirmVote() {
-  if (!selectedCandidate.value) return
+  if (hasVoted.value || !selectedCandidate.value) return
   emit('vote', selectedCandidate.value)
   votedTargetId.value = selectedCandidate.value
   hasVoted.value = true
   selectedCandidate.value = null
   emit('settled')
-}
-
-// W20: 切换至改投模式
-function changeVote() {
-  selectedCandidate.value = null
 }
 
 function cancelSelect() {
@@ -132,11 +124,6 @@ function cancelSelect() {
   border-color: #f87171;
   background: rgba(239, 68, 68, 0.2);
   color: #fca5a5;
-}
-
-.btn-change-vote {
-  margin-top: 14px;
-  padding: 8px 18px;
 }
 
 .action-confirm {

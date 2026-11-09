@@ -21,7 +21,6 @@
         <p v-else-if="completedAction === 'check'">🔮 选择查验 <strong>{{ completedTargetName }}</strong></p>
         <p v-else-if="completedAction === 'skip'">⏭️ 选择跳过</p>
       </div>
-      <button v-if="completedAction === 'kill'" class="btn btn-secondary" @click="reviseWerewolfVote">修改击杀目标</button>
       <div v-if="completedAction === 'kill' && werewolfVoteState" class="teammates-info">
         <p>{{ werewolfVoteState.isUnanimous ? '狼人已统一目标' : '等待狼人统一目标' }}</p>
         <p v-for="choice in werewolfVoteState.choices" :key="choice.playerId">
@@ -150,24 +149,17 @@ const props = defineProps({
   seerResult: { type: Object, default: null },
   currentNightRole: { type: Object, default: null },
   werewolfVoteState: { type: Object, default: null },
-  reviseTick: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['action', 'settled', 'revise'])
+const emit = defineEmits(['action', 'settled'])
 
 const witchMode = ref('save')
 const selectedTarget = ref(null)
 const actionDone = ref(false)
 const completedAction = ref(null)
 const completedTarget = ref(null)
-watch(actionDone, (done, previous) => {
+watch(actionDone, (done) => {
   if (done) emit('settled', completedAction.value)
-  else if (previous) emit('revise')
-})
-
-watch(() => props.reviseTick, (tick, previous) => {
-  if (!tick || tick === previous) return
-  if (actionDone.value && completedAction.value === 'kill') reviseWerewolfVote()
 })
 
 const timeLeft = ref(30)
@@ -282,11 +274,6 @@ function confirmAction() {
   emit('action', { action, targetId })
   completedAction.value = action
   actionDone.value = true
-}
-
-function reviseWerewolfVote() {
-  actionDone.value = false
-  selectedTarget.value = completedTarget.value?.id || selectedTarget.value
 }
 
 function confirmSave() {

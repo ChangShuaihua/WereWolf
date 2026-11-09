@@ -61,7 +61,6 @@
         >
           全知
         </button>
-        <button v-if="canReviseVote" class="btn-game-rule" type="button" @click="voteSettled = false">修改投票</button>
         <div class="game-message" v-if="gameStore.message">{{ gameStore.message }}</div>
       </div>
     </header>
@@ -150,7 +149,6 @@
           :werewolf-vote-state="gameStore.werewolfVoteState"
           @action="gameStore.submitNightAction"
           @settled="onNightSettled"
-          @revise="nightSettled = false"
         />
         <HunterPanel
           v-if="hunterMounted"
@@ -411,7 +409,6 @@ const hunterOpen = computed(() => hunterMounted.value && !hunterSettled.value)
 const speakOpen = computed(() => !roomStore.isSpectator && gameStore.isDay && !!gameStore.myPlayer?.isAlive && gameStore.currentSpeaker === mySocketId.value)
 const choiceOpen = computed(() => nightOpen.value || voteOpen.value || hunterOpen.value)
 const decisionOpen = computed(() => choiceOpen.value || (roomStore.isSpectator && insightOpen.value))
-const canReviseVote = computed(() => voteMounted.value && voteSettled.value)
 const wolfBoard = computed(() => {
   if (roomStore.isSpectator || gameStore.myRole !== 'werewolf' || !gameStore.isNight) return null
   const state = gameStore.werewolfVoteState

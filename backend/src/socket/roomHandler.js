@@ -389,33 +389,15 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
     if (game && game.phase !== 'WAITING' && game.phase !== 'END') {
       const gamePlayer = game.players.find(p => p.id === userId);
       if (gamePlayer) {
-        const oldSocketId = gamePlayer.socketId;
-        gamePlayer.socketId = socket.id;
+        const oldSocketId = gamePlayer.socketId || gamePlayer.boundSocketId;
         gamePlayer.disconnectTime = null;
-        
-        // Restore role socket mapping
-        if (gamePlayer.isAlive && game.roles) {
-          if (oldSocketId !== null && game.roles[oldSocketId]) {
-            // Reconnect from a still-open socket: migrate mapping directly
-            game.roles[socket.id] = game.roles[oldSocketId];
-            delete game.roles[oldSocketId];
-          } else if (gamePlayer.role) {
-            // Reconnect after disconnect: read role directly from player object (C6)
-            // Avoids fragile "process of elimination" recovery that could assign wrong role
-            game.roles[socket.id] = gamePlayer.role;
-          }
+        if (oldSocketId && oldSocketId !== socket.id) {
+          game.rebindSocket(oldSocketId, socket.id);
         }
-
-        // Fix currentSpeaker if it was the old socketId
-        if (game.currentSpeaker === oldSocketId) {
-          game.currentSpeaker = socket.id;
-        }
-
-        // Fix speakingOrder if it contains the old socketId
-        if (game.speakingOrder && game.speakingOrder.length > 0) {
-          game.speakingOrder = game.speakingOrder.map(id => 
-            id === oldSocketId ? socket.id : id
-          );
+        gamePlayer.socketId = socket.id;
+        gamePlayer.boundSocketId = socket.id;
+        if (gamePlayer.isAlive && game.roles && !game.roles[socket.id] && gamePlayer.role) {
+          game.roles[socket.id] = gamePlayer.role;
         }
 
         // Send current game state to reconnected player
@@ -592,11 +574,14 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
   if (game) {
     const gamePlayer = game.players.find(p => p.id === userId);
     if (gamePlayer && gamePlayer.isAlive) {
-      const oldSocketId = gamePlayer.socketId;
-      gamePlayer.socketId = socket.id;
+      const oldSocketId = gamePlayer.socketId || gamePlayer.boundSocketId;
       if (oldSocketId && oldSocketId !== socket.id) {
-        game.roles[socket.id] = game.roles[oldSocketId];
-        delete game.roles[oldSocketId];
+        game.rebindSocket(oldSocketId, socket.id);
+      }
+      gamePlayer.socketId = socket.id;
+      gamePlayer.boundSocketId = socket.id;
+      if (game.roles && !game.roles[socket.id] && gamePlayer.role) {
+        game.roles[socket.id] = gamePlayer.role;
       }
     }
   }
@@ -1194,7 +1179,8 @@ function handleDisconnect(socket) {
         // Also update game player
         const gamePlayer = game.players.find(p => p.userId === userId);
         if (gamePlayer) {
-          gamePlayer.socketId = null;
+          // 保留对局里的 socketId，投票和刀人仍挂在这条记录上；真正换连接时由 rebindSocket 迁移。
+          gamePlayer.boundSocketId = gamePlayer.socketId || gamePlayer.boundSocketId;
           gamePlayer.disconnectTime = Date.now();
         }
 

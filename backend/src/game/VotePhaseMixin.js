@@ -69,6 +69,7 @@ const VotePhaseMixin = {
     if (this.phase !== PHASE.VOTE) return false;
     const voter = this.getPlayer(socketId);
     if (!voter || !voter.isAlive) return false;
+    if (this.votes[socketId]) return false;
 
     // C3: during PK, votes must target one of the PK candidates
     if (this.pkCandidates.length > 0 && !this.pkCandidates.includes(targetId)) return false;

@@ -24,6 +24,70 @@ const CoreMixin = {
     require('./AITaskCoordinator').expireRoom(this.roomCode);
   },
 
+  // 断线重连会换 socketId。投票、夜间行动和角色都按这个 id 记账，必须整表迁过去，否则旧记录对不上活人，新连接可以再投一次、再刀一次。
+  rebindSocket(oldSocketId, newSocketId) {
+    if (!oldSocketId || !newSocketId || oldSocketId === newSocketId) return;
+
+    const swap = (id) => (id === oldSocketId ? newSocketId : id);
+
+    if (this.roles?.[oldSocketId]) {
+      this.roles[newSocketId] = this.roles[oldSocketId];
+      delete this.roles[oldSocketId];
+    }
+
+    if (this.votes) {
+      const nextVotes = {};
+      for (const [voterId, targetId] of Object.entries(this.votes)) {
+        nextVotes[swap(voterId)] = swap(targetId);
+      }
+      this.votes = nextVotes;
+    }
+
+    if (this.nightActions) {
+      const nextActions = {};
+      for (const [actorId, action] of Object.entries(this.nightActions)) {
+        if (action?.targetId) {
+          nextActions[swap(actorId)] = { ...action, targetId: swap(action.targetId) };
+        } else {
+          nextActions[swap(actorId)] = action;
+        }
+      }
+      this.nightActions = nextActions;
+    }
+
+    const remapList = (list) => {
+      if (!Array.isArray(list)) return list;
+      return list.map((item) => {
+        if (item === oldSocketId) return newSocketId;
+        if (item && item.id === oldSocketId) return { ...item, id: newSocketId };
+        return item;
+      });
+    };
+    this.pkCandidates = remapList(this.pkCandidates);
+    this.candidates = remapList(this.candidates);
+    this.speakingOrder = remapList(this.speakingOrder);
+
+    if (this.currentSpeaker === oldSocketId) this.currentSpeaker = newSocketId;
+    if (this.guardLastProtected === oldSocketId) this.guardLastProtected = newSocketId;
+    if (this.witchSaveTarget === oldSocketId) this.witchSaveTarget = newSocketId;
+    if (this.killedByWerewolves === oldSocketId) this.killedByWerewolves = newSocketId;
+    if (this.killedByWitch === oldSocketId) this.killedByWitch = newSocketId;
+    if (this.pendingHunterId === oldSocketId) this.pendingHunterId = newSocketId;
+
+    if (this.hasSpoken instanceof Set && this.hasSpoken.has(oldSocketId)) {
+      this.hasSpoken.delete(oldSocketId);
+      this.hasSpoken.add(newSocketId);
+    }
+
+    const player = this.players.find(p => p.socketId === oldSocketId || p.boundSocketId === oldSocketId);
+    if (player) {
+      player.socketId = newSocketId;
+      player.boundSocketId = newSocketId;
+    }
+
+    this.broadcast('socket_rebound', { from: oldSocketId, to: newSocketId });
+  },
+
   // 获取玩家座位号
   getSeatNum(socketId) {
     const player = this.getPlayer(socketId);
@@ -82,6 +146,7 @@ const CoreMixin = {
       const role = roleList[i];
       this.roles[p.socketId] = role;
       p.role = role;
+      p.boundSocketId = p.socketId;
     });
 
     // 标记所有准备好的玩家为存活

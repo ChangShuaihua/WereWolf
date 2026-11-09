@@ -113,6 +113,72 @@ export const useGameStore = defineStore('game', () => {
     speakerName.value = data.speakerName || ''
   }
 
+  function swapSocketId(id, from, to) {
+    return id === from ? to : id
+  }
+
+  function _onSocketRebound(data) {
+    const from = data?.from
+    const to = data?.to
+    if (!from || !to || from === to) return
+
+    players.value = players.value.map(player => (
+      player.id === from || player.socketId === from
+        ? { ...player, id: to, socketId: to }
+        : player
+    ))
+    candidates.value = candidates.value.map(candidate => {
+      if (candidate === from) return to
+      if (candidate?.id === from) return { ...candidate, id: to }
+      return candidate
+    })
+    if (myVote.value === from) myVote.value = to
+    if (currentSpeaker.value === from) currentSpeaker.value = to
+
+    if (spectatorRoles.value[from]) {
+      const nextRoles = { ...spectatorRoles.value, [to]: spectatorRoles.value[from] }
+      delete nextRoles[from]
+      spectatorRoles.value = nextRoles
+    }
+
+    const prompt = nightActionPrompt.value
+    if (prompt) {
+      nightActionPrompt.value = {
+        ...prompt,
+        targets: (prompt.targets || []).map(target => (
+          target.id === from ? { ...target, id: to } : target
+        )),
+        teammates: (prompt.teammates || []).map(target => (
+          target.id === from ? { ...target, id: to } : target
+        )),
+        killed: prompt.killed?.id === from ? { ...prompt.killed, id: to } : prompt.killed,
+        completedTarget: prompt.completedTarget?.id === from
+          ? { ...prompt.completedTarget, id: to }
+          : prompt.completedTarget,
+      }
+    }
+
+    if (werewolfVoteState.value?.choices) {
+      werewolfVoteState.value = {
+        ...werewolfVoteState.value,
+        choices: werewolfVoteState.value.choices.map(choice => ({
+          ...choice,
+          playerId: swapSocketId(choice.playerId, from, to),
+          targetId: choice.targetId ? swapSocketId(choice.targetId, from, to) : choice.targetId,
+        })),
+      }
+    }
+
+    if (hunterPrompt.value?.targets) {
+      hunterPrompt.value = {
+        ...hunterPrompt.value,
+        targets: hunterPrompt.value.targets.map(target => (
+          target.id === from ? { ...target, id: to } : target
+        )),
+      }
+    }
+  }
+
   function _onNightActionPrompt(data) {
     console.log('[gameStore] night_action_prompt', data)
     nightActionPrompt.value = data
@@ -227,6 +293,7 @@ export const useGameStore = defineStore('game', () => {
     socket.off('game_replay_ready', _onReplayReady)
     socket.off('player_disconnected', _onPlayerDisconnected)
     socket.off('speaker_change', _onSpeakerChange)
+    socket.off('socket_rebound', _onSocketRebound)
 
     socket.on('game_started', _onGameStarted)
     socket.on('spectator_view', _onSpectatorView)
@@ -245,6 +312,7 @@ export const useGameStore = defineStore('game', () => {
     socket.on('game_replay_ready', _onReplayReady)
     socket.on('player_disconnected', _onPlayerDisconnected)
     socket.on('speaker_change', _onSpeakerChange)
+    socket.on('socket_rebound', _onSocketRebound)
 
     console.log('[gameStore] events bound, socket.id=', socket.id)
   }
@@ -267,6 +335,7 @@ export const useGameStore = defineStore('game', () => {
     socket.off('game_replay_ready', _onReplayReady)
     socket.off('player_disconnected', _onPlayerDisconnected)
     socket.off('speaker_change', _onSpeakerChange)
+    socket.off('socket_rebound', _onSocketRebound)
   }
 
   function submitNightAction({ action, targetId }) {

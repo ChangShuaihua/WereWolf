@@ -346,7 +346,7 @@ async function initDB() {
     const recorded = await appliedVersionSet(conn);
     for (const migration of MIGRATIONS) {
       if (!recorded.has(migration.version)) {
-        throw new Error(
+        throw new Error( 
           `[DB Migration] v${migration.version} is missing from schema_version after apply`
         );
       }
