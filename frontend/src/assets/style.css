@@ -828,6 +828,56 @@ textarea.input-field {
   color: #5b3b1d;
 }
 
+.game-page.phase-atmosphere-day .phase-indicator.day {
+  background: rgba(255, 248, 224, 0.9);
+  border-color: rgba(126, 82, 29, 0.34);
+  color: #5b3b1d;
+}
+
+.game-page.phase-atmosphere-day .game-message,
+.game-page.phase-atmosphere-day .section-title,
+.game-page.phase-atmosphere-day .section-badge,
+.game-page.phase-atmosphere-day .chat-user,
+.game-page.phase-atmosphere-day .chat-text,
+.game-page.phase-atmosphere-day .chat-system,
+.game-page.phase-atmosphere-day .player-name,
+.game-page.phase-atmosphere-day .seat-num-badge,
+.game-page.phase-atmosphere-day .speak-bar,
+.game-page.phase-atmosphere-day .countdown-text {
+  color: var(--text-primary);
+}
+
+.game-page.phase-atmosphere-day .chat-msg {
+  background: rgba(255, 248, 232, 0.88);
+  border-color: rgba(102, 72, 36, 0.2);
+}
+
+.game-page.phase-atmosphere-day .chat-msg.system-msg {
+  background: transparent;
+}
+
+.game-page.phase-atmosphere-day .chat-input-field {
+  background: rgba(255, 250, 239, 0.94);
+  border-color: rgba(112, 77, 35, 0.42);
+  color: #322719;
+}
+
+.game-page.phase-atmosphere-day .chat-input-field::placeholder {
+  color: #806d54;
+}
+
+.game-page.phase-atmosphere-day .chat-send-btn:disabled {
+  color: #684719;
+  border-color: rgba(112, 77, 35, 0.4);
+}
+
+.game-page.phase-atmosphere-day .player-card.is-dead .player-name,
+.game-page.phase-atmosphere-day .empty-name,
+.game-page.phase-atmosphere-day .chat-empty,
+.game-page.phase-atmosphere-day .insight-empty {
+  color: #75634d;
+}
+
 /* Game Header */
 .game-header {
   display: flex;

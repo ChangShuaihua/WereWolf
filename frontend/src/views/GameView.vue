@@ -1,5 +1,22 @@
 <template>
   <div class="game-page" :class="phaseAtmosphereClass">
+    <Transition name="phase-curtain">
+      <div
+        v-if="phaseTransition"
+        class="phase-transition"
+        :class="`phase-transition-${phaseTransition.kind}`"
+        role="status"
+        aria-live="assertive"
+      >
+        <div class="phase-transition-sky" aria-hidden="true">
+          <span class="phase-transition-orb">{{ phaseTransition.kind === 'day' ? '☀' : '☾' }}</span>
+          <span class="phase-transition-horizon"></span>
+        </div>
+        <p class="phase-transition-kicker">{{ phaseTransition.kind === 'day' ? '黎明将至' : '夜幕降临' }}</p>
+        <h2>{{ phaseTransition.title }}</h2>
+        <p class="phase-transition-copy">{{ phaseTransition.copy }}</p>
+      </div>
+    </Transition>
     <!-- Loading overlay -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
@@ -292,6 +309,10 @@ const userStore = useUserStore()
 const showRoleReveal = ref(false)
 const loading = ref(true)
 const thoughtPlayer = ref(null)
+const displayedAtmosphere = ref('neutral')
+const phaseTransition = ref(null)
+let atmosphereTimer = null
+let transitionTimer = null
 
 // 规则问答面板
 const showRulePanel = ref(false)
@@ -359,13 +380,27 @@ const phaseIcon = computed(() => {
 
 const phaseClass = computed(() => gameStore.phase.toLowerCase())
 
-const phaseAtmosphereClass = computed(() => {
-  if (gameStore.phase === 'NIGHT') return 'phase-atmosphere-night'
-  if (['LAST_WILL', 'DISCUSSION', 'DAY', 'VOTE'].includes(gameStore.phase)) {
-    return 'phase-atmosphere-day'
-  }
-  return 'phase-atmosphere-neutral'
-})
+function atmosphereForPhase(phase) {
+  if (phase === 'NIGHT') return 'night'
+  if (['LAST_WILL', 'DISCUSSION', 'DAY', 'VOTE'].includes(phase)) return 'day'
+  return 'neutral'
+}
+
+const phaseAtmosphereClass = computed(() => `phase-atmosphere-${displayedAtmosphere.value}`)
+
+function runPhaseTransition(kind) {
+  clearTimeout(atmosphereTimer)
+  clearTimeout(transitionTimer)
+  phaseTransition.value = kind === 'day'
+    ? { kind, title: '天亮了', copy: '昨夜已经过去，请睁眼确认场上的变化。' }
+    : { kind, title: '天黑请闭眼', copy: '村庄归于寂静，夜间角色即将行动。' }
+  atmosphereTimer = setTimeout(() => {
+    displayedAtmosphere.value = kind
+  }, 850)
+  transitionTimer = setTimeout(() => {
+    phaseTransition.value = null
+  }, 2100)
+}
 
 const roleIcons = {
   werewolf: '🐺',
@@ -392,9 +427,23 @@ watch(() => gameStore.nightActionPrompt, (prompt) => {
   if (!prompt?.alreadyDone) nightSettledAction.value = ''
 })
 
-watch(() => gameStore.phase, (phase) => {
+watch(() => gameStore.phase, (phase, previousPhase) => {
   if (phase === 'VOTE') voteSettled.value = !!gameStore.myVote
   else voteSettled.value = false
+
+  const nextAtmosphere = atmosphereForPhase(phase)
+  const previousAtmosphere = atmosphereForPhase(previousPhase)
+  if (nextAtmosphere === displayedAtmosphere.value) return
+  if (nextAtmosphere === 'neutral') {
+    clearTimeout(atmosphereTimer)
+    clearTimeout(transitionTimer)
+    phaseTransition.value = null
+    displayedAtmosphere.value = 'neutral'
+  } else if (nextAtmosphere !== previousAtmosphere) {
+    runPhaseTransition(nextAtmosphere)
+  } else {
+    displayedAtmosphere.value = nextAtmosphere
+  }
 })
 
 watch(() => gameStore.message, () => {
@@ -520,6 +569,7 @@ async function reconnectToRoom() {
 }
 
 onMounted(async () => {
+  displayedAtmosphere.value = atmosphereForPhase(gameStore.phase)
   await reconnectToRoom()
 
   socket.on('rule_qa_answer', _onRuleAnswer)
@@ -536,6 +586,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  clearTimeout(atmosphereTimer)
+  clearTimeout(transitionTimer)
   roomStore.unbindEvents()
   gameStore.unbindEvents()
   socket.off('rule_qa_answer', _onRuleAnswer)
@@ -557,6 +609,109 @@ function returnToRoom() {
 </script>
 
 <style scoped>
+.phase-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 28px;
+  text-align: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.phase-transition::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.phase-transition-day::before {
+  background: linear-gradient(180deg, #15283e 0%, #c87845 48%, #f5d58f 76%, #fff4d2 100%);
+}
+
+.phase-transition-night::before {
+  background: radial-gradient(circle at 72% 22%, rgba(183, 205, 255, .2), transparent 16%), linear-gradient(180deg, #17233e 0%, #090e1d 58%, #040710 100%);
+}
+
+.phase-transition-sky {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.phase-transition-orb {
+  position: absolute;
+  left: 50%;
+  top: 31%;
+  color: #fff1b0;
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 16vw, 8rem);
+  line-height: 1;
+  text-shadow: 0 0 42px rgba(255, 224, 128, .72);
+  transform: translate(-50%, -50%);
+  animation: phaseOrbRise 1.8s cubic-bezier(.2, .75, .2, 1) both;
+}
+
+.phase-transition-night .phase-transition-orb {
+  color: #dce7ff;
+  text-shadow: 0 0 42px rgba(150, 180, 255, .48);
+}
+
+.phase-transition-horizon {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  top: 48%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 245, 210, .74), transparent);
+  box-shadow: 0 0 36px rgba(255, 213, 128, .62);
+}
+
+.phase-transition-kicker {
+  margin: 150px 0 8px;
+  color: rgba(255, 249, 232, .76);
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .34em;
+}
+
+.phase-transition h2 {
+  margin: 0;
+  color: #fffaf0;
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 10vw, 5.2rem);
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-shadow: 0 4px 28px rgba(0, 0, 0, .32);
+}
+
+.phase-transition-copy {
+  max-width: 30rem;
+  margin: 12px 0 0;
+  color: rgba(255, 250, 240, .8);
+  font-size: clamp(.86rem, 2vw, 1rem);
+  letter-spacing: .05em;
+}
+
+.phase-curtain-enter-active,
+.phase-curtain-leave-active { transition: opacity .32s ease; }
+.phase-curtain-enter-from,
+.phase-curtain-leave-to { opacity: 0; }
+
+@keyframes phaseOrbRise {
+  from { opacity: 0; transform: translate(-50%, 28%) scale(.76); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase-transition-orb { animation: none; }
+}
+
 .decision-mask {
   position: fixed;
   inset: 0;
