@@ -1,5 +1,5 @@
 <template>
-  <div class="game-page">
+  <div class="game-page" :class="phaseAtmosphereClass">
     <!-- Loading overlay -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner"></div>
@@ -358,6 +358,14 @@ const phaseIcon = computed(() => {
 })
 
 const phaseClass = computed(() => gameStore.phase.toLowerCase())
+
+const phaseAtmosphereClass = computed(() => {
+  if (gameStore.phase === 'NIGHT') return 'phase-atmosphere-night'
+  if (['LAST_WILL', 'DISCUSSION', 'DAY', 'VOTE'].includes(gameStore.phase)) {
+    return 'phase-atmosphere-day'
+  }
+  return 'phase-atmosphere-neutral'
+})
 
 const roleIcons = {
   werewolf: '🐺',

@@ -1,5 +1,16 @@
 const AIAgent = require('../models/AIAgent');
 
+const AVATAR_LIBRARY = ['raven', 'ember', 'sage', 'luna', 'rook', 'iris', 'ash', 'moss', 'nova', 'silk', 'flint', 'tide']
+  .map(name => `/avatars/${name}.svg`);
+
+function libraryAvatar(value, seed = '') {
+  if (AVATAR_LIBRARY.includes(value) || /^\/api\/avatars\/[0-9]+-agent-[a-f0-9]{16}\.(jpg|png|webp)$/.test(value || '')) return value;
+  const text = `${seed}:${value || ''}`;
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = ((hash * 31) + text.charCodeAt(i)) >>> 0;
+  return AVATAR_LIBRARY[hash % AVATAR_LIBRARY.length];
+}
+
 // 默认智能体
 const DEFAULT_AGENTS = [
   {
@@ -287,7 +298,7 @@ function clampPersonality(val) {
 function normalizeAgent(data = {}, existing = null) {
   const now = Date.now();
   const rawName = data.name || existing?.name || '未命名智能体';
-  const rawAvatar = data.avatar || existing?.avatar || '🤖';
+  const rawAvatar = data.avatar || existing?.avatar || AVATAR_LIBRARY[0];
 
   // 语言习惯长度限制 + 内容清洗
   const prefixes = sanitizeLangList(data.language?.prefixes || existing?.language?.prefixes || ['我觉得'], 6, 15);
@@ -313,7 +324,7 @@ function normalizeAgent(data = {}, existing = null) {
   return {
     id: existing?.id || data.id || `agent-${now}`,
     name: sanitizePromptString(rawName, 30) || '未命名智能体',
-    avatar: (rawAvatar && rawAvatar.length <= 4) ? rawAvatar : '🤖',
+    avatar: libraryAvatar(rawAvatar, existing?.id || data.id || rawName),
     personality: {
       aggressiveness: clampPersonality(data.personality?.aggressiveness ?? existing?.personality?.aggressiveness ?? 50),
       caution: clampPersonality(data.personality?.caution ?? existing?.personality?.caution ?? 50),
@@ -415,6 +426,7 @@ class AIAgentManager {
     await AIAgent.bulkInsertIfEmpty(DEFAULT_AGENTS.map(agent => normalizeAgent(agent)));
     await this._renameLegacyBuiltinNames();
     await this._refreshLegacyBuiltinLanguage();
+    await this._migrateLegacyAvatars();
     await this.resetRandomAgents();
     this.initialized = true;
   }
@@ -444,6 +456,15 @@ class AIAgentManager {
         language: next.language,
         updatedAt: Date.now(),
       });
+    }
+  }
+
+  async _migrateLegacyAvatars() {
+    const agents = await AIAgent.findAll();
+    for (const agent of agents) {
+      const avatar = libraryAvatar(agent.avatar, agent.id);
+      if (avatar === agent.avatar) continue;
+      await AIAgent.update(agent.id, { ...agent, avatar, updatedAt: Date.now() });
     }
   }
 

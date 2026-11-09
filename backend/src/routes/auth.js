@@ -187,7 +187,10 @@ router.post('/me/avatar', authMiddleware, async (req, res) => {
   try {
     const current = await User.findById(req.user.id);
     if (!current) return res.status(404).json({ message: '用户不存在' });
-    const avatarUrl = await saveUserAvatar(req.user.id, req.body?.image);
+    const preset = req.body?.preset;
+    const avatarUrl = typeof preset === 'string' && /^\/avatars\/(raven|ember|sage|luna|rook|iris|ash|moss|nova|silk|flint|tide)\.svg$/.test(preset)
+      ? preset
+      : await saveUserAvatar(req.user.id, req.body?.image);
     const updated = await User.updateAvatar(req.user.id, avatarUrl);
     if (!updated) return res.status(404).json({ message: '用户不存在' });
     await removeStoredAvatar(current.avatar_url);

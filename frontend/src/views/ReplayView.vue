@@ -179,7 +179,7 @@ function returnToRoom() {
 </script>
 
 <style scoped>
-.replay-page { min-height: 100%; padding: 32px clamp(18px, 5vw, 72px) 64px; background: var(--bg-primary); color: var(--text-primary); }
+.replay-page { min-height: 100%; padding: 32px clamp(18px, 5vw, 72px) 64px; background: linear-gradient(180deg, rgba(7, 10, 18, .72), rgba(7, 10, 18, .88)), url('/bg2.webp') center 28% / cover fixed no-repeat; color: var(--text-primary); }
 .replay-header { max-width: 1180px; margin: 0 auto 28px; display: grid; grid-template-columns: 44px 1fr auto; gap: 16px; align-items: center; }
 .icon-button { width: 40px; height: 40px; border: var(--border-medium); border-radius: var(--radius-sm); background: var(--bg-secondary); color: var(--text-primary); font-size: 22px; cursor: pointer; }
 .eyebrow, .summary-label, .section-index { color: var(--ai-primary); font-size: 12px; font-weight: 800; text-transform: uppercase; }

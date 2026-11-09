@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const aiAgentManager = require('../ai/AIAgentManager');
 const authMiddleware = require('../middleware/auth');
+const { saveAgentAvatar, removeStoredAvatar } = require('../utils/avatarStore');
 
 // 管理员ID白名单（与 stats 路由一致）
 const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || '')
@@ -20,6 +21,11 @@ function canModify(req, agent) {
   if (isAdmin(req.user.id)) return true;
   if (agent && agent.ownerId !== null && Number(agent.ownerId) === Number(req.user.id)) return true;
   return false;
+}
+
+function ownsUploadedAvatar(userId, avatar) {
+  return !String(avatar || '').startsWith('/api/avatars/')
+    || new RegExp(`^/api/avatars/${Number(userId)}-agent-[a-f0-9]{16}\\.(jpg|png|webp)$`).test(avatar);
 }
 
 // W14: validate agent payload shape
@@ -88,24 +94,32 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
 });
 
 router.post('/', authMiddleware, async (req, res, next) => {
+  let uploadedAvatar = '';
   try {
-    const errors = validateAgent(req.body, false);
+    const payload = { ...req.body };
+    if (payload.avatarImage) {
+      uploadedAvatar = await saveAgentAvatar(req.user.id, payload.avatarImage);
+      payload.avatar = uploadedAvatar;
+    }
+    delete payload.avatarImage;
+    if (!ownsUploadedAvatar(req.user.id, payload.avatar)) {
+      return res.status(400).json({ message: '只能使用自己上传的 AI 头像' });
+    }
+    const errors = validateAgent(payload, false);
     if (errors.length > 0) {
       return res.status(400).json({ message: errors.join('；') });
     }
-    const agent = await aiAgentManager.createAgent(req.body, req.user.id);
+    const agent = await aiAgentManager.createAgent(payload, req.user.id);
     res.status(201).json(agent);
   } catch (err) {
+    if (uploadedAvatar) await removeStoredAvatar(uploadedAvatar);
     next(err);
   }
 });
 
 router.put('/:id', authMiddleware, async (req, res, next) => {
+  let uploadedAvatar = '';
   try {
-    const errors = validateAgent(req.body, true);
-    if (errors.length > 0) {
-      return res.status(400).json({ message: errors.join('；') });
-    }
     const existing = await aiAgentManager.getAgentById(req.params.id);
     if (!existing) {
       return res.status(404).json({ message: '智能体不存在' });
@@ -117,9 +131,26 @@ router.put('/:id', authMiddleware, async (req, res, next) => {
           : '仅智能体创建者或管理员可修改',
       });
     }
-    const agent = await aiAgentManager.updateAgent(req.params.id, req.body);
+    const payload = { ...req.body };
+    if (payload.avatarImage) {
+      uploadedAvatar = await saveAgentAvatar(req.user.id, payload.avatarImage);
+      payload.avatar = uploadedAvatar;
+    }
+    delete payload.avatarImage;
+    if (payload.avatar !== existing.avatar && !ownsUploadedAvatar(req.user.id, payload.avatar)) {
+      if (uploadedAvatar) await removeStoredAvatar(uploadedAvatar);
+      return res.status(400).json({ message: '只能使用自己上传的 AI 头像' });
+    }
+    const errors = validateAgent(payload, true);
+    if (errors.length > 0) {
+      if (uploadedAvatar) await removeStoredAvatar(uploadedAvatar);
+      return res.status(400).json({ message: errors.join('；') });
+    }
+    const agent = await aiAgentManager.updateAgent(req.params.id, payload);
+    if (agent && existing.avatar !== agent.avatar) await removeStoredAvatar(existing.avatar);
     res.json(agent);
   } catch (err) {
+    if (uploadedAvatar) await removeStoredAvatar(uploadedAvatar);
     next(err);
   }
 });
@@ -141,6 +172,7 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
     if (!success) {
       return res.status(404).json({ message: '智能体不存在' });
     }
+    await removeStoredAvatar(existing.avatar);
     res.json({ message: '删除成功' });
   } catch (err) {
     next(err);

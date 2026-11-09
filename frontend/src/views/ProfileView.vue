@@ -32,6 +32,14 @@
         </div>
       </div>
 
+      <div class="edit-card avatar-vault-card">
+        <div class="avatar-vault-heading">
+          <div><h3>角色头像库</h3><p>真人玩家与 AI 玩家共享这套角色肖像。你也可以继续上传自己的照片。</p></div>
+          <button type="button" class="btn btn-ai btn-sm" @click="pickAvatar">上传照片</button>
+        </div>
+        <AvatarPicker :model-value="userStore.user?.avatarUrl || ''" @update:model-value="selectPresetAvatar" />
+      </div>
+
       <div class="edit-card">
         <h3>✏️ 编辑资料</h3>
         
@@ -146,6 +154,7 @@ import api from '../api'
 import { compressAvatar } from '../utils/avatarImage'
 import { validatePassword, validateUsername } from '../utils/authRules'
 import { useConfirmDialog } from '../composables/useConfirm'
+import AvatarPicker from '../components/AvatarPicker.vue'
 
 const { showConfirm } = useConfirmDialog()
 
@@ -226,6 +235,22 @@ async function onAvatarFile(event) {
     avatarMessageType.value = 'success'
   } catch (err) {
     avatarMessage.value = err.response?.data?.message || err.message || '头像上传失败'
+    avatarMessageType.value = 'error'
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
+
+async function selectPresetAvatar(preset) {
+  uploadingAvatar.value = true
+  avatarMessage.value = ''
+  try {
+    const { data } = await api.post('/auth/me/avatar', { preset })
+    rememberUser(data.user)
+    avatarMessage.value = '已从头像库更换头像'
+    avatarMessageType.value = 'success'
+  } catch (err) {
+    avatarMessage.value = err.response?.data?.message || '头像更换失败'
     avatarMessageType.value = 'error'
   } finally {
     uploadingAvatar.value = false
@@ -441,7 +466,7 @@ async function handleLogout() {
   inset: 0;
   background:
     linear-gradient(180deg, rgba(7, 10, 18, 0.46) 0%, rgba(7, 10, 18, 0.16) 40%, rgba(7, 10, 18, 0.48) 100%),
-    url('/bg3.webp') center 28% / cover no-repeat;
+    url('/bg2.webp') center 28% / cover no-repeat;
   pointer-events: none;
   z-index: 0;
 }
@@ -595,6 +620,11 @@ async function handleLogout() {
   color: var(--text-primary);
   margin: 0;
 }
+
+.avatar-vault-card { gap: 18px; }
+.avatar-vault-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.avatar-vault-heading p { margin: 7px 0 0; color: var(--text-tertiary); font-size: .86rem; }
+@media (max-width: 600px) { .avatar-vault-heading { align-items: flex-start; flex-direction: column; } }
 
 .form-group {
   display: flex;

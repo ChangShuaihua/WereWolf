@@ -720,9 +720,61 @@ textarea.input-field {
   flex: 1;
   height: 100%;
   min-height: 0;
-  background: var(--bg-primary);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-primary) 64%, transparent), color-mix(in srgb, var(--bg-primary) 86%, transparent)), url('/bg2.webp') center 28% / cover no-repeat;
   position: relative;
   overflow: hidden;
+  transition: background-color 0.65s ease, color 0.65s ease;
+}
+
+/* The active game phase drives the whole board atmosphere. Variables are
+   scoped to the game page so the lobby keeps its original dark identity. */
+.game-page.phase-atmosphere-night {
+  color-scheme: dark;
+  --bg-primary: #070b16;
+  --bg-secondary: #10182a;
+  --bg-tertiary: #18233a;
+  --bg-card: rgba(13, 21, 38, 0.94);
+  --bg-card-hover: rgba(22, 33, 55, 0.98);
+  --bg-hover: rgba(28, 41, 66, 0.98);
+  --glass-bg: rgba(8, 14, 28, 0.82);
+  --glass-border: rgba(184, 205, 255, 0.1);
+  --hairline: rgba(202, 218, 255, 0.13);
+  --text-primary: #eef3ff;
+  --text-secondary: #aab8d4;
+  --text-tertiary: #71809e;
+  --border-thin: 1px solid rgba(190, 210, 255, 0.1);
+  --border-medium: 1px solid rgba(190, 210, 255, 0.16);
+  --border-thick: 1px solid rgba(190, 210, 255, 0.24);
+}
+
+.game-page.phase-atmosphere-day {
+  color-scheme: light;
+  --bg-primary: #f2e6c8;
+  --bg-secondary: #fff8e8;
+  --bg-tertiary: #ead9b4;
+  --bg-card: rgba(255, 250, 235, 0.94);
+  --bg-card-hover: rgba(255, 253, 245, 0.99);
+  --bg-hover: rgba(240, 224, 188, 0.98);
+  --glass-bg: rgba(255, 249, 232, 0.84);
+  --glass-border: rgba(112, 77, 35, 0.14);
+  --hairline: rgba(255, 255, 255, 0.72);
+  --on-accent: #fffaf0;
+  --ai-primary: #94662d;
+  --ai-hover: #7f5524;
+  --ai-secondary: #755027;
+  --ai-light: #5b3b1d;
+  --ai-glow: rgba(219, 166, 73, 0.2);
+  --werewolf-glow: rgba(194, 95, 76, 0.12);
+  --villager-glow: rgba(91, 141, 177, 0.15);
+  --text-primary: #322719;
+  --text-secondary: #685742;
+  --text-tertiary: #927d62;
+  --border-thin: 1px solid rgba(102, 72, 36, 0.14);
+  --border-medium: 1px solid rgba(102, 72, 36, 0.21);
+  --border-thick: 1px solid rgba(102, 72, 36, 0.3);
+  --shadow-sm: 0 2px 8px rgba(96, 66, 28, 0.1);
+  --shadow-md: 0 16px 36px rgba(96, 66, 28, 0.14);
+  --shadow-lg: 0 32px 64px rgba(96, 66, 28, 0.18);
 }
 
 .game-page::before {
@@ -734,6 +786,32 @@ textarea.input-field {
     radial-gradient(ellipse at bottom right, var(--villager-glow) 0%, transparent 40%);
   pointer-events: none;
   z-index: 0;
+  opacity: 0.9;
+  transition: background 0.65s ease, opacity 0.65s ease;
+}
+
+.game-page.phase-atmosphere-night::before {
+  background:
+    radial-gradient(circle at 78% 12%, rgba(184, 205, 255, 0.14), transparent 18%),
+    radial-gradient(ellipse at top left, rgba(57, 76, 132, 0.22) 0%, transparent 45%),
+    linear-gradient(180deg, rgba(5, 9, 22, 0.2), rgba(2, 5, 13, 0.62));
+}
+
+.game-page.phase-atmosphere-day::before {
+  background:
+    radial-gradient(circle at 82% 8%, rgba(255, 224, 128, 0.62), transparent 22%),
+    radial-gradient(ellipse at 10% 0%, rgba(255, 250, 218, 0.85), transparent 48%),
+    linear-gradient(180deg, rgba(255, 248, 218, 0.34), rgba(225, 193, 125, 0.12));
+}
+
+.game-page.phase-atmosphere-day .chat-messages {
+  background: rgba(255, 252, 242, 0.78);
+  border-color: rgba(148, 98, 37, 0.22);
+}
+
+.game-page.phase-atmosphere-day .role-name,
+.game-page.phase-atmosphere-day .btn-game-rule {
+  color: #5b3b1d;
 }
 
 /* Game Header */

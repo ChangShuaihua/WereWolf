@@ -32,10 +32,12 @@ const routeBackgrounds = {
   Login: '/bg.webp',
   Lobby: '/bg1.webp',
   Workshop: '/bg2.webp',
-  Profile: '/bg3.webp',
-  Stats: '/bg3.webp',
-  Settings: '/bg3.webp',
-  Room: '/bg4.webp',
+  Profile: '/bg2.webp',
+  Stats: '/bg2.webp',
+  Settings: '/bg2.webp',
+  Room: '/bg2.webp',
+  Game: '/bg2.webp',
+  Replay: '/bg2.webp',
 }
 
 const preloadedBackgrounds = new Set()

@@ -45,7 +45,7 @@
             :class="{ active: selectedAgent?.id === agent.id }"
             @click="selectAgent(agent)"
           >
-            <div class="agent-avatar">{{ agent.avatar }}</div>
+            <div class="agent-avatar"><img :src="resolveAgentAvatar(agent.avatar, agent.id)" alt="" /></div>
             <div class="agent-info">
               <h3>{{ agent.name }}</h3>
               <div class="agent-personality-tags">
@@ -86,7 +86,7 @@
           </div>
           <div class="info-row">
             <span class="info-label">头像:</span>
-            <span class="info-value">{{ selectedAgent.avatar }}</span>
+            <span class="info-value avatar-info"><img :src="resolveAgentAvatar(selectedAgent.avatar, selectedAgent.id)" alt="" /> 头像库角色</span>
           </div>
           <div class="info-row">
             <span class="info-label">发言风格:</span>
@@ -196,16 +196,18 @@
 
         <div class="form-group">
           <label>头像</label>
-          <div class="avatar-selector">
-            <span v-for="avatar in avatarChoices" :key="avatar"
-              class="avatar-option"
-              :class="{ selected: formData.avatar === avatar }"
-              role="button"
-              tabindex="0"
-              @click="formData.avatar = avatar"
-              @keydown.enter.prevent="formData.avatar = avatar"
-            >{{ avatar }}</span>
+          <div class="agent-avatar-source">
+            <div class="agent-avatar-preview">
+              <img :src="avatarPreview" alt="当前 AI 头像预览" />
+              <div><strong>{{ avatarUpload ? '自定义图片' : '头像库角色' }}</strong><span>房间和对局中将显示这张头像</span></div>
+            </div>
+            <input ref="agentAvatarInput" class="agent-avatar-file" type="file" accept="image/jpeg,image/png,image/webp" @change="onAgentAvatarFile" />
+            <button type="button" class="avatar-upload-button" :disabled="processingAvatar" @click="agentAvatarInput?.click()">
+              {{ processingAvatar ? '处理中…' : '上传自己的图片' }}
+            </button>
           </div>
+          <p class="avatar-library-hint">也可以从公共头像库选择；选择预设头像会替换上方的自定义图片。</p>
+          <AvatarPicker :model-value="avatarUpload ? '' : formData.avatar" @update:model-value="selectLibraryAvatar" />
         </div>
 
         <div class="form-group">
@@ -307,6 +309,9 @@ import api from '../api';
 import { useUserStore } from '../stores/user';
 import { useConfirmDialog } from '../composables/useConfirm';
 import { buildSampleLine, personalityNotes, strategyNotes, traitHint } from '../utils/agentPreview';
+import AvatarPicker from '../components/AvatarPicker.vue';
+import { defaultAvatar, resolveAgentAvatar } from '../utils/avatarCatalog';
+import { compressAvatar } from '../utils/avatarImage';
 
 const { showConfirm } = useConfirmDialog();
 const userStore = useUserStore();
@@ -318,7 +323,9 @@ const editingAgent = ref(null);
 const pageNotice = ref('');
 const formError = ref('');
 const listTab = ref('builtin');
-const avatars = ['🧠', '😌', '😏', '🌫️', '📣', '😄', '🐣', '🗣️', '🤫', '😤', '🤔', '😎', '😇', '😂', '🤖'];
+const agentAvatarInput = ref(null);
+const avatarUpload = ref('');
+const processingAvatar = ref(false);
 
 const speakingStyleNames = {
   humorous: '幽默',
@@ -351,7 +358,7 @@ const revealIdentityNames = {
 
 const formData = reactive({
   name: '',
-  avatar: '🤖',
+  avatar: defaultAvatar,
   personality: {
     aggressiveness: 50,
     caution: 50,
@@ -372,12 +379,27 @@ const formData = reactive({
   }
 });
 
-const avatarChoices = computed(() => {
-  if (formData.avatar && !avatars.includes(formData.avatar)) {
-    return [formData.avatar, ...avatars];
+const avatarPreview = computed(() => avatarUpload.value || resolveAgentAvatar(formData.avatar, editingAgent.value?.id || formData.name));
+
+function selectLibraryAvatar(avatar) {
+  avatarUpload.value = '';
+  formData.avatar = avatar;
+}
+
+async function onAgentAvatarFile(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  processingAvatar.value = true;
+  formError.value = '';
+  try {
+    avatarUpload.value = await compressAvatar(file);
+  } catch (err) {
+    formError.value = err.message || '图片处理失败，请换一张图片。';
+  } finally {
+    processingAvatar.value = false;
   }
-  return avatars;
-});
+}
 
 const formPreview = computed(() => ({
   personality: formData.personality,
@@ -497,7 +519,8 @@ function editAgent(agent) {
   formError.value = '';
   editingAgent.value = agent;
   formData.name = agent.name;
-  formData.avatar = agent.avatar;
+  formData.avatar = resolveAgentAvatar(agent.avatar, agent.id);
+  avatarUpload.value = '';
   formData.personality = { ...agent.personality };
   formData.speakingStyle = agent.speakingStyle;
   formData.strategy = { ...agent.strategy };
@@ -518,7 +541,8 @@ function closeModal() {
   editingAgent.value = null;
   formError.value = '';
   formData.name = '';
-  formData.avatar = '🤖';
+  formData.avatar = defaultAvatar;
+  avatarUpload.value = '';
   formData.personality = { aggressiveness: 50, caution: 50, cunning: 50, honesty: 50, talkativeness: 50 };
   formData.speakingStyle = 'calm';
   formData.strategy = { nightAction: 'random', dayStrategy: 'passive', revealIdentity: 'mid' };
@@ -529,6 +553,7 @@ async function saveAgent() {
   const data = {
     name: formData.name.trim(),
     avatar: formData.avatar,
+    avatarImage: avatarUpload.value || undefined,
     personality: formData.personality,
     speakingStyle: formData.speakingStyle,
     strategy: formData.strategy,
@@ -565,7 +590,7 @@ async function saveAgent() {
 async function copyAgent(agent) {
   const data = {
     name: copyName(agent.name),
-    avatar: avatars.includes(agent.avatar) ? agent.avatar : '🤖',
+    avatar: resolveAgentAvatar(agent.avatar, agent.id),
     personality: { ...agent.personality },
     speakingStyle: agent.speakingStyle,
     strategy: { ...agent.strategy },
@@ -732,6 +757,24 @@ onMounted(async () => {
   font-size: 1.5rem;
   flex-shrink: 0;
 }
+
+.agent-avatar img,
+.avatar-info img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.avatar-info { display: inline-flex; align-items: center; gap: 8px; }
+.avatar-info img { width: 28px; height: 28px; }
+.avatar-library-hint { margin: -2px 0 10px; color: var(--text-tertiary); font-size: .82rem; line-height: 1.5; }
+.agent-avatar-source { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.agent-avatar-preview { flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px; padding: 9px; background: rgba(10, 14, 24, .62); border: 1px solid rgba(231, 194, 122, .18); border-radius: 14px; }
+.agent-avatar-preview img { width: 52px; height: 52px; flex: 0 0 auto; object-fit: cover; border-radius: 50%; }
+.agent-avatar-preview div { min-width: 0; display: grid; gap: 3px; }
+.agent-avatar-preview strong { color: var(--text-primary); font-size: .88rem; }
+.agent-avatar-preview span { color: var(--text-tertiary); font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-avatar-file { display: none; }
+.avatar-upload-button { min-height: 40px; padding: 0 14px; color: #e7c27a; background: rgba(198, 161, 94, .1); border: 1px solid rgba(231, 194, 122, .38); border-radius: 10px; cursor: pointer; }
+.avatar-upload-button:hover:not(:disabled) { background: rgba(198, 161, 94, .18); border-color: #e7c27a; }
+.avatar-upload-button:focus-visible { outline: 2px solid #e7c27a; outline-offset: 2px; }
+.avatar-upload-button:disabled { opacity: .55; cursor: progress; }
+@media (max-width: 560px) { .agent-avatar-source { align-items: stretch; flex-direction: column; } .avatar-upload-button { width: 100%; } }
 
 .agent-info {
   flex: 1;

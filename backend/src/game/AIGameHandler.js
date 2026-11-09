@@ -187,7 +187,8 @@ class AIGameHandler {
     return {
       socketId: `ai_${roomCode}_${this.aiIdCounter}`,
       userId: null,
-      username: agent ? `${agent.avatar} ${agent.name}` : `🤖 人机${aiNumber}`,
+      username: agent ? agent.name : `人机${aiNumber}`,
+      avatarUrl: agent?.avatar || '/avatars/raven.svg',
       isReady: true,
       isAlive: true,
       isAI: true,

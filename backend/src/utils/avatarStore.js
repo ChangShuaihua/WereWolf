@@ -4,7 +4,7 @@ const crypto = require('crypto');
 
 const AVATAR_DIR = path.resolve(process.env.AVATAR_DIR || path.join(__dirname, '../../uploads/avatars'));
 const MAX_BYTES = 400 * 1024;
-const STORED_NAME = /^[0-9]+-[a-f0-9]{16}\.(jpg|png|webp)$/;
+const STORED_NAME = /^[0-9]+-(?:agent-)?[a-f0-9]{16}\.(jpg|png|webp)$/;
 
 function avatarError(message) {
   const error = new Error(message);
@@ -57,6 +57,18 @@ async function saveUserAvatar(userId, input) {
   return `/api/avatars/${filename}`;
 }
 
+async function saveAgentAvatar(userId, input) {
+  const id = Number(userId);
+  if (!Number.isInteger(id) || id <= 0) throw avatarError('用户无效');
+  const { buffer, kind } = decodeAvatarPayload(input);
+  await fs.mkdir(AVATAR_DIR, { recursive: true });
+  const filename = `${id}-agent-${crypto.randomBytes(8).toString('hex')}.${kind.ext}`;
+  const fullPath = path.join(AVATAR_DIR, filename);
+  if (!fullPath.startsWith(AVATAR_DIR + path.sep)) throw avatarError('头像保存失败');
+  await fs.writeFile(fullPath, buffer);
+  return `/api/avatars/${filename}`;
+}
+
 async function removeStoredAvatar(url) {
   if (typeof url !== 'string' || !url.startsWith('/api/avatars/')) return;
   const filename = path.basename(url);
@@ -71,5 +83,6 @@ module.exports = {
   detectImage,
   decodeAvatarPayload,
   saveUserAvatar,
+  saveAgentAvatar,
   removeStoredAvatar,
 };
