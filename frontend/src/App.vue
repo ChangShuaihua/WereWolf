@@ -143,6 +143,8 @@ const showChrome = computed(() => {
     -webkit-backdrop-filter: blur(var(--glass-blur));
     border-top: var(--border-thin);
     z-index: 100;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
   }
 
   .mobile-tab {

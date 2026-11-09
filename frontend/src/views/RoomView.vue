@@ -112,17 +112,17 @@
               <option value="">选择AI智能体</option>
               <optgroup v-if="builtinAgents.length" label="内置">
                 <option v-for="agent in builtinAgents" :key="agent.id" :value="agent.id">
-                  {{ agent.avatar }} {{ agent.name }}
+                  {{ agent.name }}
                 </option>
               </optgroup>
               <optgroup v-if="myAgents.length" label="我的">
                 <option v-for="agent in myAgents" :key="agent.id" :value="agent.id">
-                  {{ agent.avatar }} {{ agent.name }}
+                  {{ agent.name }}
                 </option>
               </optgroup>
               <optgroup v-if="otherAgents.length" label="其他用户">
                 <option v-for="agent in otherAgents" :key="agent.id" :value="agent.id">
-                  {{ agent.avatar }} {{ agent.name }}
+                  {{ agent.name }}
                 </option>
               </optgroup>
             </select>
@@ -1111,7 +1111,8 @@ function handleLeave() {
 @media (max-width: 768px) {
   .room-page {
     gap: 8px;
-    padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 8px max(8px, env(safe-area-inset-bottom, 0px));
+    max-width: 100vw;
   }
 
   .room-header {
@@ -1381,13 +1382,25 @@ function handleLeave() {
   }
 
   .room-dock .add-ai-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     flex-wrap: nowrap;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .room-dock .agent-select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .room-dock .add-ai-row .btn {
     width: auto;
     flex: 0 0 auto;
     min-height: 42px;
+    padding-inline: 14px;
+    white-space: nowrap;
   }
 
   .room-dock .btn-start {
@@ -1398,6 +1411,27 @@ function handleLeave() {
 
   .room-actions-panel .btn {
     min-height: 44px;
+  }
+}
+
+@media (max-width: 420px) {
+  .room-header {
+    padding-inline: 8px;
+  }
+
+  .room-code {
+    padding-inline: 5px;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+  }
+
+  .room-meta {
+    gap: 5px;
+  }
+
+  .room-dock .add-ai-row .btn {
+    padding-inline: 11px;
+    font-size: 0.78rem;
   }
 }
 

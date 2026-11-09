@@ -847,7 +847,8 @@ async function handleLogout() {
 
 @media (max-width: 600px) {
   .profile-page {
-    padding: 20px 16px 28px;
+    padding: 20px 12px calc(28px + env(safe-area-inset-bottom, 0px));
+    overflow-x: clip;
   }
 
   .profile-header {
@@ -873,6 +874,16 @@ async function handleLogout() {
 
   .edit-card {
     padding: 24px 16px;
+    min-width: 0;
+  }
+
+  .password-row {
+    min-width: 0;
+  }
+
+  .password-next {
+    padding-inline: 12px;
+    white-space: nowrap;
   }
 
   .edit-card .btn {

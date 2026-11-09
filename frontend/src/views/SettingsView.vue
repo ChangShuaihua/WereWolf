@@ -502,7 +502,13 @@ onMounted(loadStatus)
 
 @media (max-width: 600px) {
   .settings-page {
-    padding: 20px 16px 28px;
+    min-height: 100%;
+    padding: 18px 12px calc(28px + env(safe-area-inset-bottom, 0px));
+    overflow-x: clip;
+  }
+
+  .settings-header {
+    margin-bottom: 14px;
   }
 
   .settings-header h1 {
@@ -511,15 +517,35 @@ onMounted(loadStatus)
 
   .status-card,
   .edit-card {
-    padding: 20px 16px;
+    min-width: 0;
+    padding: 18px 14px;
+    gap: 16px;
   }
 
   .status-grid {
     grid-template-columns: 1fr;
   }
 
+  .form-input {
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
   .btn-row .btn {
-    flex: 1;
+    width: 100%;
+    min-width: 0;
+    padding-inline: 10px;
+    white-space: nowrap;
+  }
+
+  .btn-row .btn-primary {
+    grid-column: 1 / -1;
   }
 }
 </style>

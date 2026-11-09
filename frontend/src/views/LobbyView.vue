@@ -1175,8 +1175,9 @@ async function handleSearchJoin() {
 
 @media (max-width: 768px) {
   .lobby-content {
-    padding: 4px 16px 24px;
+    padding: 4px 12px calc(24px + env(safe-area-inset-bottom, 0px));
     gap: 22px;
+    overflow-x: clip;
   }
 
   .hero-section {

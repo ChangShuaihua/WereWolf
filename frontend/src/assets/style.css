@@ -114,6 +114,20 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  min-width: 0;
+}
+
 h1, h2, h3 {
   font-family: var(--font-display);
   font-weight: 600;

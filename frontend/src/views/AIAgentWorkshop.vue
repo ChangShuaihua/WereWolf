@@ -1420,7 +1420,8 @@ onMounted(async () => {
 
 @media (max-width: 600px) {
   .workshop-page {
-    padding: 16px 12px 24px;
+    padding: 16px 12px calc(24px + env(safe-area-inset-bottom, 0px));
+    overflow-x: clip;
   }
 
   .list-header,

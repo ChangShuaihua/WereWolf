@@ -579,7 +579,8 @@ onMounted(() => {
 @media (max-width: 768px) {
   .stats-page {
     width: 100%;
-    padding: 16px 12px 24px;
+    padding: 16px 12px calc(24px + env(safe-area-inset-bottom, 0px));
+    overflow-x: clip;
   }
 
   .card {
