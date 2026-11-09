@@ -250,6 +250,7 @@ onMounted(() => {
   flex-shrink: 0;
   text-align: center;
   background: rgba(8, 12, 22, 0.42);
+  padding: 14px 24px 16px;
 }
 
 .score-header {
@@ -257,26 +258,26 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 
 .score-icon {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
 }
 
 .score-title {
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: var(--text-secondary);
   font-weight: 500;
 }
 
 .score-main {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .score-value {
   font-family: var(--font-display);
-  font-size: 3.4rem;
+  font-size: 2.7rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--text-primary);
@@ -284,7 +285,7 @@ onMounted(() => {
 }
 
 .score-rank {
-  font-size: 1rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   margin-top: 4px;
 }
@@ -292,7 +293,7 @@ onMounted(() => {
 .score-details {
   display: flex;
   justify-content: space-around;
-  gap: 12px;
+  gap: 8px;
 }
 
 .detail-item {
@@ -585,8 +586,20 @@ onMounted(() => {
     padding: 16px;
   }
 
+  .score-card {
+    padding: 12px 12px 14px;
+  }
+
+  .score-header {
+    margin-bottom: 2px;
+  }
+
+  .score-main {
+    margin-bottom: 8px;
+  }
+
   .score-value {
-    font-size: 2.6rem;
+    font-size: 2.35rem;
   }
 
   .score-details {
