@@ -1,0 +1,4 @@
+interface:
+  display_name: "代码结构分析（中文）"
+  short_description: "分析仓库结构、技术栈、模块职责和调用链"
+  default_prompt: "请使用 $code-structure-analysis-zh 分析当前代码仓库的结构，并用中文输出有证据引用的架构报告。"

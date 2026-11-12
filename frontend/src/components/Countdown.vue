@@ -7,6 +7,7 @@
 
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
+import { countdownPercent, countdownUrgency } from '../utils/countdown.js'
 
 const props = defineProps({
   timeout: { type: Number, default: 60 },
@@ -16,16 +17,9 @@ const props = defineProps({
 const remaining = ref(0)
 let timer = null
 
-const percent = computed(() => {
-  if (!props.timeout) return 0
-  return (remaining.value / props.timeout) * 100
-})
+const percent = computed(() => countdownPercent(remaining.value, props.timeout))
 
-const urgencyClass = computed(() => {
-  if (percent.value < 25) return 'danger'
-  if (percent.value < 50) return 'warning'
-  return 'safe'
-})
+const urgencyClass = computed(() => countdownUrgency(percent.value))
 
 // W17: immediate:true 确保组件挂载后立即启动倒计时，避免初始空白
 watch([() => props.timeout, () => props.phase], ([newTimeout]) => {

@@ -299,6 +299,7 @@ import VotePanel from '../components/VotePanel.vue'
 import GameResult from '../components/GameResult.vue'
 import HunterPanel from '../components/HunterPanel.vue'
 import { renderMarkdown } from '../utils/markdown'
+import { atmosphereForPhase, phaseTransitionContent } from '../utils/phaseTransition.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -380,20 +381,12 @@ const phaseIcon = computed(() => {
 
 const phaseClass = computed(() => gameStore.phase.toLowerCase())
 
-function atmosphereForPhase(phase) {
-  if (phase === 'NIGHT') return 'night'
-  if (['LAST_WILL', 'DISCUSSION', 'DAY', 'VOTE'].includes(phase)) return 'day'
-  return 'neutral'
-}
-
 const phaseAtmosphereClass = computed(() => `phase-atmosphere-${displayedAtmosphere.value}`)
 
 function runPhaseTransition(kind) {
   clearTimeout(atmosphereTimer)
   clearTimeout(transitionTimer)
-  phaseTransition.value = kind === 'day'
-    ? { kind, title: '天亮了', copy: '昨夜已经过去，请睁眼确认场上的变化。' }
-    : { kind, title: '天黑请闭眼', copy: '村庄归于寂静，夜间角色即将行动。' }
+  phaseTransition.value = phaseTransitionContent(kind)
   atmosphereTimer = setTimeout(() => {
     displayedAtmosphere.value = kind
   }, 850)
