@@ -306,7 +306,7 @@ npm run dev
 - 💡 AI 自动发言和决策（支持 LLM 或 fallback 模板）
 
 **LLM 配置与 fallback 机制：**
-- 在「设置」页为每个用户填写自己的 API Key / Base URL / 模型名启用大模型推理（绑定到账号，无内置默认模型）
+- 服务器可通过 `DEFAULT_LLM_API_KEY` / `DEFAULT_LLM_API_URL` / `DEFAULT_LLM_MODEL_NAME` 提供默认模型；用户也可在「设置」页绑定自己的配置进行覆盖
 - 未配置 API Key 时自动降级为模板引擎（fallback），不影响游戏运行
 - LLM 超时保护：聊天 12s / 夜晚行动 15s / 遗言 10s，超时自动回退模板
 - AI 信息隔离：只暴露自己角色 + 狼人队友身份，其他人均为 unknown，保证公平性

@@ -59,6 +59,9 @@ services:
       DB_NAME: werewolf
       JWT_SECRET: your_jwt_secret_change_this_in_production
       JWT_EXPIRES_IN: 7d
+      DEFAULT_LLM_API_KEY: ${DEFAULT_LLM_API_KEY:-}
+      DEFAULT_LLM_API_URL: ${DEFAULT_LLM_API_URL:-}
+      DEFAULT_LLM_MODEL_NAME: ${DEFAULT_LLM_MODEL_NAME:-}
       PORT: 3001
       CORS_ORIGINS: http://localhost,http://localhost:5172
       REDIS_URL: redis://redis:6379/0

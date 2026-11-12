@@ -43,6 +43,9 @@
         <p v-if="status.source === 'user'" class="status-note">
           已使用你自己的 API Key（绑定到你的账号）。
         </p>
+        <p v-else-if="status.source === 'default'" class="status-note">
+          已使用服务器提供的默认模型；你也可以在下方绑定自己的 API Key 进行覆盖。
+        </p>
         <p v-else class="status-note">
           尚未配置任何 Key，AI 将使用本地策略（fallback）。
         </p>

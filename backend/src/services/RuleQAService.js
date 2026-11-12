@@ -15,17 +15,18 @@ const User = require('../models/User');
 class RuleQAService {
   /**
    * 解析某用户应使用的 LLM 模型。
-   * 仅使用该用户自己的 Key；无 Key 时返回 null。
+   * 优先使用该用户自己的 Key；无 Key 时使用服务器默认模型。
    */
   async _getModelForUser(userId) {
-    let cfg = llmConfig.getEnvConfig();
+    let userCfg = {};
     if (userId) {
       try {
-        cfg = llmConfig.mergeConfig(await User.getLLMConfig(userId));
+        userCfg = await User.getLLMConfig(userId);
       } catch (err) {
         console.warn('[RuleQAService] load user LLM config failed:', err.message);
       }
     }
+    const cfg = llmConfig.resolveConfig(userCfg);
     return llmConfig.buildModel(cfg, { temperature: 0.2, maxTokens: 800 });
   }
 

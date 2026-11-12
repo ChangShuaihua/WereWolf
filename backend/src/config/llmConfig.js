@@ -2,7 +2,7 @@
  * llmConfig - 大模型 API 配置解析与模型实例构建
  *
  * 职责：
- * 1. 提供空的默认配置占位（系统不内置任何默认大模型 API）；
+ * 1. 从环境变量读取服务器默认大模型配置；
  * 2. 解析用户 DB 配置（trim 首尾空白）；
  * 3. 按配置签名缓存 ChatOpenAI 实例，避免每次调用重建。
  *
@@ -18,11 +18,14 @@ const net = require('net');
 const modelCache = new Map();
 
 /**
- * 空配置占位：系统不再内置任何默认大模型 API，
- * 唯一的 API 来源是用户在「设置」页配置并绑定到账号的 Key。
+ * 服务器默认配置。未配置默认 Key 时仍保持原有的本地策略降级行为。
  */
 function getEnvConfig() {
-  return { apiKey: '', apiUrl: '', modelName: '' };
+  return {
+    apiKey: (process.env.DEFAULT_LLM_API_KEY || '').trim(),
+    apiUrl: (process.env.DEFAULT_LLM_API_URL || '').trim(),
+    modelName: (process.env.DEFAULT_LLM_MODEL_NAME || '').trim(),
+  };
 }
 
 /**
@@ -35,6 +38,16 @@ function mergeConfig(userDb = {}) {
     apiUrl: (userDb.apiUrl || '').trim(),
     modelName: (userDb.modelName || '').trim(),
   };
+}
+
+/**
+ * 用户配置优先；用户没有绑定 Key 时使用服务器默认模型。
+ * 不混用用户 Key 与默认服务商的 URL/模型，避免配置串台。
+ */
+function resolveConfig(userDb = {}) {
+  const user = mergeConfig(userDb);
+  if (user.apiKey) return { ...user, source: 'user' };
+  return { ...getEnvConfig(), source: 'default' };
 }
 
 function modelKey(cfg, opts = {}) {
@@ -138,4 +151,4 @@ function maskKey(key) {
   return `${key.slice(0, 4)}••••${key.slice(-4)}`;
 }
 
-module.exports = { getEnvConfig, mergeConfig, buildModel, maskKey, validateApiUrl, modelCache };
+module.exports = { getEnvConfig, mergeConfig, resolveConfig, buildModel, maskKey, validateApiUrl, modelCache };

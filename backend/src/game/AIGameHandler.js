@@ -153,7 +153,7 @@ class AIGameHandler {
 
   /**
    * 解析某房间应使用的 LLM 模型。
-   * 仅使用房主自己的 Key；无 Key 时返回 null，调用方放弃这次行动。
+   * 优先使用房主自己的 Key；无 Key 时使用服务器默认模型。
    * @param {string} roomCode
    * @returns {Promise<import('@langchain/openai').ChatOpenAI|null>}
    */
@@ -161,15 +161,16 @@ class AIGameHandler {
     const room = roomCache.get(roomCode);
     const hostUserId = room && room.hostUserId;
 
-    let cfg = llmConfig.getEnvConfig();
+    let userCfg = {};
     if (hostUserId) {
       try {
-        cfg = llmConfig.mergeConfig(await User.getLLMConfig(hostUserId));
+        userCfg = await User.getLLMConfig(hostUserId);
       } catch (err) {
         console.warn('[AIGameHandler] load host LLM config failed:', err.message);
       }
     }
 
+    const cfg = llmConfig.resolveConfig(userCfg);
     return llmConfig.buildModel(cfg, opts);
   }
 

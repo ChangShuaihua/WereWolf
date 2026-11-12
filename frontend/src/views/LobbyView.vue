@@ -396,7 +396,7 @@ async function ensureLLMReady() {
   }
 
   // 未绑定 → 提示
-  if (!status.ownKeySet) {
+  if (!status.configured) {
     const goConfig = await showConfirm({
       title: '未配置大模型 API',
       message: '你还没有配置大模型 API，房间里的 AI 玩家将使用本地模板逻辑。是否先去配置？',

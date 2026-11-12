@@ -10,15 +10,16 @@ router.use(authMiddleware);
 
 // 组装当前用户的状态（不返回完整 API Key）
 function buildStatus(dbCfg) {
-  const cfg = llmConfig.mergeConfig(dbCfg);
+  const userCfg = llmConfig.mergeConfig(dbCfg);
+  const cfg = llmConfig.resolveConfig(dbCfg);
   return {
     // ownKeySet：是否填了 Key；configured：是否已配置完整（有 Key + 模型名）
-    ownKeySet: Boolean(cfg.apiKey),
+    ownKeySet: Boolean(userCfg.apiKey),
     configured: Boolean(cfg.apiKey && cfg.modelName),
-    apiKeyPreview: llmConfig.maskKey(cfg.apiKey),
+    apiKeyPreview: userCfg.apiKey ? llmConfig.maskKey(userCfg.apiKey) : '',
     apiUrl: cfg.apiUrl,
     modelName: cfg.modelName,
-    source: cfg.apiKey ? 'user' : 'none',
+    source: cfg.apiKey ? cfg.source : 'none',
   };
 }
 
@@ -81,15 +82,20 @@ router.post('/llm/test', async (req, res) => {
     console.error('[settings] load user config for test failed:', err.message);
   }
 
-  const saved = llmConfig.mergeConfig(dbCfg);
+  const savedUser = llmConfig.mergeConfig(dbCfg);
+  const saved = llmConfig.resolveConfig(dbCfg);
   const { apiKey, apiUrl, modelName } = req.body || {};
 
   // 表单传入的值优先，未传则用已保存/默认配置，方便「先测试再保存」
   const effective = {
     apiKey: typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : saved.apiKey,
-    apiUrl: typeof apiUrl === 'string' && apiUrl.trim() ? apiUrl.trim() : saved.apiUrl,
+    apiUrl: typeof apiUrl === 'string' && apiUrl.trim()
+      ? apiUrl.trim()
+      : (savedUser.apiKey ? savedUser.apiUrl : saved.apiUrl),
     modelName:
-      typeof modelName === 'string' && modelName.trim() ? modelName.trim() : saved.modelName,
+      typeof modelName === 'string' && modelName.trim()
+        ? modelName.trim()
+        : (savedUser.apiKey ? savedUser.modelName : saved.modelName),
   };
 
   if (!effective.apiKey) {
