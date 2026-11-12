@@ -395,13 +395,13 @@ async function ensureLLMReady() {
     return true // 无法判断时不阻塞
   }
 
-  // 未绑定 → 提示
+  // 个人模型和服务器默认模型都未配置 → 提示
   if (!status.configured) {
     const goConfig = await showConfirm({
-      title: '未配置大模型 API',
-      message: '你还没有配置大模型 API，房间里的 AI 玩家将使用本地模板逻辑。是否先去配置？',
-      confirmText: '去配置',
-      cancelText: '直接进入',
+      title: '当前没有可用的大模型',
+      message: '服务器未提供默认模型，你也没有配置个人模型。仍可创建房间，AI 玩家将使用本地策略。',
+      confirmText: '配置个人模型',
+      cancelText: '使用本地策略',
       type: 'warning',
     })
     if (goConfig) {
@@ -412,7 +412,7 @@ async function ensureLLMReady() {
     return true
   }
 
-  // 已绑定 → 检测是否可用
+  // 已配置个人模型或服务器默认模型 → 检测是否可用
   let ok = true
   try {
     ok = !!(await api.post('/settings/llm/test', {})).data?.ok
@@ -425,11 +425,14 @@ async function ensureLLMReady() {
     return true
   }
 
+  const usingDefaultModel = status.source === 'default'
   const goConfig = await showConfirm({
-    title: '大模型 API 不可用',
-    message: '你绑定的大模型 API 似乎无法连接，AI 玩家将使用本地模板逻辑。是否先去重新配置？',
-    confirmText: '去配置',
-    cancelText: '直接进入',
+    title: usingDefaultModel ? '服务器默认模型不可用' : '个人模型不可用',
+    message: usingDefaultModel
+      ? '服务器默认模型暂时无法连接。仍可创建房间，AI 玩家将使用本地策略；你也可配置个人模型。'
+      : '你配置的个人模型暂时无法连接。仍可创建房间，AI 玩家将使用本地策略。',
+    confirmText: usingDefaultModel ? '配置个人模型' : '检查个人配置',
+    cancelText: '使用本地策略',
     type: 'warning',
   })
   if (goConfig) {
