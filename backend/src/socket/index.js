@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { createRoom, joinRoom, joinAsSpectator, takeSeat, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
+const { createRoom, joinRoom, joinAsSpectator, takeSeat, leaveRoom, toggleReady, addChat, handleDisconnect, addAIPlayer, removeAIPlayer, kickHumanPlayer, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits } = require('./roomHandler');
 const { startGame, handleNightAction, handleVote, skipDay, resetGame, handleHunterShoot } = require('./gameHandler');
 const { socketCache, gameCache } = require('../utils/cache');
 const { kickOldSocket, removeUserSocket, getUserBySocket, getUserCount } = require('../utils/userSocketMap');
@@ -156,6 +156,19 @@ function initSocket(io) {
       if (code && aiSocketId) {
         removeAIPlayer(socket, code, aiSocketId);
       }
+    });
+
+    socket.on('kick_player', ({ roomCode, targetUserId } = {}, ack) => {
+      if (socket.kicked) return;
+      const info = socketCache.get(socket.id);
+      const code = info?.roomCode;
+      if (!code || (roomCode && roomCode !== code)) {
+        const message = '你当前不在该房间';
+        socket.emit('error', { message });
+        if (typeof ack === 'function') ack({ ok: false, message });
+        return;
+      }
+      kickHumanPlayer(socket, code, targetUserId, ack);
     });
 
     // Start game

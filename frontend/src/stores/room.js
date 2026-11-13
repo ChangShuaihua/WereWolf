@@ -140,6 +140,10 @@ export const useRoomStore = defineStore('room', () => {
 
   function leaveRoom() {
     socket.emit('leave_room', { roomCode: roomCode.value })
+    clearRoomState()
+  }
+
+  function clearRoomState() {
     roomCode.value = ''
     localStorage.removeItem(ROOM_CODE_KEY)
     players.value = []
@@ -197,6 +201,16 @@ export const useRoomStore = defineStore('room', () => {
     }
   }
 
+  function kickPlayer(targetUserId) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ ok: false, message: '移出玩家超时，请重试' }), 5000)
+      socket.emit('kick_player', { roomCode: roomCode.value, targetUserId }, (res) => {
+        clearTimeout(timer)
+        resolve(res || { ok: false, message: '无法移出玩家' })
+      })
+    })
+  }
+
   function isHost() {
     if (socket.id === hostId.value) return true
     const hostPlayer = players.value.find(p => (p.socketId || p.id) === hostId.value)
@@ -221,7 +235,8 @@ export const useRoomStore = defineStore('room', () => {
     mySeat, myPlayer,
     bindEvents, unbindEvents,
     createRoom, joinRoom, joinAsSpectator, takeSeat, leaveRoom,
-    toggleReady, startGame, sendChat, addAIPlayer, removeAIPlayer, isHost, allReady,
+    toggleReady, startGame, sendChat, addAIPlayer, removeAIPlayer, kickPlayer, isHost, allReady,
+    clearRoomState,
     clearRoomCode: () => { roomCode.value = ''; localStorage.removeItem(ROOM_CODE_KEY); setSpectatorFlag(false) },
     getSavedRoomCode: () => localStorage.getItem(ROOM_CODE_KEY),
   }

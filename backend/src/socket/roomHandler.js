@@ -109,6 +109,16 @@ function ensureSpectators(room) {
   return room.spectators;
 }
 
+function ensureKickedUsers(room) {
+  if (!Array.isArray(room.kickedUserIds)) room.kickedUserIds = [];
+  return room.kickedUserIds;
+}
+
+function isUserKicked(room, userId) {
+  const id = String(userId);
+  return Array.from(ensureKickedUsers(room)).some(kickedId => String(kickedId) === id);
+}
+
 function buildPublicSpectators(room) {
   return ensureSpectators(room)
     .filter(spectator => spectator.socketId)
@@ -225,6 +235,7 @@ function createRoom(socket, username, userId, maxPlayers = 6) {
     players: [],
     spectators: [],
     chat: [],
+    kickedUserIds: [],
     maxPlayers,
     createdAt: Date.now(),
   };
@@ -240,6 +251,77 @@ function createRoom(socket, username, userId, maxPlayers = 6) {
 
 function isHost(socketId, room) {
   return room.hostId === socketId;
+}
+
+function rejectKick(socket, ack, message) {
+  socket.emit('error', { message });
+  if (typeof ack === 'function') ack({ ok: false, message });
+  return { ok: false, message };
+}
+
+function kickHumanPlayer(socket, code, targetUserId, ack) {
+  const room = roomCache.get(code);
+  if (!room) return rejectKick(socket, ack, '房间不存在或已过期');
+
+  if (Number(room.hostUserId) !== Number(socket.userId)) {
+    return rejectKick(socket, ack, '只有房主可以移出玩家');
+  }
+
+  const game = gameCache.get(code);
+  if (game && game.phase !== 'WAITING') {
+    return rejectKick(socket, ack, '游戏已经开始，无法移出玩家');
+  }
+
+  if (Number(targetUserId) === Number(socket.userId)) {
+    return rejectKick(socket, ack, '不能将自己移出房间');
+  }
+
+  const target = room.players.find(player => Number(player.userId) === Number(targetUserId));
+  if (!target || target.isAI) {
+    return rejectKick(socket, ack, '真人玩家不存在');
+  }
+
+  if (target.disconnectTimer) {
+    clearTimeout(target.disconnectTimer);
+    target.disconnectTimer = null;
+  }
+
+  if (!isUserKicked(room, target.userId)) {
+    ensureKickedUsers(room).push(String(target.userId));
+  }
+  room.players = room.players.filter(player => player !== target);
+  room.spectators = ensureSpectators(room).filter(item => Number(item.userId) !== Number(target.userId));
+
+  const io = require('../app').getIO();
+  const targetSocket = target.socketId ? io.sockets.sockets.get(target.socketId) : null;
+  if (targetSocket) {
+    targetSocket.emit('room_kicked', {
+      roomCode: code,
+      reason: 'KICKED_BY_HOST',
+      message: '你已被房主移出房间',
+    });
+    targetSocket.leave(code);
+    socketCache.set(target.socketId, {
+      ...(socketCache.get(target.socketId) || {}),
+      roomCode: null,
+      isSpectator: false,
+    });
+  }
+
+  const leaveMsg = {
+    username: '系统',
+    message: `${target.username} 已被房主移出房间`,
+    timestamp: Date.now(),
+    isSystem: true,
+  };
+  room.chat.push(leaveMsg);
+  if (room.chat.length > 100) room.chat = room.chat.slice(-100);
+  roomCache.set(code, room);
+  io.to(code).emit('chat_message', leaveMsg);
+  broadcastRoomUpdate(code, room);
+
+  if (typeof ack === 'function') ack({ ok: true });
+  return { ok: true };
 }
 
 /**
@@ -354,6 +436,11 @@ function joinRoom(socket, code, username, userId, isCreator = false) {
   const room = roomCache.get(code);
   if (!room) {
     socket.emit('error', { message: '房间不存在或已过期' });
+    return null;
+  }
+
+  if (isUserKicked(room, userId)) {
+    socket.emit('error', { message: '你已被房主移出该房间' });
     return null;
   }
 
@@ -658,6 +745,9 @@ function rejectSeat(socket, ack, message) {
 function takeSeat(socket, code, seatIndex, ack) {
   const room = roomCache.get(code);
   if (!room) return rejectSeat(socket, ack, '房间不存在或已过期');
+  if (isUserKicked(room, socket.userId)) {
+    return rejectSeat(socket, ack, '你已被房主移出该房间');
+  }
 
   const game = gameCache.get(code);
   if (game && game.phase !== 'WAITING') {
@@ -742,6 +832,10 @@ function joinAsSpectator(socket, code, username, userId) {
     socket.emit('error', { message: '房间不存在或已过期' });
     return null;
   }
+  if (isUserKicked(room, userId)) {
+    socket.emit('error', { message: '你已被房主移出该房间' });
+    return null;
+  }
 
   const game = gameCache.get(code);
   const gameActive = Boolean(game && game.phase && game.phase !== 'WAITING');
@@ -760,11 +854,7 @@ function joinAsSpectator(socket, code, username, userId) {
     const wasHost = room.hostId === seated.socketId || room.hostUserId === seated.userId;
     room.players = room.players.filter(player => player !== seated);
     if (wasHost) {
-      const nextHuman = room.players.find(player => !player.isAI && player.socketId);
-      if (nextHuman) {
-        room.hostId = nextHuman.socketId;
-        room.hostUserId = nextHuman.userId;
-      }
+      if (settleHostDeparture(code, room, seated.userId, seated.socketId)) return null;
     }
   }
 
@@ -831,17 +921,32 @@ function hasRealHuman(room) {
 }
 
 function transferHostIfNeeded(room, leavingUserId, leavingSocketId) {
-  const hostLeft = room.hostUserId === leavingUserId || (leavingSocketId && room.hostId === leavingSocketId);
-  if (!hostLeft) return;
-  const next = (room.players || []).find((player) => !player.isAI && player.socketId)
-    || (room.players || []).find((player) => !player.isAI && player.disconnectTimer);
+  const hostLeft = Number(room.hostUserId) === Number(leavingUserId)
+    || (leavingSocketId && room.hostId === leavingSocketId);
+  if (!hostLeft) return false;
+
+  // room.players preserves seat/join order, so ownership follows the visible order.
+  const next = (room.players || []).find((player) => !player.isAI);
   if (next) {
     room.hostId = next.socketId || null;
     room.hostUserId = next.userId;
+    return true;
   } else {
     room.hostId = null;
     room.hostUserId = null;
+    return false;
   }
+}
+
+function settleHostDeparture(code, room, leavingUserId, leavingSocketId) {
+  const wasHost = Number(room.hostUserId) === Number(leavingUserId)
+    || (leavingSocketId && room.hostId === leavingSocketId);
+  if (!wasHost) return false;
+  if (!transferHostIfNeeded(room, leavingUserId, leavingSocketId)) {
+    destroyRoom(code);
+    return true;
+  }
+  return false;
 }
 
 function abandonRoomIfEmpty(code) {
@@ -904,13 +1009,19 @@ function leaveRoom(socket, code, isDisconnect = false) {
       if (!playerCheck || playerCheck.socketId !== null) return;
       playerCheck.disconnectTimer = null;
       roomCheck.players = roomCheck.players.filter(p => p.userId !== leavingUserId);
+      if (settleHostDeparture(code, roomCheck, leavingUserId, null)) return;
       if (abandonRoomIfEmpty(code)) return;
-      transferHostIfNeeded(roomCheck, leavingUserId, null);
       roomCache.set(code, roomCheck);
       broadcastRoomUpdate(code);
     }, 30000);
   } else {
     room.players = room.players.filter(p => p.socketId !== socket.id);
+
+    if (settleHostDeparture(code, room, leavingUserId, socket.id)) {
+      socket.leave(code);
+      socketCache.del(socket.id);
+      return;
+    }
 
     if (!hasRealHuman(room)) {
       destroyRoom(code);
@@ -919,7 +1030,6 @@ function leaveRoom(socket, code, isDisconnect = false) {
       return;
     }
 
-    transferHostIfNeeded(room, leavingUserId, socket.id);
     roomCache.set(code, room);
   }
 
@@ -1212,8 +1322,8 @@ function handleDisconnect(socket) {
           const roomCheck = roomCache.get(code);
           if (!roomCheck) return;
           roomCheck.players = roomCheck.players.filter(p => p.userId !== userId);
+          if (settleHostDeparture(code, roomCheck, userId, null)) return;
           if (abandonRoomIfEmpty(code)) return;
-          transferHostIfNeeded(roomCheck, userId, null);
           roomCache.set(code, roomCheck);
           broadcastRoomUpdate(code);
         }, 60000);
@@ -1264,4 +1374,4 @@ function forgetLobbyRoom(code) {
   lobbySnapshotCache.delete(code);
 }
 
-module.exports = { createRoom, joinRoom, joinAsSpectator, takeSeat, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, broadcastLobbyRoom, buildLobbySnapshot, applyUserAvatar, addAIPlayer, removeAIPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits, abandonRoomIfEmpty, hasRealHuman };
+module.exports = { createRoom, joinRoom, joinAsSpectator, takeSeat, leaveRoom, toggleReady, addChat, handleDisconnect, broadcastRoomUpdate, broadcastLobbyRoom, buildLobbySnapshot, applyUserAvatar, addAIPlayer, removeAIPlayer, kickHumanPlayer, buildSeats, buildPublicPlayers, buildPublicSpectators, ruleQA, isRuleQARateLimited, cleanupSocketRateLimits, abandonRoomIfEmpty, hasRealHuman };

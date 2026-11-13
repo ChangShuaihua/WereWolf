@@ -172,6 +172,11 @@ app.get('/api/room/:code', authMiddleware, (req, res) => {
   if (!room) {
     return res.status(404).json({ message: '房间不存在' });
   }
+  const kicked = Array.from(room.kickedUserIds || [])
+    .some(userId => String(userId) === String(req.user.id));
+  if (kicked) {
+    return res.status(403).json({ message: '你已被房主移出该房间' });
+  }
   const { buildSeats, buildPublicPlayers, buildPublicSpectators } = require('./socket/roomHandler');
   const connectedPlayers = room.players.filter((p) => p.socketId !== null);
   const game = gameCache.get(room.code);

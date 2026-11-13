@@ -61,6 +61,13 @@
                 >
                   ✕
                 </button>
+                <button
+                  v-if="canKickPlayer(seat)"
+                  class="seat-remove seat-kick"
+                  @click.stop="handleKickPlayer(seat)"
+                  title="移出真人玩家"
+                  aria-label="移出真人玩家"
+                >×</button>
               </template>
               <template v-else>
                 <div class="seat-index">{{ seat.seatIndex + 1 }}</div>
@@ -231,12 +238,16 @@ import api from '../api'
 import ChatBox from '../components/ChatBox.vue'
 import SpectatorBar from '../components/SpectatorBar.vue'
 import { renderMarkdown } from '../utils/markdown'
+import { useConfirmDialog } from '../composables/useConfirm'
+import { useToast } from '../composables/useToast'
 
 const router = useRouter()
 const route = useRoute()
 const roomStore = useRoomStore()
 const gameStore = useGameStore()
 const userStore = useUserStore()
+const { showConfirm } = useConfirmDialog()
+const { showToast } = useToast()
 const loading = ref(true)
 const aiAgents = ref([])
 const selectedAgentId = ref('')
@@ -350,6 +361,38 @@ function handleRemoveAI(aiSocketId) {
   roomStore.removeAIPlayer(aiSocketId)
 }
 
+function canKickPlayer(seat) {
+  return roomStore.isHost()
+    && !seat.isAI
+    && Number(seat.userId) !== Number(userStore.user?.id)
+}
+
+async function handleKickPlayer(seat) {
+  const confirmed = await showConfirm({
+    title: '移出玩家',
+    message: `确定将「${seat.username}」移出房间吗？该玩家将无法再次加入本房间。`,
+    confirmText: '移出',
+    cancelText: '取消',
+    type: 'warning',
+  })
+  if (!confirmed) return
+  const result = await roomStore.kickPlayer(seat.userId)
+  if (!result?.ok) showToast(result?.message || '移出玩家失败', 'error')
+}
+
+function _onRoomKicked(data) {
+  roomStore.clearRoomState()
+  showToast(data?.message || '你已被房主移出房间', 'warning', 4500)
+  router.replace('/lobby')
+}
+
+function _onRoomDeleted(data) {
+  if (data?.code !== roomStore.roomCode) return
+  roomStore.clearRoomState()
+  showToast('房主已退出且没有其他真人玩家，房间已解散', 'info', 4500)
+  router.replace('/lobby')
+}
+
 async function fetchRoomInfo() {
   const code = route.params.code
   if (!code) {
@@ -392,6 +435,8 @@ onMounted(async () => {
   gameStore.bindEvents()
   socket.on('game_started', _onGameStarted)
   socket.on('rule_qa_answer', _onRuleAnswer)
+  socket.on('room_kicked', _onRoomKicked)
+  socket.on('room_deleted', _onRoomDeleted)
 
   if (userStore.user) {
     await authenticate() // W26: 统一无参签名
@@ -420,6 +465,8 @@ onMounted(async () => {
 onUnmounted(() => {
   socket.off('game_started', _onGameStarted)
   socket.off('rule_qa_answer', _onRuleAnswer)
+  socket.off('room_kicked', _onRoomKicked)
+  socket.off('room_deleted', _onRoomDeleted)
 })
 
 function handleLeave() {
